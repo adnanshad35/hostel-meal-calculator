@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "115727062396",
+    "project_id": "hostel-meal-calculator-1035",
+    "storage_bucket": "hostel-meal-calculator-1035.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:115727062396:android:187755a46298d9b377c0f9",
+        "android_client_info": {
+          "package_name": "com.adnanshad.hostel_meal_calculator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNL-iIJAyOjCz8qOA4G5t68C_f9NI046o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
