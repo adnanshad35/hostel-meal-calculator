@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'create_group_screen.dart';
 import 'join_group_screen.dart';
+import 'meal_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -104,6 +105,7 @@ class HomeScreen extends StatelessWidget {
                 final group = groupSnapshot.data!.data()!;
 
                 return _GroupDashboard(
+                  groupId: groupId,
                   memberName: user.displayName,
                   groupName: group['name'] as String? ?? 'Hostel Group',
                   inviteCode: group['inviteCode'] as String? ?? '',
@@ -190,12 +192,14 @@ class _NoGroupView extends StatelessWidget {
 
 class _GroupDashboard extends StatelessWidget {
   const _GroupDashboard({
+    required this.groupId,
     required this.memberName,
     required this.groupName,
     required this.inviteCode,
     required this.role,
   });
 
+  final String groupId;
   final String? memberName;
   final String groupName;
   final String inviteCode;
@@ -244,11 +248,21 @@ class _GroupDashboard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Card(
+        Card(
           child: ListTile(
-            leading: Icon(Icons.restaurant_outlined),
-            title: Text('Meals'),
-            subtitle: Text('Daily meal entry will be added next.'),
+            leading: const Icon(Icons.restaurant_outlined),
+            title: const Text('Meals'),
+            subtitle: const Text('Enter and update your daily meals.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MealScreen(
+                    groupId: groupId,
+                  ),
+                ),
+              );
+            },
           ),
         ),
         const Card(
