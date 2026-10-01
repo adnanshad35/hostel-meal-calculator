@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'create_group_screen.dart';
+import 'join_group_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,6 +16,14 @@ class HomeScreen extends StatelessWidget {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => const CreateGroupScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openJoinGroup(BuildContext context) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const JoinGroupScreen(),
       ),
     );
   }
@@ -55,12 +64,14 @@ class HomeScreen extends StatelessWidget {
 
             final userData = userSnapshot.data?.data();
             final groupId = userData?['groupId'] as String?;
+            final role = userData?['role'] as String? ?? 'member';
 
             if (groupId == null || groupId.isEmpty) {
               return _NoGroupView(
                 name: user.displayName,
                 email: user.email,
                 onCreateGroup: () => _openCreateGroup(context),
+                onJoinGroup: () => _openJoinGroup(context),
               );
             }
 
@@ -77,6 +88,12 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
 
+                if (groupSnapshot.hasError) {
+                  return const Center(
+                    child: Text('Unable to load the hostel group.'),
+                  );
+                }
+
                 if (!groupSnapshot.hasData ||
                     !groupSnapshot.data!.exists) {
                   return const Center(
@@ -90,6 +107,7 @@ class HomeScreen extends StatelessWidget {
                   memberName: user.displayName,
                   groupName: group['name'] as String? ?? 'Hostel Group',
                   inviteCode: group['inviteCode'] as String? ?? '',
+                  role: role,
                 );
               },
             );
@@ -105,11 +123,13 @@ class _NoGroupView extends StatelessWidget {
     required this.name,
     required this.email,
     required this.onCreateGroup,
+    required this.onJoinGroup,
   });
 
   final String? name;
   final String? email;
   final VoidCallback onCreateGroup;
+  final VoidCallback onJoinGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -155,13 +175,7 @@ class _NoGroupView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Join Group is coming next.'),
-                      ),
-                    );
-                  },
+                  onPressed: onJoinGroup,
                   icon: const Icon(Icons.group_add_outlined),
                   label: const Text('Join Group'),
                 ),
@@ -179,14 +193,18 @@ class _GroupDashboard extends StatelessWidget {
     required this.memberName,
     required this.groupName,
     required this.inviteCode,
+    required this.role,
   });
 
   final String? memberName;
   final String groupName;
   final String inviteCode;
+  final String role;
 
   @override
   Widget build(BuildContext context) {
+    final roleLabel = role == 'admin' ? 'Administrator' : 'Member';
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -220,7 +238,7 @@ class _GroupDashboard extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 8),
-                const Text('Role: Administrator'),
+                Text('Role: $roleLabel'),
               ],
             ),
           ),

@@ -33,81 +33,94 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     ).join();
   }
 
-  Future<void> _createGroup() async {
-    if (!_formKey.currentState!.validate()) return;
+Future<void> _createGroup() async {
+  if (!_formKey.currentState!.validate()) return;
 
-    final user = FirebaseAuth.instance.currentUser;
+  final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your session has expired. Please sign in again.'),
-        ),
-      );
-      return;
-    }
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Your session has expired. Please sign in again.'),
+      ),
+    );
+    return;
+  }
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final groupReference = firestore.collection('groups').doc();
-      final userReference = firestore.collection('users').doc(user.uid);
-      final batch = firestore.batch();
+  try {
+    final firestore = FirebaseFirestore.instance;
+    final invitationCode = _generateInvitationCode();
 
-      batch.set(groupReference, {
-        'name': _nameController.text.trim(),
-        'inviteCode': _generateInvitationCode(),
-        'createdBy': user.uid,
-        'admins': [user.uid],
-        'memberIds': [user.uid],
-        'currency': 'BDT',
-        'status': 'active',
+    final groupReference = firestore.collection('groups').doc();
+    final userReference = firestore.collection('users').doc(user.uid);
+    final inviteReference =
+        firestore.collection('invites').doc(invitationCode);
+
+    final batch = firestore.batch();
+
+    batch.set(groupReference, {
+      'name': _nameController.text.trim(),
+      'inviteCode': invitationCode,
+      'createdBy': user.uid,
+      'admins': [user.uid],
+      'memberIds': [user.uid],
+      'currency': 'BDT',
+      'status': 'active',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.set(inviteReference, {
+      'groupId': groupReference.id,
+      'groupName': _nameController.text.trim(),
+      'createdBy': user.uid,
+      'active': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.set(
+      userReference,
+      {
+        'uid': user.uid,
+        'fullName': user.displayName ?? 'Member',
+        'email': user.email,
+        'groupId': groupReference.id,
+        'role': 'admin',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      },
+      SetOptions(merge: true),
+    );
 
-      batch.set(
-        userReference,
-        {
-          'uid': user.uid,
-          'fullName': user.displayName ?? 'Member',
-          'email': user.email,
-          'groupId': groupReference.id,
-          'role': 'admin',
-          'createdAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+    await batch.commit();
 
-      await batch.commit();
+    if (!mounted) return;
 
-      if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Hostel group created successfully.'),
+      ),
+    );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hostel group created successfully.'),
+    Navigator.of(context).pop(true);
+  } on FirebaseException catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error.code == 'permission-denied'
+              ? 'Permission denied. Please check the Firestore rules.'
+              : 'Unable to create the group. Please try again.',
         ),
-      );
-
-      Navigator.of(context).pop(true);
-    } on FirebaseException catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.code == 'permission-denied'
-                ? 'Permission denied. Please check the Firestore rules.'
-                : 'Unable to create the group. Please try again.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
