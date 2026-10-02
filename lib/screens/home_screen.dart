@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'create_group_screen.dart';
 import 'join_group_screen.dart';
 import 'meal_screen.dart';
+import 'expense_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -266,13 +267,24 @@ class _GroupDashboard extends StatelessWidget {
             },
           ),
         ),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.receipt_long_outlined),
-            title: Text('Expenses'),
-            subtitle: Text('Shared expense entry will be added soon.'),
+        Card(
+  child: ListTile(
+    leading: const Icon(Icons.receipt_long_outlined),
+    title: const Text('Expenses'),
+    subtitle: const Text('Add and view shared expenses.'),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExpenseScreen(
+            groupId: groupId,
+            isAdmin: role == 'admin',
           ),
         ),
+      );
+    },
+  ),
+),
       ],
     );
   }

@@ -21,22 +21,22 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-  allow create, update: if isSignedIn()
-    && request.auth.uid == userId;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId;
 
-  allow read: if isSignedIn() && (
-    request.auth.uid == userId
-    ||
-    (
-      resource.data.groupId != null
-      && resource.data.groupId ==
-        get(/databases/$(database)/documents/users/$(request.auth.uid))
-          .data.groupId
-    )
-  );
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId
+        ||
+        (
+          resource.data.groupId != null
+          && resource.data.groupId ==
+            get(/databases/$(database)/documents/users/$(request.auth.uid))
+              .data.groupId
+        )
+      );
 
-  allow delete: if false;
-}
+      allow delete: if false;
+    }
 
     match /groups/{groupId} {
       allow create: if isSignedIn()
@@ -65,30 +65,64 @@ service cloud.firestore {
       allow delete: if false;
 
       match /meals/{mealId} {
-  allow read: if isGroupMember(groupId);
+        allow read: if isGroupMember(groupId);
 
-  allow create: if isGroupMember(groupId)
-    && request.resource.data.userId in
-      get(/databases/$(database)/documents/groups/$(groupId))
-        .data.memberIds
-    && (
-      request.resource.data.userId == request.auth.uid
-      || isGroupAdmin(groupId)
-    );
+        allow create: if isGroupMember(groupId)
+          && request.resource.data.userId in
+            get(/databases/$(database)/documents/groups/$(groupId))
+              .data.memberIds
+          && (
+            request.resource.data.userId == request.auth.uid
+            || isGroupAdmin(groupId)
+          );
 
-  allow update: if isGroupMember(groupId)
-    && request.resource.data.userId == resource.data.userId
-    && (
-      resource.data.userId == request.auth.uid
-      || isGroupAdmin(groupId)
-    );
+        allow update: if isGroupMember(groupId)
+          && request.resource.data.userId == resource.data.userId
+          && (
+            resource.data.userId == request.auth.uid
+            || isGroupAdmin(groupId)
+          );
 
-  allow delete: if isGroupAdmin(groupId)
-    || (
-      isGroupMember(groupId)
-      && resource.data.userId == request.auth.uid
-    );
-}
+        allow delete: if isGroupAdmin(groupId)
+          || (
+            isGroupMember(groupId)
+            && resource.data.userId == request.auth.uid
+          );
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isGroupMember(groupId);
+
+        allow create: if isGroupMember(groupId)
+          && request.resource.data.paidById == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.date is timestamp;
+
+        allow update: if isGroupMember(groupId)
+          && request.resource.data.paidById == resource.data.paidById
+          && (
+            resource.data.paidById == request.auth.uid
+            || isGroupAdmin(groupId)
+          )
+          && request.resource.data.name is string
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.date is timestamp
+          && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'name',
+                'amount',
+                'date',
+                'updatedBy',
+                'updatedAt'
+              ]);
+
+        allow delete: if false;
+      }
     }
 
     match /invites/{inviteCode} {
