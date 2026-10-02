@@ -7,9 +7,11 @@ class MealScreen extends StatefulWidget {
   const MealScreen({
     super.key,
     required this.groupId,
+    required this.isAdmin,
   });
 
   final String groupId;
+  final bool isAdmin;
 
   @override
   State<MealScreen> createState() => _MealScreenState();
@@ -237,8 +239,9 @@ class _MealScreenState extends State<MealScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => MealLedgerScreen(
-              groupId: widget.groupId,
-            ),
+  groupId: widget.groupId,
+  isAdmin: widget.isAdmin,
+),
           ),
         );
       },

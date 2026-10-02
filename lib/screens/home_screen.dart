@@ -258,8 +258,9 @@ class _GroupDashboard extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => MealScreen(
-                    groupId: groupId,
-                  ),
+  groupId: groupId,
+  isAdmin: role == 'admin',
+),
                 ),
               );
             },

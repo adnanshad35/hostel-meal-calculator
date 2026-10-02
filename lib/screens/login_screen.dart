@@ -29,37 +29,44 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
+  try {
+    await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
 
-      String message = 'Unable to sign in. Please try again.';
+    if (!mounted) return;
 
-      if (error.code == 'invalid-credential') {
-        message = 'Incorrect email address or password.';
-      } else if (error.code == 'invalid-email') {
-        message = 'Please enter a valid email address.';
-      } else if (error.code == 'too-many-requests') {
-        message = 'Too many attempts. Please try again later.';
-      }
+    // Close the login page. AuthGate will automatically show the dashboard.
+    Navigator.of(context).pop();
+  } on FirebaseAuthException catch (error) {
+    if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    String message = 'Unable to sign in. Please try again.';
+
+    if (error.code == 'invalid-credential' ||
+        error.code == 'wrong-password' ||
+        error.code == 'user-not-found') {
+      message = 'Incorrect email address or password.';
+    } else if (error.code == 'invalid-email') {
+      message = 'Please enter a valid email address.';
+    } else if (error.code == 'too-many-requests') {
+      message = 'Too many attempts. Please try again later.';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {

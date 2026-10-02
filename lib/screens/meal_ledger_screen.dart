@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'admin_meal_edit_screen.dart';
+
 class MealLedgerScreen extends StatelessWidget {
   const MealLedgerScreen({
     super.key,
     required this.groupId,
+    required this.isAdmin,
   });
 
   final String groupId;
+  final bool isAdmin;
 
   String _dateKey(DateTime date) {
     final year = date.year.toString();
@@ -19,7 +23,6 @@ class MealLedgerScreen extends StatelessWidget {
 
   String _nextMonthKey(DateTime date) {
     final nextMonth = DateTime(date.year, date.month + 1);
-
     final year = nextMonth.year.toString();
     final month = nextMonth.month.toString().padLeft(2, '0');
 
@@ -93,7 +96,7 @@ class MealLedgerScreen extends StatelessWidget {
             );
           }
 
-          final members = usersSnapshot.data?.docs ?? [];
+          final members = [...?usersSnapshot.data?.docs];
 
           members.sort((first, second) {
             final firstName =
@@ -120,13 +123,10 @@ class MealLedgerScreen extends StatelessWidget {
                 );
               }
 
-              final entryMap =
-                  <String, Map<String, dynamic>>{};
-
+              final entryMap = <String, Map<String, dynamic>>{};
               double groupMonthlyTotal = 0;
 
-              for (final document
-                  in mealsSnapshot.data?.docs ?? []) {
+              for (final document in mealsSnapshot.data?.docs ?? []) {
                 final data = document.data();
                 final dateKey = data['dateKey'] as String? ?? '';
                 final userId = data['userId'] as String? ?? '';
@@ -188,6 +188,21 @@ class MealLedgerScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (isAdmin) ...[
+                    const SizedBox(height: 8),
+                    const Card(
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.admin_panel_settings_outlined,
+                          color: Color(0xFF2E7D32),
+                        ),
+                        title: Text('Administrator editing enabled'),
+                        subtitle: Text(
+                          'Tap any member to add or correct their meals.',
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (members.isEmpty)
                     const Card(
@@ -202,6 +217,8 @@ class MealLedgerScreen extends StatelessWidget {
                   else
                     for (int day = 1; day <= totalDays; day++)
                       _DateMealCard(
+                        groupId: groupId,
+                        isAdmin: isAdmin,
                         date: DateTime(now.year, now.month, day),
                         dateKey: _dateKey(
                           DateTime(now.year, now.month, day),
@@ -223,6 +240,8 @@ class MealLedgerScreen extends StatelessWidget {
 
 class _DateMealCard extends StatelessWidget {
   const _DateMealCard({
+    required this.groupId,
+    required this.isAdmin,
     required this.date,
     required this.dateKey,
     required this.todayKey,
@@ -231,6 +250,8 @@ class _DateMealCard extends StatelessWidget {
     required this.displayQuantity,
   });
 
+  final String groupId;
+  final bool isAdmin;
   final DateTime date;
   final String dateKey;
   final String todayKey;
@@ -284,8 +305,13 @@ class _DateMealCard extends StatelessWidget {
           const Divider(height: 1),
           for (final member in members)
             _MemberMealRow(
+              groupId: groupId,
+              isAdmin: isAdmin,
+              memberId: member.id,
               memberName:
                   member.data()['fullName'] as String? ?? 'Member',
+              date: date,
+              dateKey: dateKey,
               entry: entryMap['$dateKey|${member.id}'],
               displayQuantity: displayQuantity,
             ),
@@ -297,14 +323,44 @@ class _DateMealCard extends StatelessWidget {
 
 class _MemberMealRow extends StatelessWidget {
   const _MemberMealRow({
+    required this.groupId,
+    required this.isAdmin,
+    required this.memberId,
     required this.memberName,
+    required this.date,
+    required this.dateKey,
     required this.entry,
     required this.displayQuantity,
   });
 
+  final String groupId;
+  final bool isAdmin;
+  final String memberId;
   final String memberName;
+  final DateTime date;
+  final String dateKey;
   final Map<String, dynamic>? entry;
   final String Function(double) displayQuantity;
+
+  void _openEditor(BuildContext context) {
+    final lunch = (entry?['lunch'] as num?)?.toDouble() ?? 0;
+    final dinner = (entry?['dinner'] as num?)?.toDouble() ?? 0;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminMealEditScreen(
+          groupId: groupId,
+          memberId: memberId,
+          memberName: memberName,
+          date: date,
+          dateKey: dateKey,
+          initialLunch: lunch,
+          initialDinner: dinner,
+          hasEntry: entry != null,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +371,13 @@ class _MemberMealRow extends StatelessWidget {
           color: Colors.orange,
         ),
         title: Text(memberName),
-        subtitle: const Text('Not entered'),
+        subtitle: Text(
+          isAdmin ? 'Not entered • Tap to add' : 'Not entered',
+        ),
+        trailing: isAdmin
+            ? const Icon(Icons.edit_outlined)
+            : null,
+        onTap: isAdmin ? () => _openEditor(context) : null,
       );
     }
 
@@ -333,12 +395,27 @@ class _MemberMealRow extends StatelessWidget {
         'Lunch: ${displayQuantity(lunch)}   '
         'Dinner: ${displayQuantity(dinner)}',
       ),
-      trailing: Text(
-        displayQuantity(total),
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+      trailing: isAdmin
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  displayQuantity(total),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.edit_outlined),
+              ],
+            )
+          : Text(
+              displayQuantity(total),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
-      ),
+      onTap: isAdmin ? () => _openEditor(context) : null,
     );
   }
 }
