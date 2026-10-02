@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'expense_screen.dart';
+import 'group_settings_screen.dart';
 import 'manage_members_screen.dart';
 import 'meal_screen.dart';
 import 'monthly_summary_screen.dart';
@@ -196,6 +197,29 @@ class HostelDashboardScreen extends StatelessWidget {
                   },
                 ),
               ),
+            Card(
+              child: ListTile(
+                leading:
+                    const Icon(Icons.settings_outlined),
+                title: const Text('Group Settings'),
+                subtitle: const Text(
+                  'Manage your hostel membership and settings.',
+                ),
+                trailing:
+                    const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          GroupSettingsScreen(
+                        groupId: groupId,
+                        groupName: groupName,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
