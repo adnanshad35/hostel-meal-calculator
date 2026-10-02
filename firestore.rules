@@ -91,38 +91,46 @@ service cloud.firestore {
       }
 
       match /expenses/{expenseId} {
-        allow read: if isGroupMember(groupId);
+  allow read: if isGroupMember(groupId);
 
-        allow create: if isGroupMember(groupId)
-          && request.resource.data.paidById == request.auth.uid
-          && request.resource.data.name is string
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0
-          && request.resource.data.date is timestamp;
+  allow create: if isGroupMember(groupId)
+    && request.resource.data.paidById in
+      get(/databases/$(database)/documents/groups/$(groupId))
+        .data.memberIds
+    && (
+      request.resource.data.paidById == request.auth.uid
+      || isGroupAdmin(groupId)
+    )
+    && request.resource.data.enteredBy == request.auth.uid
+    && request.resource.data.name is string
+    && request.resource.data.paidByName is string
+    && request.resource.data.amount is number
+    && request.resource.data.amount > 0
+    && request.resource.data.date is timestamp;
 
-        allow update: if isGroupMember(groupId)
-          && request.resource.data.paidById == resource.data.paidById
-          && (
-            resource.data.paidById == request.auth.uid
-            || isGroupAdmin(groupId)
-          )
-          && request.resource.data.name is string
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0
-          && request.resource.data.date is timestamp
-          && request.resource.data
-              .diff(resource.data)
-              .affectedKeys()
-              .hasOnly([
-                'name',
-                'amount',
-                'date',
-                'updatedBy',
-                'updatedAt'
-              ]);
+  allow update: if isGroupMember(groupId)
+    && request.resource.data.paidById == resource.data.paidById
+    && (
+      resource.data.paidById == request.auth.uid
+      || isGroupAdmin(groupId)
+    )
+    && request.resource.data.name is string
+    && request.resource.data.amount is number
+    && request.resource.data.amount > 0
+    && request.resource.data.date is timestamp
+    && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly([
+          'name',
+          'amount',
+          'date',
+          'updatedBy',
+          'updatedAt'
+        ]);
 
-        allow delete: if false;
-      }
+  allow delete: if false;
+}
       match /monthlySettings/{monthKey} {
   allow read: if isGroupMember(groupId);
 

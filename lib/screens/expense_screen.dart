@@ -20,6 +20,7 @@ class ExpenseScreen extends StatelessWidget {
       context: context,
       builder: (_) => _ExpenseFormDialog(
         groupId: groupId,
+        isAdmin: isAdmin,
         expense: expense,
       ),
     );
@@ -92,12 +93,14 @@ class ExpenseScreen extends StatelessWidget {
           }
 
           final total = expenses.fold<double>(
-  0,
-  (currentTotal, expense) {
-    final amount = expense.data()['amount'];
-    return currentTotal + (amount is num ? amount.toDouble() : 0);
-  },
-);
+            0,
+            (currentTotal, expense) {
+              final amount = expense.data()['amount'];
+
+              return currentTotal +
+                  (amount is num ? amount.toDouble() : 0);
+            },
+          );
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -112,11 +115,13 @@ class ExpenseScreen extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         '৳${total.toStringAsFixed(2)}',
-                        style:
-                            Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  color: const Color(0xFF2E7D32),
-                                  fontWeight: FontWeight.bold,
-                                ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              color: const Color(0xFF2E7D32),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ],
                   ),
@@ -125,12 +130,16 @@ class ExpenseScreen extends StatelessWidget {
               const SizedBox(height: 12),
               ...expenses.map((expense) {
                 final data = expense.data();
-                final name = data['name'] as String? ?? 'Expense';
+                final name =
+                    data['name'] as String? ?? 'Expense';
                 final paidByName =
-                    data['paidByName'] as String? ?? 'Unknown member';
-                final paidById = data['paidById'] as String? ?? '';
+                    data['paidByName'] as String? ??
+                        'Unknown member';
+                final paidById =
+                    data['paidById'] as String? ?? '';
                 final amount = data['amount'];
-                final date = (data['date'] as Timestamp?)?.toDate();
+                final date =
+                    (data['date'] as Timestamp?)?.toDate();
 
                 final canEdit =
                     isAdmin || paidById == currentUser.uid;
@@ -155,10 +164,12 @@ class ExpenseScreen extends StatelessWidget {
                       children: [
                         Text(
                           '৳${_formatAmount(amount)}',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
                         if (canEdit) ...[
                           const SizedBox(width: 4),
@@ -170,7 +181,9 @@ class ExpenseScreen extends StatelessWidget {
                                 expense: expense,
                               );
                             },
-                            icon: const Icon(Icons.edit_outlined),
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                            ),
                           ),
                         ],
                       ],
@@ -206,25 +219,38 @@ class ExpenseScreen extends StatelessWidget {
 class _ExpenseFormDialog extends StatefulWidget {
   const _ExpenseFormDialog({
     required this.groupId,
+    required this.isAdmin,
     this.expense,
   });
 
   final String groupId;
+  final bool isAdmin;
   final DocumentSnapshot<Map<String, dynamic>>? expense;
 
   @override
-  State<_ExpenseFormDialog> createState() => _ExpenseFormDialogState();
+  State<_ExpenseFormDialog> createState() =>
+      _ExpenseFormDialogState();
 }
 
-class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
+class _ExpenseFormDialogState
+    extends State<_ExpenseFormDialog> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _nameController;
   late final TextEditingController _amountController;
 
   late DateTime _selectedDate;
+
+  List<_ExpenseMember> _members = [];
+  String? _selectedMemberId;
+
+  bool _isLoadingMembers = false;
   bool _isSaving = false;
 
   bool get _isEditing => widget.expense != null;
+
+  User get _currentUser =>
+      FirebaseAuth.instance.currentUser!;
 
   @override
   void initState() {
@@ -242,7 +268,15 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     );
 
     _selectedDate =
-        (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+        (data?['date'] as Timestamp?)?.toDate() ??
+            DateTime.now();
+
+    _selectedMemberId =
+        data?['paidById'] as String? ?? _currentUser.uid;
+
+    if (widget.isAdmin && !_isEditing) {
+      _loadMembers();
+    }
   }
 
   @override
@@ -250,6 +284,89 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _nameController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMembers() async {
+    setState(() => _isLoadingMembers = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('groupId', isEqualTo: widget.groupId)
+          .get();
+
+      final members = snapshot.docs.map((document) {
+        final data = document.data();
+
+        return _ExpenseMember(
+          id: document.id,
+          name: _readMemberName(data),
+        );
+      }).toList();
+
+      if (!members.any(
+        (member) => member.id == _currentUser.uid,
+      )) {
+        members.add(
+          _ExpenseMember(
+            id: _currentUser.uid,
+            name: _currentUser.displayName
+                        ?.trim()
+                        .isNotEmpty ==
+                    true
+                ? _currentUser.displayName!.trim()
+                : _currentUser.email ?? 'Administrator',
+          ),
+        );
+      }
+
+      members.sort(
+        (first, second) =>
+            first.name.compareTo(second.name),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _members = members;
+
+        if (!_members.any(
+          (member) => member.id == _selectedMemberId,
+        )) {
+          _selectedMemberId = _currentUser.uid;
+        }
+      });
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message ?? 'Unable to load members.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMembers = false);
+      }
+    }
+  }
+
+  String _readMemberName(Map<String, dynamic> data) {
+    final possibleNames = [
+      data['name'],
+      data['displayName'],
+      data['fullName'],
+    ];
+
+    for (final value in possibleNames) {
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+
+    return 'Member';
   }
 
   Future<void> _selectDate() async {
@@ -260,7 +377,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       lastDate: DateTime.now(),
     );
 
-    if (selectedDate != null) {
+    if (selectedDate != null && mounted) {
       setState(() => _selectedDate = selectedDate);
     }
   }
@@ -268,8 +385,35 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final user = FirebaseAuth.instance.currentUser!;
-    final amount = double.parse(_amountController.text.trim());
+    if (widget.isAdmin &&
+        !_isEditing &&
+        _selectedMemberId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a member.'),
+        ),
+      );
+      return;
+    }
+
+    final amount =
+        double.parse(_amountController.text.trim());
+
+    final selectedMember = _members
+        .where(
+          (member) => member.id == _selectedMemberId,
+        )
+        .firstOrNull;
+
+    final paidById = widget.isAdmin && !_isEditing
+        ? _selectedMemberId!
+        : _currentUser.uid;
+
+    final paidByName = widget.isAdmin && !_isEditing
+        ? selectedMember?.name ?? 'Member'
+        : _currentUser.displayName?.trim().isNotEmpty == true
+            ? _currentUser.displayName!.trim()
+            : _currentUser.email ?? 'Member';
 
     setState(() => _isSaving = true);
 
@@ -284,20 +428,22 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'name': _nameController.text.trim(),
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
-          'updatedBy': user.uid,
+          'updatedBy': _currentUser.uid,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        final paidByName = user.displayName?.trim().isNotEmpty == true
-            ? user.displayName!.trim()
-            : user.email ?? 'Member';
-
         await expenses.add({
           'name': _nameController.text.trim(),
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
-          'paidById': user.uid,
+          'paidById': paidById,
           'paidByName': paidByName,
+          'enteredBy': _currentUser.uid,
+          'enteredByName':
+              _currentUser.displayName?.trim().isNotEmpty ==
+                      true
+                  ? _currentUser.displayName!.trim()
+                  : _currentUser.email ?? 'Member',
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -310,7 +456,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.message ?? 'Unable to save expense.'),
+          content: Text(
+            error.message ?? 'Unable to save expense.',
+          ),
         ),
       );
     } finally {
@@ -322,29 +470,92 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final day = _selectedDate.day.toString().padLeft(2, '0');
-    final month = _selectedDate.month.toString().padLeft(2, '0');
-    final formattedDate = '$day/$month/${_selectedDate.year}';
+    final day =
+        _selectedDate.day.toString().padLeft(2, '0');
+    final month =
+        _selectedDate.month.toString().padLeft(2, '0');
+    final formattedDate =
+        '$day/$month/${_selectedDate.year}';
+
+    final existingPaidByName =
+        widget.expense?.data()?['paidByName'] as String?;
 
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
+      title: Text(
+        _isEditing ? 'Edit Expense' : 'Add Expense',
+      ),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.isAdmin && !_isEditing) ...[
+                if (_isLoadingMembers)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedMemberId,
+                    decoration: const InputDecoration(
+                      labelText: 'Paid by',
+                      prefixIcon: Icon(
+                        Icons.person_outline,
+                      ),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _members.map((member) {
+                      return DropdownMenuItem<String>(
+                        value: member.id,
+                        child: Text(member.name),
+                      );
+                    }).toList(),
+                    onChanged: _isSaving
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _selectedMemberId = value;
+                            });
+                          },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please select a member.';
+                      }
+
+                      return null;
+                    },
+                  ),
+                const SizedBox(height: 16),
+              ],
+              if (_isEditing &&
+                  existingPaidByName != null) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.person_outline,
+                  ),
+                  title: const Text('Paid by'),
+                  subtitle: Text(existingPaidByName),
+                ),
+                const SizedBox(height: 8),
+              ],
               TextFormField(
                 controller: _nameController,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Expense name',
-                  hintText: 'Example: Rice or electricity bill',
-                  prefixIcon: Icon(Icons.description_outlined),
+                  hintText:
+                      'Example: Rice or electricity bill',
+                  prefixIcon: Icon(
+                    Icons.description_outlined,
+                  ),
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
+                  if (value == null ||
+                      value.trim().isEmpty) {
                     return 'Please enter the expense name.';
                   }
 
@@ -354,17 +565,20 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(
+                keyboardType:
+                    const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 decoration: const InputDecoration(
                   labelText: 'Amount',
                   prefixText: '৳ ',
-                  prefixIcon: Icon(Icons.payments_outlined),
+                  prefixIcon:
+                      Icon(Icons.payments_outlined),
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
-                  final amount = double.tryParse(value?.trim() ?? '');
+                  final amount =
+                      double.tryParse(value?.trim() ?? '');
 
                   if (amount == null || amount <= 0) {
                     return 'Please enter a valid amount.';
@@ -376,11 +590,14 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today_outlined),
+                leading: const Icon(
+                  Icons.calendar_today_outlined,
+                ),
                 title: const Text('Date'),
                 subtitle: Text(formattedDate),
                 trailing: TextButton(
-                  onPressed: _selectDate,
+                  onPressed:
+                      _isSaving ? null : _selectDate,
                   child: const Text('Change'),
                 ),
               ),
@@ -390,12 +607,18 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed:
-              _isSaving ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving
+              ? null
+              : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _isSaving ? null : _saveExpense,
+          onPressed: _isSaving ||
+                  (widget.isAdmin &&
+                      !_isEditing &&
+                      _isLoadingMembers)
+              ? null
+              : _saveExpense,
           child: _isSaving
               ? const SizedBox(
                   width: 20,
@@ -409,4 +632,14 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       ],
     );
   }
+}
+
+class _ExpenseMember {
+  const _ExpenseMember({
+    required this.id,
+    required this.name,
+  });
+
+  final String id;
+  final String name;
 }
