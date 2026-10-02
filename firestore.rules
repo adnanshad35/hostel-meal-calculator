@@ -172,7 +172,10 @@ service cloud.firestore {
               'updatedAt'
             ]);
 
-        allow delete: if false;
+        allow delete: if isSignedIn()
+  && get(
+    /databases/$(database)/documents/groups/$(groupId)
+  ).data.admins.hasAny([request.auth.uid]);
       }
 
       match /monthlySettings/{monthKey} {
@@ -183,7 +186,7 @@ service cloud.firestore {
           && request.resource.data.minimumMeals >= 0
           && request.resource.data.monthKey == monthKey;
 
-        allow delete: if false;
+        allow delete: if isGroupAdmin(groupId);
       }
     }
 
