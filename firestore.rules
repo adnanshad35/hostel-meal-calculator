@@ -21,22 +21,44 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create, update: if isSignedIn()
-        && request.auth.uid == userId;
+  allow create: if isSignedIn()
+    && request.auth.uid == userId;
 
-      allow read: if isSignedIn() && (
-        request.auth.uid == userId
-        ||
-        (
-          resource.data.groupId != null
-          && resource.data.groupId ==
-            get(/databases/$(database)/documents/users/$(request.auth.uid))
-              .data.groupId
-        )
-      );
+  allow update: if isSignedIn() && (
+    request.auth.uid == userId
+    ||
+    (
+      resource.data.groupId != null
+      && isGroupAdmin(resource.data.groupId)
+      && request.resource.data.groupId
+        == resource.data.groupId
+      && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly([
+          'role',
+          'updatedAt'
+        ])
+      && request.resource.data.role in [
+        'admin',
+        'member'
+      ]
+    )
+  );
 
-      allow delete: if false;
-    }
+  allow read: if isSignedIn() && (
+    request.auth.uid == userId
+    ||
+    (
+      resource.data.groupId != null
+      && resource.data.groupId ==
+        get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.groupId
+    )
+  );
+
+  allow delete: if false;
+}
 
     match /groups/{groupId} {
       allow create: if isSignedIn()

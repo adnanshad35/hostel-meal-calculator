@@ -7,6 +7,7 @@ import 'join_group_screen.dart';
 import 'meal_screen.dart';
 import 'expense_screen.dart';
 import 'monthly_summary_screen.dart';
+import 'manage_members_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -308,6 +309,28 @@ Card(
     },
   ),
 ),
+if (role == 'admin')
+  Card(
+    child: ListTile(
+      leading: const Icon(
+        Icons.manage_accounts_outlined,
+      ),
+      title: const Text('Manage Members'),
+      subtitle: const Text(
+        'Promote members and manage administrator roles.',
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ManageMembersScreen(
+              groupId: groupId,
+            ),
+          ),
+        );
+      },
+    ),
+  ),
       ],
     );
   }
