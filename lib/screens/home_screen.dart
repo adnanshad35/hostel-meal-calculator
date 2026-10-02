@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'create_group_screen.dart';
 import 'hostel_dashboard_screen.dart';
 import 'join_group_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -100,13 +101,26 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
           actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Close'),
-            ),
-          ],
+  TextButton(
+    onPressed: () {
+      Navigator.of(dialogContext).pop();
+    },
+    child: const Text('Close'),
+  ),
+  FilledButton.icon(
+    onPressed: () {
+      Navigator.of(dialogContext).pop();
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ProfileScreen(),
+        ),
+      );
+    },
+    icon: const Icon(Icons.edit_outlined),
+    label: const Text('Edit Profile'),
+  ),
+],
         );
       },
     );
