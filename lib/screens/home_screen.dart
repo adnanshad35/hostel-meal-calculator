@@ -6,6 +6,7 @@ import 'create_group_screen.dart';
 import 'join_group_screen.dart';
 import 'meal_screen.dart';
 import 'expense_screen.dart';
+import 'monthly_summary_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -267,6 +268,8 @@ class _GroupDashboard extends StatelessWidget {
             },
           ),
         ),
+        
+        
         Card(
   child: ListTile(
     leading: const Icon(Icons.receipt_long_outlined),
@@ -277,6 +280,26 @@ class _GroupDashboard extends StatelessWidget {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ExpenseScreen(
+            groupId: groupId,
+            isAdmin: role == 'admin',
+          ),
+        ),
+      );
+    },
+  ),
+),
+Card(
+  child: ListTile(
+    leading: const Icon(Icons.calculate_outlined),
+    title: const Text('Monthly Calculation'),
+    subtitle: const Text(
+      'View meal rate, expenses, and member balances.',
+    ),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MonthlySummaryScreen(
             groupId: groupId,
             isAdmin: role == 'admin',
           ),

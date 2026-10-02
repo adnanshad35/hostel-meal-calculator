@@ -123,6 +123,16 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+      match /monthlySettings/{monthKey} {
+  allow read: if isGroupMember(groupId);
+
+  allow create, update: if isGroupAdmin(groupId)
+    && request.resource.data.minimumMeals is number
+    && request.resource.data.minimumMeals >= 0
+    && request.resource.data.monthKey == monthKey;
+
+  allow delete: if false;
+}
     }
 
     match /invites/{inviteCode} {
