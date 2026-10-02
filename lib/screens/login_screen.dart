@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'forgot_password_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
@@ -10,7 +12,8 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback onCreateAccount;
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() =>
+      _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -29,44 +32,63 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  try {
-    await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    try {
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // Close the login page. AuthGate will automatically show the dashboard.
-    Navigator.of(context).pop();
-  } on FirebaseAuthException catch (error) {
-    if (!mounted) return;
+      Navigator.of(context).popUntil(
+        (route) => route.isFirst,
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
 
-    String message = 'Unable to sign in. Please try again.';
+      String message =
+          'Unable to sign in. Please try again.';
 
-    if (error.code == 'invalid-credential' ||
-        error.code == 'wrong-password' ||
-        error.code == 'user-not-found') {
-      message = 'Incorrect email address or password.';
-    } else if (error.code == 'invalid-email') {
-      message = 'Please enter a valid email address.';
-    } else if (error.code == 'too-many-requests') {
-      message = 'Too many attempts. Please try again later.';
-    }
+      if (error.code == 'invalid-credential') {
+        message =
+            'Incorrect email address or password.';
+      } else if (error.code == 'invalid-email') {
+        message =
+            'Please enter a valid email address.';
+      } else if (error.code == 'too-many-requests') {
+        message =
+            'Too many attempts. Please try again later.';
+      } else if (error.code ==
+          'network-request-failed') {
+        message =
+            'Please check your internet connection.';
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-}
+
+  void _openForgotPassword() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(
+          initialEmail:
+              _emailController.text.trim(),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment:
+                  CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 24),
                 const Icon(
@@ -92,28 +115,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   'Welcome back',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                 ),
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
+                  keyboardType:
+                      TextInputType.emailAddress,
+                  textInputAction:
+                      TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: 'Email address',
-                    prefixIcon: Icon(Icons.email_outlined),
+                    prefixIcon:
+                        Icon(Icons.email_outlined),
                     border: OutlineInputBorder(),
                   ),
                   validator: (value) {
-                    final email = value?.trim() ?? '';
+                    final email =
+                        value?.trim() ?? '';
 
                     if (email.isEmpty) {
                       return 'Please enter your email address.';
                     }
 
-                    if (!email.contains('@') || !email.contains('.')) {
+                    if (!email.contains('@') ||
+                        !email.contains('.')) {
                       return 'Please enter a valid email address.';
                     }
 
@@ -124,41 +155,64 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _hidePassword,
-                  textInputAction: TextInputAction.done,
+                  textInputAction:
+                      TextInputAction.done,
                   onFieldSubmitted: (_) => _signIn(),
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline),
+                    border:
+                        const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       onPressed: () {
-                        setState(() => _hidePassword = !_hidePassword);
+                        setState(() {
+                          _hidePassword =
+                              !_hidePassword;
+                        });
                       },
                       icon: Icon(
                         _hidePassword
                             ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                            : Icons
+                                .visibility_off_outlined,
                       ),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null ||
+                        value.isEmpty) {
                       return 'Please enter your password.';
                     }
 
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : _openForgotPassword,
+                    child:
+                        const Text('Forgot Password?'),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 FilledButton(
-                  onPressed: _isLoading ? null : _signIn,
+                  onPressed:
+                      _isLoading ? null : _signIn,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 12,
+                    ),
                     child: _isLoading
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(
+                            child:
+                                CircularProgressIndicator(
                               strokeWidth: 2,
                             ),
                           )
@@ -167,8 +221,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed:
-                      _isLoading ? null : widget.onCreateAccount,
+                  onPressed: _isLoading
+                      ? null
+                      : widget.onCreateAccount,
                   child: const Text(
                     'Don’t have an account? Create one',
                   ),
