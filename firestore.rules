@@ -179,15 +179,17 @@ service cloud.firestore {
       }
 
       match /monthlySettings/{monthKey} {
-        allow read: if isGroupMember(groupId);
+  allow read: if isGroupMember(groupId);
 
-        allow create, update: if isGroupAdmin(groupId)
-          && request.resource.data.minimumMeals is number
-          && request.resource.data.minimumMeals >= 0
-          && request.resource.data.monthKey == monthKey;
+  allow create, update: if isGroupAdmin(groupId)
+    && request.resource.data.minimumMeals is number
+    && request.resource.data.minimumMeals >= 0
+    && request.resource.data.shopDue is number
+    && request.resource.data.shopDue >= 0
+    && request.resource.data.monthKey == monthKey;
 
-        allow delete: if isGroupAdmin(groupId);
-      }
+  allow delete: if isGroupAdmin(groupId);
+}
     }
 
     match /invites/{inviteCode} {
