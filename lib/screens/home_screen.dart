@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import 'create_group_screen.dart';
 import 'hostel_dashboard_screen.dart';
 import 'join_group_screen.dart';
@@ -10,11 +11,9 @@ import 'profile_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut();
-  }
-
-  Future<void> _openCreateGroup(BuildContext context) async {
+  Future<void> _openCreateGroup(
+    BuildContext context,
+  ) async {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => const CreateGroupScreen(),
@@ -22,10 +21,20 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openJoinGroup(BuildContext context) async {
+  Future<void> _openJoinGroup(
+    BuildContext context,
+  ) async {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => const JoinGroupScreen(),
+      ),
+    );
+  }
+
+  void _openProfile(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ProfileScreen(),
       ),
     );
   }
@@ -42,7 +51,8 @@ class HomeScreen extends StatelessWidget {
     ];
 
     for (final value in possibleNames) {
-      if (value is String && value.trim().isNotEmpty) {
+      if (value is String &&
+          value.trim().isNotEmpty) {
         return value.trim();
       }
     }
@@ -50,165 +60,32 @@ class HomeScreen extends StatelessWidget {
     return 'Member';
   }
 
-  Future<void> _showUserDetails(
-    BuildContext context, {
-    required User user,
-    required String name,
-    required String role,
-    required String? groupName,
-  }) async {
-    final roleLabel =
-        role == 'admin' ? 'Administrator' : 'Member';
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.account_circle_outlined),
-              SizedBox(width: 10),
-              Text('My Profile'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ProfileRow(
-                label: 'Name',
-                value: name,
-              ),
-              const SizedBox(height: 14),
-              _ProfileRow(
-                label: 'Email',
-                value: user.email ?? 'Not available',
-              ),
-              const SizedBox(height: 14),
-              _ProfileRow(
-                label: 'Role',
-                value: groupName == null
-                    ? 'No hostel group'
-                    : roleLabel,
-              ),
-              if (groupName != null) ...[
-                const SizedBox(height: 14),
-                _ProfileRow(
-                  label: 'Hostel',
-                  value: groupName,
-                ),
-              ],
-            ],
-          ),
-          actions: [
-  TextButton(
-    onPressed: () {
-      Navigator.of(dialogContext).pop();
-    },
-    child: const Text('Close'),
-  ),
-  FilledButton.icon(
-    onPressed: () {
-      Navigator.of(dialogContext).pop();
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const ProfileScreen(),
-        ),
-      );
-    },
-    icon: const Icon(Icons.edit_outlined),
-    label: const Text('Edit Profile'),
-  ),
-],
-        );
-      },
-    );
-  }
-
-  Future<void> _showAbout(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(
-                Icons.restaurant_menu,
-                color: Color(0xFF2E7D32),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text('Hostel Meal Calculator'),
-              ),
-            ],
-          ),
-          content: const SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'A simple and transparent application for '
-                  'managing hostel meals, shared expenses, '
-                  'meal rates, and monthly member balances.',
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'Main Features',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text('• Daily lunch and dinner entry'),
-                Text('• Shared expense management'),
-                Text('• Transparent monthly calculations'),
-                Text('• Administrator and member roles'),
-                Text('• Minimum monthly meal settings'),
-                SizedBox(height: 20),
-                Divider(),
-                SizedBox(height: 12),
-                Text(
-                  'Developer',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text('Abu Adnan Shad'),
-                Text(
-                  'Independent Flutter and Firebase project',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user =
+        FirebaseAuth.instance.currentUser!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const Row(
+          children: [
+            _AppLogo(),
+            SizedBox(width: 11),
+            Text('HostelMate'),
+          ],
+        ),
         actions: [
           IconButton(
-            tooltip: 'Sign out',
-            onPressed: _signOut,
-            icon: const Icon(Icons.logout),
+            tooltip: 'Profile',
+            onPressed: () {
+              _openProfile(context);
+            },
+            icon: const Icon(
+              Icons.account_circle_outlined,
+              size: 28,
+            ),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -220,102 +97,94 @@ class HomeScreen extends StatelessWidget {
               .snapshots(),
           builder: (context, userSnapshot) {
             if (userSnapshot.connectionState ==
-                ConnectionState.waiting) {
+                    ConnectionState.waiting &&
+                !userSnapshot.hasData) {
               return const Center(
                 child: CircularProgressIndicator(),
               );
             }
 
             if (userSnapshot.hasError) {
-              return const Center(
-                child: Text(
-                  'Unable to load your account information.',
-                ),
+              return const _PageMessage(
+                icon: Icons.cloud_off_outlined,
+                title: 'Unable to load account',
               );
             }
 
-            final userData = userSnapshot.data?.data();
+            final userData =
+                userSnapshot.data?.data();
+
             final groupId =
                 userData?['groupId'] as String?;
-            final role =
-                userData?['role'] as String? ?? 'member';
-            final name = _readUserName(user, userData);
 
-            if (groupId == null || groupId.isEmpty) {
-              return _HomeWithoutGroup(
-                name: name,
-                email: user.email,
+            final role =
+                userData?['role'] as String? ??
+                    'member';
+
+            final name =
+                _readUserName(user, userData);
+
+            if (groupId == null ||
+                groupId.isEmpty) {
+              return _NoHostelView(
                 onCreateGroup: () {
                   _openCreateGroup(context);
                 },
                 onJoinGroup: () {
                   _openJoinGroup(context);
                 },
-                onProfile: () {
-                  _showUserDetails(
-                    context,
-                    user: user,
-                    name: name,
-                    role: role,
-                    groupName: null,
-                  );
-                },
-                onAbout: () {
-                  _showAbout(context);
-                },
               );
             }
 
             return StreamBuilder<
-                DocumentSnapshot<Map<String, dynamic>>>(
+                DocumentSnapshot<
+                    Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('groups')
                   .doc(groupId)
                   .snapshots(),
               builder: (context, groupSnapshot) {
                 if (groupSnapshot.connectionState ==
-                    ConnectionState.waiting) {
+                        ConnectionState.waiting &&
+                    !groupSnapshot.hasData) {
                   return const Center(
-                    child: CircularProgressIndicator(),
+                    child:
+                        CircularProgressIndicator(),
                   );
                 }
 
-                if (groupSnapshot.hasError) {
-                  return const Center(
-                    child: Text(
-                      'Unable to load the hostel group.',
-                    ),
-                  );
-                }
-
-                if (!groupSnapshot.hasData ||
+                if (groupSnapshot.hasError ||
+                    !groupSnapshot.hasData ||
                     !groupSnapshot.data!.exists) {
-                  return const Center(
-                    child: Text(
-                      'The hostel group could not be found.',
-                    ),
+                  return const _PageMessage(
+                    icon:
+                        Icons.apartment_outlined,
+                    title: 'Hostel not found',
                   );
                 }
 
-                final group = groupSnapshot.data!.data()!;
+                final group =
+                    groupSnapshot.data!.data()!;
 
                 final groupName =
                     group['name'] as String? ??
                         'Hostel Group';
 
                 final inviteCode =
-                    group['inviteCode'] as String? ?? '';
+                    group['inviteCode']
+                            as String? ??
+                        '';
 
-                final memberIds = List<String>.from(
-                  group['memberIds'] as List? ?? [],
+                final memberIds =
+                    List<String>.from(
+                  group['memberIds'] as List? ??
+                      [],
                 );
 
-                return _HomeWithGroup(
-                  name: name,
-                  email: user.email,
+                return _HostelView(
                   groupName: groupName,
-                  role: role,
-                  memberCount: memberIds.length,
+                  memberCount:
+                      memberIds.length,
                   onOpenHostel: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -323,24 +192,13 @@ class HomeScreen extends StatelessWidget {
                             HostelDashboardScreen(
                           groupId: groupId,
                           groupName: groupName,
-                          inviteCode: inviteCode,
+                          inviteCode:
+                              inviteCode,
                           memberName: name,
                           role: role,
                         ),
                       ),
                     );
-                  },
-                  onProfile: () {
-                    _showUserDetails(
-                      context,
-                      user: user,
-                      name: name,
-                      role: role,
-                      groupName: groupName,
-                    );
-                  },
-                  onAbout: () {
-                    _showAbout(context);
                   },
                 );
               },
@@ -352,270 +210,327 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _HomeWithoutGroup extends StatelessWidget {
-  const _HomeWithoutGroup({
-    required this.name,
-    required this.email,
+class _NoHostelView extends StatelessWidget {
+  const _NoHostelView({
     required this.onCreateGroup,
     required this.onJoinGroup,
-    required this.onProfile,
-    required this.onAbout,
   });
 
-  final String name;
-  final String? email;
   final VoidCallback onCreateGroup;
   final VoidCallback onJoinGroup;
-  final VoidCallback onProfile;
-  final VoidCallback onAbout;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text(
-          'Hello, $name!',
-          style:
-              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-        ),
-        const SizedBox(height: 4),
-        Text(email ?? ''),
-        const SizedBox(height: 24),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.groups_outlined,
-                  size: 48,
-                  color: Color(0xFF2E7D32),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'No hostel group yet',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Create a new hostel or join an existing one.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: onCreateGroup,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create Group'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: onJoinGroup,
-                  icon:
-                      const Icon(Icons.group_add_outlined),
-                  label: const Text('Join Group'),
-                ),
-              ],
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          constraints: const BoxConstraints(
+            maxWidth: 460,
+          ),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius:
+                BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFFE2E9E5),
             ),
           ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceSoft,
+                  borderRadius:
+                      BorderRadius.circular(22),
+                ),
+                child: const Icon(
+                  Icons.apartment_rounded,
+                  size: 38,
+                  color: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No Hostel Yet',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Create a hostel or join with a code.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onCreateGroup,
+                  icon: const Icon(
+                    Icons.add_rounded,
+                  ),
+                  label:
+                      const Text('Create Hostel'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onJoinGroup,
+                  icon: const Icon(
+                    Icons.group_add_outlined,
+                  ),
+                  label:
+                      const Text('Join Hostel'),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        _GeneralOptions(
-          onProfile: onProfile,
-          onAbout: onAbout,
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _HomeWithGroup extends StatelessWidget {
-  const _HomeWithGroup({
-    required this.name,
-    required this.email,
+class _HostelView extends StatelessWidget {
+  const _HostelView({
     required this.groupName,
-    required this.role,
     required this.memberCount,
     required this.onOpenHostel,
-    required this.onProfile,
-    required this.onAbout,
   });
 
-  final String name;
-  final String? email;
   final String groupName;
-  final String role;
   final int memberCount;
   final VoidCallback onOpenHostel;
-  final VoidCallback onProfile;
-  final VoidCallback onAbout;
 
   @override
   Widget build(BuildContext context) {
-    final roleLabel =
-        role == 'admin' ? 'Administrator' : 'Member';
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text(
-          'Hello, $name!',
-          style:
-              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 480,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius:
+                  BorderRadius.circular(26),
+              onTap: onOpenHostel,
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient:
+                      const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end:
+                        Alignment.bottomRight,
+                    colors: [
+                      AppTheme.primaryDark,
+                      AppTheme.primary,
+                    ],
                   ),
-        ),
-        const SizedBox(height: 4),
-        Text(email ?? ''),
-        const SizedBox(height: 24),
-        Text(
-          'My Hostel',
-          style:
-              Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          color: const Color(0xFFE8F5E9),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onOpenHostel,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Color(0xFFC8E6C9),
-                    child: Icon(
-                      Icons.apartment_outlined,
-                      size: 30,
-                      color: Color(0xFF2E7D32),
+                  borderRadius:
+                      BorderRadius.circular(26),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primary
+                          .withValues(
+                        alpha: 0.20,
+                      ),
+                      blurRadius: 28,
+                      offset:
+                          const Offset(0, 14),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          groupName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                                fontWeight:
-                                    FontWeight.bold,
+                  ],
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.all(26),
+                  child: Column(
+                    mainAxisSize:
+                        MainAxisSize.min,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration:
+                                BoxDecoration(
+                              color: Colors.white
+                                  .withValues(
+                                alpha: 0.15,
                               ),
+                              borderRadius:
+                                  BorderRadius
+                                      .circular(19),
+                            ),
+                            child: const Icon(
+                              Icons
+                                  .apartment_rounded,
+                              size: 32,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding:
+                                const EdgeInsets
+                                    .symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration:
+                                BoxDecoration(
+                              color: Colors.white
+                                  .withValues(
+                                alpha: 0.14,
+                              ),
+                              borderRadius:
+                                  BorderRadius
+                                      .circular(20),
+                            ),
+                            child: Text(
+                              '$memberCount '
+                              '${memberCount == 1 ? 'member' : 'members'}',
+                              style:
+                                  const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight:
+                                    FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      Text(
+                        groupName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight:
+                              FontWeight.w800,
+                          letterSpacing: -0.5,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$roleLabel • $memberCount '
-                          '${memberCount == 1 ? 'member' : 'members'}',
+                      ),
+                      const SizedBox(height: 26),
+                      Container(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal: 15,
+                          vertical: 13,
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Tap to open hostel',
-                          style: TextStyle(
-                            color: Color(0xFF2E7D32),
+                        decoration: BoxDecoration(
+                          color: Colors.white
+                              .withValues(
+                            alpha: 0.13,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(
+                            15,
                           ),
                         ),
-                      ],
-                    ),
+                        child: const Row(
+                          children: [
+                            Text(
+                              'Enter Hostel',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight:
+                                    FontWeight.w700,
+                              ),
+                            ),
+                            Spacer(),
+                            Icon(
+                              Icons
+                                  .arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 21,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const Icon(Icons.chevron_right),
-                ],
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        _GeneralOptions(
-          onProfile: onProfile,
-          onAbout: onAbout,
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _GeneralOptions extends StatelessWidget {
-  const _GeneralOptions({
-    required this.onProfile,
-    required this.onAbout,
-  });
-
-  final VoidCallback onProfile;
-  final VoidCallback onAbout;
+class _AppLogo extends StatelessWidget {
+  const _AppLogo();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Card(
-          child: ListTile(
-            leading:
-                const Icon(Icons.account_circle_outlined),
-            title: const Text('My Profile'),
-            subtitle: const Text(
-              'View your account and hostel information.',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onProfile,
-          ),
-        ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About App & Developer'),
-            subtitle: const Text(
-              'Learn more about this application.',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onAbout,
-          ),
-        ),
-      ],
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceSoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.home_work_rounded,
+        color: AppTheme.primary,
+        size: 21,
+      ),
     );
   }
 }
 
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
-    required this.label,
-    required this.value,
+class _PageMessage extends StatelessWidget {
+  const _PageMessage({
+    required this.icon,
+    required this.title,
   });
 
-  final String label;
-  final String value;
+  final IconData icon;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 48,
+              color: AppTheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge,
+            ),
+          ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style:
-              Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-        ),
-      ],
+      ),
     );
   }
 }
