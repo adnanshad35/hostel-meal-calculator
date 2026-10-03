@@ -1,17 +1,30 @@
-# hostel_meal_calculator
+# HostelMate
 
-A new Flutter project.
+HostelMate is a Flutter and Firebase app for managing shared hostel meals,
+expenses, monthly calculations, and member balances.
 
-## Getting Started
+## Current features
 
-This project is a starting point for a Flutter application.
+- Email and password authentication
+- Create or join a hostel with an invitation code
+- Administrator and member roles
+- Daily meal entry and shared meal ledger
+- Shared expense tracking
+- Monthly meal-rate and member-balance calculations
+- Minimum monthly meal settings
+- Monthly shop-due tracking
+- Member and administrator management
+- Password reset and profile screen
 
-A few resources to get you started if this is your first Flutter project:
+## Technology
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Flutter and Dart
+- Firebase Authentication
+- Cloud Firestore
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Run locally
+
+```bash
+flutter pub get
+flutter run
+```
