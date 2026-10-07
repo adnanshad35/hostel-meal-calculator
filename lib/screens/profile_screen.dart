@@ -229,6 +229,8 @@ Future<void> _requestFeature(
           final name = _readName(userData);
           final email =
               _currentUser.email ?? 'Not available';
+          final phone =
+              userData?['phoneNumber'] as String? ?? '';
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -241,6 +243,7 @@ Future<void> _requestFeature(
               _ProfileHeader(
   name: name,
   email: email,
+  phone: phone,
 ),
 const SizedBox(height: 28),
 const _SectionLabel(
@@ -313,10 +316,12 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.name,
     required this.email,
+    required this.phone,
   });
 
   final String name;
   final String email;
+  final String phone;
 
   String get initials {
     final words = name
@@ -409,6 +414,19 @@ class _ProfileHeader extends StatelessWidget {
                     fontSize: 13,
                   ),
                 ),
+                if (phone.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    phone,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white
+                          .withValues(alpha: 0.78),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

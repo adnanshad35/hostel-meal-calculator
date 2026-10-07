@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -22,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -42,6 +45,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await credential.user?.updateDisplayName(
         _nameController.text.trim(),
       );
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(credential.user!.uid)
+          .set({
+        'uid': credential.user!.uid,
+        'fullName': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'role': 'member',
+        'groupId': null,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       await credential.user?.sendEmailVerification();
 
@@ -167,6 +183,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     if (!email.contains('@') || !email.contains('.')) {
                       return 'Please enter a valid email address.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [
+                    AutofillHints.telephoneNumber,
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Phone number (optional)',
+                    hintText: 'Example: +8801712345678',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final phone = value?.trim() ?? '';
+
+                    if (phone.isEmpty) return null;
+
+                    final normalized = phone.replaceAll(
+                      RegExp(r'[\s()-]'),
+                      '',
+                    );
+
+                    if (!RegExp(r'^\+?[0-9]{8,15}$')
+                        .hasMatch(normalized)) {
+                      return 'Please enter a valid phone number.';
                     }
 
                     return null;
