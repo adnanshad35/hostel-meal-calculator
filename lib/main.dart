@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/verify_email_screen.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -38,8 +39,7 @@ class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream:
-          FirebaseAuth.instance.authStateChanges(),
+      stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState ==
             ConnectionState.waiting) {
@@ -50,8 +50,13 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasData) {
+        if (snapshot.hasData &&
+            snapshot.data!.emailVerified) {
           return const HomeScreen();
+        }
+
+        if (snapshot.hasData) {
+          return const VerifyEmailScreen();
         }
 
         return const WelcomeScreen();

@@ -43,18 +43,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _nameController.text.trim(),
       );
 
-      // For Version 1, the user signs in manually after registration.
-      await FirebaseAuth.instance.signOut();
+      await credential.user?.sendEmailVerification();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account created successfully. Please sign in.'),
+          content: Text(
+            'Account created. Check your email to verify it.',
+          ),
         ),
       );
 
-      Navigator.of(context).pop();
+      Navigator.of(context).popUntil(
+        (route) => route.isFirst,
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
@@ -66,6 +69,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         message = 'Please enter a valid email address.';
       } else if (error.code == 'weak-password') {
         message = 'Please choose a stronger password.';
+      } else if (error.code == 'network-request-failed') {
+        message = 'Please check your internet connection.';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,6 +125,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 8),
+                const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Color(0xFFE08A17),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your name cannot be changed later. '
+                        'Please check it carefully.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF647069),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
