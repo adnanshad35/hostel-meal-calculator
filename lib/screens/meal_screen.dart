@@ -224,46 +224,58 @@ class _MealScreenState extends State<MealScreen> {
     }
   }
 
+  void _openLedger() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MealLedgerScreen(
+          groupId: widget.groupId,
+          isAdmin: widget.isAdmin,
+        ),
+      ),
+    );
+  }
+
+  void _openMyMeals() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MyMealsScreen(
+          groupId: widget.groupId,
+          currentUserId: _user.uid,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentMonth = _monthKey(DateTime.now());
 
     return Scaffold(
       appBar: AppBar(
-  title: const Text('My Meals'),
-  actions: [
-    IconButton(
-      tooltip: 'Shared meal ledger',
-      icon: const Icon(Icons.table_chart_outlined),
-      onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MealLedgerScreen(
-  groupId: widget.groupId,
-  isAdmin: widget.isAdmin,
-),
-          ),
-        );
-      },
-    ),
-  ],
-),
+        title: const Text('Meal Update'),
+      ),
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _mealCollection
-              .where('userId', isEqualTo: _user.uid)
-              .snapshots(),
+          stream: _mealCollection.snapshots(),
           builder: (context, snapshot) {
-            double monthlyTotal = 0;
+            double totalMealsMonthly = 0;
+            double myMonthlyTotal = 0;
 
             if (snapshot.hasData) {
               for (final document in snapshot.data!.docs) {
                 final data = document.data();
                 final dateKey = data['dateKey'] as String? ?? '';
+                final userId = data['userId'] as String?;
 
-                if (dateKey.startsWith(currentMonth)) {
-                  monthlyTotal +=
-                      (data['total'] as num?)?.toDouble() ?? 0;
+                if (!dateKey.startsWith(currentMonth)) continue;
+
+                final total =
+                    (data['total'] as num?)?.toDouble() ?? 0;
+
+                totalMealsMonthly += total;
+
+                if (userId == _user.uid) {
+                  myMonthlyTotal += total;
                 }
               }
             }
@@ -271,6 +283,35 @@ class _MealScreenState extends State<MealScreen> {
             return ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                // ─── Top: two summary cards ───
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: Icons.groups_outlined,
+                        title: 'Total Meals',
+                        value: _displayQuantity(totalMealsMonthly),
+                        subtitle: 'This month',
+                        color: const Color(0xFF2E7D32), // <--- NOW GREEN
+                        onTap: _openLedger,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: Icons.person_outline,
+                        title: 'My Meals',
+                        value: _displayQuantity(myMonthlyTotal),
+                        subtitle: 'This month',
+                        color: const Color(0xFF2E7D32), // green
+                        onTap: _openMyMeals,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // ─── Selected date card (unchanged) ───
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.calendar_month_outlined),
@@ -280,22 +321,8 @@ class _MealScreenState extends State<MealScreen> {
                     onTap: _selectDate,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.summarize_outlined),
-                    title: const Text('My meals this month'),
-                    trailing: Text(
-                      _displayQuantity(monthlyTotal),
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF2E7D32),
-                              ),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 20),
+
                 if (_isLoading)
                   const Center(
                     child: Padding(
@@ -381,6 +408,342 @@ class _MealScreenState extends State<MealScreen> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Tappable summary tile
+// ─────────────────────────────────────────────────────────────
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: Theme.of(context).colorScheme.outline,
+                    size: 20,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                value,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineMedium
+                    ?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// My Meals screen — listens to the same simple query as the
+// main screen and filters client-side to avoid needing a
+// composite Firestore index.
+// ─────────────────────────────────────────────────────────────
+class MyMealsScreen extends StatelessWidget {
+  const MyMealsScreen({
+    super.key,
+    required this.groupId,
+    required this.currentUserId,
+  });
+
+  final String groupId;
+  final String currentUserId;
+
+  String _monthKey(DateTime date) {
+    final year = date.year.toString();
+    final month = date.month.toString().padLeft(2, '0');
+    return '$year-$month';
+  }
+
+  String _displayQuantity(double value) {
+    return value % 1 == 0
+        ? value.toInt().toString()
+        : value.toStringAsFixed(1);
+  }
+
+  String _monthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
+  }
+
+  String _weekdayName(int weekday) {
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return weekdays[weekday - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final currentMonth = _monthKey(now);
+
+    final stream = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .collection('meals')
+        .snapshots();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Meals'),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: stream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Unable to load your meals.\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+          final docs = (snapshot.data?.docs ?? [])
+              .where((d) {
+                final data = d.data();
+                final userId = data['userId'] as String?;
+                final dateKey = data['dateKey'] as String? ?? '';
+                return userId == currentUserId &&
+                    dateKey.startsWith(currentMonth);
+              })
+              .toList();
+
+          docs.sort((a, b) {
+            final aKey = a.data()['dateKey'] as String? ?? '';
+            final bKey = b.data()['dateKey'] as String? ?? '';
+            return bKey.compareTo(aKey); // newest first
+          });
+
+          double totalMeals = 0;
+          for (final d in docs) {
+            totalMeals +=
+                (d.data()['total'] as num?)?.toDouble() ?? 0;
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.person_outline,
+                        size: 38,
+                        color: Color(0xFF2E7D32),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_monthName(now.month)} ${now.year}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text('${docs.length} entries'),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('My meals'),
+                          Text(
+                            _displayQuantity(totalMeals),
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: const Color(0xFF2E7D32),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (docs.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'You have not entered any meals this month.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                for (final doc in docs)
+                  _MyMealEntryTile(
+                    data: doc.data(),
+                    weekdayName: _weekdayName,
+                    displayQuantity: _displayQuantity,
+                  ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MyMealEntryTile extends StatelessWidget {
+  const _MyMealEntryTile({
+    required this.data,
+    required this.weekdayName,
+    required this.displayQuantity,
+  });
+
+  final Map<String, dynamic> data;
+  final String Function(int) weekdayName;
+  final String Function(double) displayQuantity;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateKey = data['dateKey'] as String? ?? '';
+    final lunch = (data['lunch'] as num?)?.toDouble() ?? 0;
+    final dinner = (data['dinner'] as num?)?.toDouble() ?? 0;
+    final total = (data['total'] as num?)?.toDouble() ?? 0;
+
+    DateTime? parsedDate;
+    try {
+      final parts = dateKey.split('-');
+      parsedDate = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+    } catch (_) {
+      parsedDate = null;
+    }
+
+    final label = parsedDate != null
+        ? '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}'
+        : dateKey;
+
+    final weekday = parsedDate != null
+        ? weekdayName(parsedDate.weekday)
+        : '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor:
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Text(
+            parsedDate != null ? parsedDate.day.toString() : '?',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Text(
+          weekday.isEmpty ? label : '$weekday • $label',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          'Lunch: ${displayQuantity(lunch)}   '
+          'Dinner: ${displayQuantity(dinner)}',
+        ),
+        trailing: Text(
+          displayQuantity(total),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2E7D32),
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Existing lunch / dinner counter — unchanged
+// ─────────────────────────────────────────────────────────────
 class _MealCounter extends StatelessWidget {
   const _MealCounter({
     required this.title,
