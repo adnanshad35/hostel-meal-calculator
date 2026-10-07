@@ -149,6 +149,144 @@ class _ManageMembersScreenState
     }
   }
 
+  Future<void> _removeMember({
+    required String memberId,
+    required String memberName,
+    required String memberEmail,
+  }) async {
+    if (memberId == _currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Use Group Settings if you want to leave the hostel.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove Member?'),
+          content: Text(
+            'Remove $memberName from this hostel?\n\n'
+            'Their previous meals and expenses will remain in '
+            'the hostel records.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Remove Member'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _updatingMemberId = memberId);
+
+    try {
+      final groupReference =
+          _firestore.collection('groups').doc(widget.groupId);
+      final userReference =
+          _firestore.collection('users').doc(memberId);
+
+      await _firestore.runTransaction((transaction) async {
+        final groupSnapshot =
+            await transaction.get(groupReference);
+
+        if (!groupSnapshot.exists) {
+          throw Exception('The hostel group could not be found.');
+        }
+
+        final groupData = groupSnapshot.data()!;
+        final memberIds = List<String>.from(
+          groupData['memberIds'] as List? ?? [],
+        );
+        final admins = List<String>.from(
+          groupData['admins'] as List? ?? [],
+        );
+
+        if (!admins.contains(_currentUserId)) {
+          throw Exception(
+            'Only an administrator can remove members.',
+          );
+        }
+
+        if (!memberIds.contains(memberId)) {
+          throw Exception(
+            '$memberName is no longer a member of this hostel.',
+          );
+        }
+
+        if (admins.contains(memberId) && admins.length <= 1) {
+          throw Exception(
+            'The final administrator cannot be removed.',
+          );
+        }
+
+        memberIds.remove(memberId);
+        admins.remove(memberId);
+
+        transaction.update(groupReference, {
+          'memberIds': memberIds,
+          'admins': admins,
+          'formerMembers.$memberId': {
+            'name': memberName,
+            'email': memberEmail,
+            'removedBy': _currentUserId,
+            'removedAt': FieldValue.serverTimestamp(),
+          },
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(userReference, {
+          'groupId': null,
+          'role': 'member',
+          'previousGroupId': widget.groupId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$memberName was removed from the hostel.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      final message = error
+          .toString()
+          .replaceFirst('Exception: ', '');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _updatingMemberId = null);
+      }
+    }
+  }
+
   String _readMemberName(Map<String, dynamic> data) {
     final possibleNames = [
       data['name'],
@@ -347,12 +485,23 @@ class _ManageMembersScreenState
                                           memberName,
                                       makeAdmin: false,
                                     );
+                                  } else if (value ==
+                                      'remove') {
+                                    _removeMember(
+                                      memberId: member.id,
+                                      memberName:
+                                          memberName,
+                                      memberEmail: email,
+                                    );
                                   }
                                 },
                                 itemBuilder: (context) {
+                                  final items =
+                                      <PopupMenuEntry<String>>[];
+
                                   if (isAdmin) {
-                                    return const [
-                                      PopupMenuItem(
+                                    items.add(
+                                      const PopupMenuItem(
                                         value: 'demote',
                                         child: Row(
                                           children: [
@@ -367,26 +516,55 @@ class _ManageMembersScreenState
                                           ],
                                         ),
                                       ),
-                                    ];
+                                    );
+                                  } else {
+                                    items.add(
+                                      const PopupMenuItem(
+                                        value: 'promote',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons
+                                                  .admin_panel_settings_outlined,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Make Administrator',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
                                   }
 
-                                  return const [
-                                    PopupMenuItem(
-                                      value: 'promote',
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons
-                                                .admin_panel_settings_outlined,
-                                          ),
-                                          SizedBox(width: 10),
-                                          Text(
-                                            'Make Administrator',
-                                          ),
-                                        ],
+                                  if (!isCurrentUser) {
+                                    items.add(
+                                      const PopupMenuDivider(),
+                                    );
+                                    items.add(
+                                      const PopupMenuItem(
+                                        value: 'remove',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons
+                                                  .person_remove_outlined,
+                                              color: Colors.red,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Remove from Hostel',
+                                              style: TextStyle(
+                                                color: Colors.red,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ];
+                                    );
+                                  }
+
+                                  return items;
                                 },
                               ),
                       ),

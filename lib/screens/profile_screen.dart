@@ -29,6 +29,119 @@ class ProfileScreen extends StatelessWidget {
     return 'Member';
   }
 
+  Future<void> _editPhoneNumber(
+    BuildContext context, {
+    required String currentPhone,
+  }) async {
+    final formKey = GlobalKey<FormState>();
+    final controller = TextEditingController(
+      text: currentPhone,
+    );
+
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            currentPhone.trim().isEmpty
+                ? 'Add Phone Number'
+                : 'Update Phone Number',
+          ),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Phone number',
+                hintText: 'Example: +8801712345678',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              validator: (value) {
+                final enteredPhone = value?.trim() ?? '';
+
+                if (enteredPhone.isEmpty) {
+                  return 'Please enter your phone number.';
+                }
+
+                final normalized = enteredPhone.replaceAll(
+                  RegExp(r'[\s()-]'),
+                  '',
+                );
+
+                if (!RegExp(r'^\+?[0-9]{8,15}$')
+                    .hasMatch(normalized)) {
+                  return 'Please enter a valid phone number.';
+                }
+
+                return null;
+              },
+              onFieldSubmitted: (_) {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(dialogContext).pop(
+                    controller.text.trim(),
+                  );
+                }
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(dialogContext).pop(
+                    controller.text.trim(),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (phone == null || !context.mounted) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser.uid)
+          .set({
+        'phoneNumber': phone,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number updated.'),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message ?? 'Unable to update phone number.',
+          ),
+        ),
+      );
+    }
+  }
+
 Future<void> _requestFeature(
   BuildContext context,
 ) async {
@@ -246,6 +359,29 @@ Future<void> _requestFeature(
   phone: phone,
 ),
 const SizedBox(height: 28),
+const _SectionLabel(
+  text: 'Account',
+),
+              const SizedBox(height: 10),
+              Card(
+                child: _ProfileTile(
+                  icon: Icons.phone_outlined,
+                  iconBackground:
+                      AppTheme.surfaceSoft,
+                  iconColor: AppTheme.primary,
+                  title: 'Phone Number',
+                  subtitle: phone.trim().isEmpty
+                      ? 'Add your phone number'
+                      : phone,
+                  onTap: () {
+                    _editPhoneNumber(
+                      context,
+                      currentPhone: phone,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
 const _SectionLabel(
   text: 'Help & Information',
 ),

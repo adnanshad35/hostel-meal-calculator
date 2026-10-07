@@ -476,6 +476,9 @@ class _MonthlySummaryScreenState
     required double minimumMeals,
     required double shopDue,
   }) {
+    final memberById = <String, _MemberInfo>{
+      for (final member in members) member.id: member,
+    };
     final actualMeals = <String, double>{};
     final memberSpending = <String, double>{};
 
@@ -492,8 +495,7 @@ class _MonthlySummaryScreenState
       final userId =
           data['userId'] as String?;
 
-      if (userId == null ||
-          !actualMeals.containsKey(userId)) {
+      if (userId == null) {
         continue;
       }
 
@@ -514,6 +516,20 @@ class _MonthlySummaryScreenState
               );
 
       if (!belongsToMonth) continue;
+
+      if (!memberById.containsKey(userId)) {
+        final savedName =
+            data['userName'] as String?;
+
+        memberById[userId] = _MemberInfo(
+          id: userId,
+          name: savedName?.trim().isNotEmpty == true
+              ? savedName!.trim()
+              : 'Former Member',
+        );
+        actualMeals[userId] = 0;
+        memberSpending[userId] = 0;
+      }
 
       final lunch =
           (data['lunch'] as num?)
@@ -551,11 +567,7 @@ class _MonthlySummaryScreenState
           (data['date'] as Timestamp?)
               ?.toDate();
 
-      if (userId == null ||
-          date == null ||
-          !memberSpending.containsKey(
-            userId,
-          )) {
+      if (userId == null || date == null) {
         continue;
       }
 
@@ -564,6 +576,20 @@ class _MonthlySummaryScreenState
               date.isBefore(nextMonth);
 
       if (!belongsToMonth) continue;
+
+      if (!memberById.containsKey(userId)) {
+        final savedName =
+            data['paidByName'] as String?;
+
+        memberById[userId] = _MemberInfo(
+          id: userId,
+          name: savedName?.trim().isNotEmpty == true
+              ? savedName!.trim()
+              : 'Former Member',
+        );
+        actualMeals[userId] = 0;
+        memberSpending[userId] = 0;
+      }
 
       final amount =
           (data['amount'] as num?)
@@ -581,7 +607,7 @@ class _MonthlySummaryScreenState
     double totalMealNumber = 0;
     double memberPaidExpenses = 0;
 
-    for (final member in members) {
+    for (final member in memberById.values) {
       final actual =
           actualMeals[member.id] ?? 0;
 

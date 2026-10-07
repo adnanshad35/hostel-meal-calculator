@@ -3,9 +3,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
-  return request.auth != null
-    && request.auth.token.email_verified == true;
-}
+      return request.auth != null
+        && request.auth.token.email_verified == true;
+    }
 
     function isGroupMember(groupId) {
       return isSignedIn()
@@ -31,19 +31,39 @@ service cloud.firestore {
         (
           resource.data.groupId != null
           && isGroupAdmin(resource.data.groupId)
-          && request.resource.data.groupId
-            == resource.data.groupId
-          && request.resource.data
-            .diff(resource.data)
-            .affectedKeys()
-            .hasOnly([
-              'role',
-              'updatedAt'
-            ])
-          && request.resource.data.role in [
-            'admin',
-            'member'
-          ]
+          && (
+            (
+              request.resource.data.groupId
+                == resource.data.groupId
+              && request.resource.data
+                .diff(resource.data)
+                .affectedKeys()
+                .hasOnly([
+                  'role',
+                  'updatedAt'
+                ])
+              && request.resource.data.role in [
+                'admin',
+                'member'
+              ]
+            )
+            ||
+            (
+              request.resource.data.groupId == null
+              && request.resource.data.role == 'member'
+              && request.resource.data.previousGroupId
+                == resource.data.groupId
+              && request.resource.data
+                .diff(resource.data)
+                .affectedKeys()
+                .hasOnly([
+                  'groupId',
+                  'role',
+                  'previousGroupId',
+                  'updatedAt'
+                ])
+            )
+          )
         )
       );
 
@@ -204,4 +224,3 @@ service cloud.firestore {
     }
   }
 }
-
