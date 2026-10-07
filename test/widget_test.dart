@@ -10,8 +10,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Hostel Meal Calculator'), findsOneWidget);
+    expect(find.text('HostelMate'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
-    expect(find.text('Create Account'), findsOneWidget);
+    expect(find.text('Create New Account'), findsOneWidget);
   });
 }
