@@ -59,7 +59,9 @@ class ExpenseRecord {
 
 class MemberCalculation {
   const MemberCalculation({
+    required this.id,
     required this.name,
+    this.isFormer = false,
     required this.actualMeals,
     required this.mealNumber,
     required this.spending,
@@ -68,7 +70,12 @@ class MemberCalculation {
     this.finalBalance = 0,
   });
 
+  final String id;
   final String name;
+
+  /// True for someone with records this month who is no longer in
+  /// the member list.
+  final bool isFormer;
 
   /// Meals the member actually ate.
   final double actualMeals;
@@ -93,7 +100,9 @@ class MemberCalculation {
     int? finalBalance,
   }) {
     return MemberCalculation(
+      id: id,
       name: name,
+      isFormer: isFormer,
       actualMeals: actualMeals,
       mealNumber: mealNumber,
       spending: spending,
@@ -148,6 +157,7 @@ class MonthlyCalculator {
     };
     final actualMeals = <String, double>{};
     final memberSpending = <String, double>{};
+    final formerMemberIds = <String>{};
 
     for (final member in members) {
       actualMeals[member.id] = 0;
@@ -165,6 +175,7 @@ class MonthlyCalculator {
       );
       actualMeals[id] = 0;
       memberSpending[id] = 0;
+      formerMemberIds.add(id);
     }
 
     final selectedMonthKey = monthKey(month);
@@ -219,7 +230,9 @@ class MonthlyCalculator {
 
       calculations.add(
         MemberCalculation(
+          id: member.id,
           name: member.name,
+          isFormer: formerMemberIds.contains(member.id),
           actualMeals: actual,
           mealNumber: calculatedMealNumber,
           spending: spending,

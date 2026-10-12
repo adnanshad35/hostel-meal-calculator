@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../services/group_member_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/notification_bell.dart';
 import 'create_group_screen.dart';
 import 'hostel_dashboard_screen.dart';
 import 'join_group_screen.dart';
@@ -78,6 +79,7 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip: 'Profile',
             onPressed: () {

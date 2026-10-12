@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
+import '../services/notification_service.dart';
 
 class ExpenseScreen extends StatelessWidget {
   const ExpenseScreen({
@@ -975,6 +976,20 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
+
+        final amountText = amount % 1 == 0
+            ? amount.toInt().toString()
+            : amount.toStringAsFixed(2);
+
+        // Not awaited: the expense is saved either way.
+        unawaited(
+          NotificationService.notifyGroup(
+            groupId: widget.groupId,
+            title: 'New expense',
+            message: '${_nameController.text.trim()} · ৳$amountText, '
+                'paid by $paidByName',
+          ),
+        );
       }
 
       if (!mounted) return;

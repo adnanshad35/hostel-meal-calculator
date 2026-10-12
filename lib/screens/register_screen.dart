@@ -46,20 +46,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _nameController.text.trim(),
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(credential.user!.uid)
-          .set({
-        'uid': credential.user!.uid,
-        'fullName': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'role': 'member',
-        'groupId': null,
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
+      // Sent first, so a problem saving the profile can never leave
+      // the new account without its verification email.
       await credential.user?.sendEmailVerification();
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(credential.user!.uid)
+            .set({
+          'uid': credential.user!.uid,
+          'fullName': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'role': 'member',
+          'groupId': null,
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } on FirebaseException {
+        // The account exists and can be verified. The profile is
+        // created again when the user joins or creates a hostel.
+      }
 
       if (!mounted) return;
 

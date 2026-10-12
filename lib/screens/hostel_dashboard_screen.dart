@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
+import '../widgets/notification_bell.dart';
 import 'expense_screen.dart';
 import 'hostel_details_screen.dart';
 import 'meal_screen.dart';
@@ -49,6 +50,13 @@ class HostelDashboardScreen
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hostel Dashboard'),
+        actions: [
+          NotificationBell(
+            groupId: groupId,
+            isAdmin: isAdmin,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: ListView(

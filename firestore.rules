@@ -55,7 +55,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create: if isSignedIn()
+      // A profile is created at sign-up, before the email is verified.
+      // It cannot place the user in a group: joining one requires a
+      // verified email.
+      allow create: if request.auth != null
         && request.auth.uid == userId
         && ownGroupFieldsAreValid();
 
@@ -319,6 +322,36 @@ service cloud.firestore {
         // Members are deactivated, never deleted.
         allow delete: if false;
       }
+
+      // In-app notifications inside the hostel: activity recorded by
+      // any member, and announcements written by admins.
+      match /notifications/{notificationId} {
+        allow read: if isGroupMember(groupId);
+
+        allow create: if isGroupMember(groupId)
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 600
+          && (
+            request.resource.data.type == 'expense'
+            || (
+              request.resource.data.type == 'announcement'
+              && isGroupAdmin(groupId)
+            )
+          );
+
+        allow update: if false;
+        allow delete: if isGroupAdmin(groupId);
+      }
+    }
+
+    // App notices from the developer to every user.
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+
+      allow create, update, delete: if isSignedIn()
+        && request.auth.uid == 'zFw7V8Yn52fsvyODMkr6Mj768gx2';
     }
 
     match /invites/{inviteCode} {
