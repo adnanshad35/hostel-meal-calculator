@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../services/group_member_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
 import 'create_group_screen.dart';
@@ -52,6 +51,99 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
 
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, userSnapshot) {
+        if (userSnapshot.connectionState == ConnectionState.waiting &&
+            !userSnapshot.hasData) {
+          return _page(
+            context,
+            const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (userSnapshot.hasError) {
+          return _page(
+            context,
+            const _PageMessage(
+              icon: Icons.cloud_off_outlined,
+              title: 'Unable to load account',
+            ),
+          );
+        }
+
+        final userData = userSnapshot.data?.data();
+
+        final groupId = userData?['groupId'] as String?;
+
+        final role = userData?['role'] as String? ?? 'member';
+
+        final name = _readUserName(user, userData);
+
+        if (groupId == null || groupId.isEmpty) {
+          return _page(
+            context,
+            _NoHostelView(
+              onCreateGroup: () {
+                _openCreateGroup(context);
+              },
+              onJoinGroup: () {
+                _openJoinGroup(context);
+              },
+            ),
+          );
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('groups')
+              .doc(groupId)
+              .snapshots(),
+          builder: (context, groupSnapshot) {
+            if (groupSnapshot.connectionState == ConnectionState.waiting &&
+                !groupSnapshot.hasData) {
+              return _page(
+                context,
+                const Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (groupSnapshot.hasError ||
+                !groupSnapshot.hasData ||
+                !groupSnapshot.data!.exists) {
+              return _page(
+                context,
+                const _PageMessage(
+                  icon: Icons.apartment_outlined,
+                  title: 'Hostel not found',
+                ),
+              );
+            }
+
+            final group = groupSnapshot.data!.data()!;
+
+            // A member belongs to one hostel, so the app opens straight
+            // into it.
+            return HostelDashboardScreen(
+              key: ValueKey(groupId),
+              groupId: groupId,
+              groupName: group['name'] as String? ?? 'Hostel Group',
+              inviteCode: group['inviteCode'] as String? ?? '',
+              memberName: name,
+              role: role,
+              isHome: true,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// The standard home page: app bar with notices and profile.
+  Widget _page(BuildContext context, Widget body) {
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -69,97 +161,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .snapshots(),
-          builder: (context, userSnapshot) {
-            if (userSnapshot.connectionState == ConnectionState.waiting &&
-                !userSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (userSnapshot.hasError) {
-              return const _PageMessage(
-                icon: Icons.cloud_off_outlined,
-                title: 'Unable to load account',
-              );
-            }
-
-            final userData = userSnapshot.data?.data();
-
-            final groupId = userData?['groupId'] as String?;
-
-            final role = userData?['role'] as String? ?? 'member';
-
-            final name = _readUserName(user, userData);
-
-            if (groupId == null || groupId.isEmpty) {
-              return _NoHostelView(
-                onCreateGroup: () {
-                  _openCreateGroup(context);
-                },
-                onJoinGroup: () {
-                  _openJoinGroup(context);
-                },
-              );
-            }
-
-            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('groups')
-                  .doc(groupId)
-                  .snapshots(),
-              builder: (context, groupSnapshot) {
-                if (groupSnapshot.connectionState == ConnectionState.waiting &&
-                    !groupSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (groupSnapshot.hasError ||
-                    !groupSnapshot.hasData ||
-                    !groupSnapshot.data!.exists) {
-                  return const _PageMessage(
-                    icon: Icons.apartment_outlined,
-                    title: 'Hostel not found',
-                  );
-                }
-
-                final group = groupSnapshot.data!.data()!;
-
-                final groupName = group['name'] as String? ?? 'Hostel Group';
-
-                final inviteCode = group['inviteCode'] as String? ?? '';
-
-                final memberIds = List<String>.from(
-                  group['memberIds'] as List? ?? [],
-                );
-
-                return _HostelView(
-                  groupId: groupId,
-                  groupName: groupName,
-                  memberCount: memberIds.length,
-                  onOpenHostel: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => HostelDashboardScreen(
-                          groupId: groupId,
-                          groupName: groupName,
-                          inviteCode: inviteCode,
-                          memberName: name,
-                          role: role,
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        ),
-      ),
+      body: SafeArea(child: body),
     );
   }
 }
@@ -236,138 +238,6 @@ class _NoHostelView extends StatelessWidget {
   }
 }
 
-class _HostelView extends StatelessWidget {
-  const _HostelView({
-    required this.groupId,
-    required this.groupName,
-    required this.memberCount,
-    required this.onOpenHostel,
-  });
-
-  final String groupId;
-  final String groupName;
-
-  /// App users only. Shown until the full member list has loaded.
-  final int memberCount;
-  final VoidCallback onOpenHostel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(26),
-              onTap: onOpenHostel,
-              child: Ink(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppTheme.primaryDark, AppTheme.primary],
-                  ),
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.20),
-                      blurRadius: 28,
-                      offset: const Offset(0, 14),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(26),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(19),
-                            ),
-                            child: const Icon(
-                              Icons.apartment_rounded,
-                              size: 32,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: _MemberCountText(
-                              key: ValueKey(groupId),
-                              groupId: groupId,
-                              initialCount: memberCount,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Text(
-                        groupName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 13,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.13),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: const Row(
-                          children: [
-                            Text(
-                              'Enter Hostel',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Spacer(),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              color: Colors.white,
-                              size: 21,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AppLogo extends StatelessWidget {
   const _AppLogo();
 
@@ -412,56 +282,6 @@ class _PageMessage extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Live count of the hostel's active members, including members
-/// who do not use the app.
-class _MemberCountText extends StatefulWidget {
-  const _MemberCountText({
-    super.key,
-    required this.groupId,
-    required this.initialCount,
-  });
-
-  final String groupId;
-  final int initialCount;
-
-  @override
-  State<_MemberCountText> createState() => _MemberCountTextState();
-}
-
-class _MemberCountTextState extends State<_MemberCountText> {
-  StreamSubscription<Object?>? _subscription;
-  int? _count;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscription = GroupMemberService.watch(widget.groupId).listen(
-      (members) => setState(() => _count = members.length),
-      onError: (_) {},
-    );
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final count = _count ?? widget.initialCount;
-
-    return Text(
-      '$count ${count == 1 ? 'member' : 'members'}',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
       ),
     );
   }

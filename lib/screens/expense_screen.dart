@@ -9,6 +9,21 @@ import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/notification_service.dart';
 
+/// Opens the Add Expense form, unless the hostel is read-only.
+Future<void> showExpenseForm(
+  BuildContext context, {
+  required String groupId,
+  required bool isAdmin,
+}) async {
+  if (!await ensureHostelEditable(context, groupId)) return;
+  if (!context.mounted) return;
+
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _ExpenseFormDialog(groupId: groupId, isAdmin: isAdmin),
+  );
+}
+
 class ExpenseScreen extends StatelessWidget {
   const ExpenseScreen({
     super.key,

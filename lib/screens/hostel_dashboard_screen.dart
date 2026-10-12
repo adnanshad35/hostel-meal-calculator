@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ import 'expense_screen.dart';
 import 'hostel_details_screen.dart';
 import 'meal_screen.dart';
 import 'monthly_summary_screen.dart';
+import 'profile_screen.dart';
 
 class HostelDashboardScreen extends StatelessWidget {
   const HostelDashboardScreen({
@@ -18,6 +21,7 @@ class HostelDashboardScreen extends StatelessWidget {
     required this.inviteCode,
     required this.memberName,
     required this.role,
+    this.isHome = false,
   });
 
   final String groupId;
@@ -25,6 +29,10 @@ class HostelDashboardScreen extends StatelessWidget {
   final String inviteCode;
   final String? memberName;
   final String role;
+
+  /// True when this is the first screen a member sees. The app bar
+  /// then also carries app notices and the profile.
+  final bool isHome;
 
   Future<void> _copyInviteCode(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: inviteCode));
@@ -41,9 +49,20 @@ class HostelDashboardScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hostel Dashboard'),
+        title: Text(isHome ? 'HostelMate' : 'Hostel Dashboard'),
         actions: [
+          if (isHome) const NotificationBell(),
           NotificationBell(groupId: groupId, isAdmin: isAdmin),
+          if (isHome)
+            IconButton(
+              tooltip: 'Profile',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+              icon: const Icon(Icons.account_circle_outlined, size: 28),
+            ),
           const SizedBox(width: 8),
         ],
       ),
@@ -59,7 +78,6 @@ class HostelDashboardScreen extends StatelessWidget {
                 _copyInviteCode(context);
               },
             ),
-            const SizedBox(height: 14),
             _SubscriptionBanner(
               groupId: groupId,
               groupName: groupName,
@@ -68,11 +86,6 @@ class HostelDashboardScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 22),
-                  Text(
-                    'Management',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
                   const SizedBox(height: 14),
                   GridView.count(
                     crossAxisCount: 2,
@@ -80,13 +93,20 @@ class HostelDashboardScreen extends StatelessWidget {
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 1.08,
+                    childAspectRatio: 1.2,
                     children: [
                       _DashboardTile(
                         icon: Icons.restaurant_outlined,
                         title: 'Meals',
+                        subtitle: _TodayMealText(groupId: groupId),
                         color: AppTheme.primary,
                         backgroundColor: const Color(0xFFE4F3EB),
+                        addTooltip: 'Add meal',
+                        onAdd: () => showMealForm(
+                          context,
+                          groupId: groupId,
+                          isAdmin: isAdmin,
+                        ),
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -103,6 +123,12 @@ class HostelDashboardScreen extends StatelessWidget {
                         title: 'Expenses',
                         color: const Color(0xFFD78116),
                         backgroundColor: const Color(0xFFFFF1DB),
+                        addTooltip: 'Add expense',
+                        onAdd: () => showExpenseForm(
+                          context,
+                          groupId: groupId,
+                          isAdmin: isAdmin,
+                        ),
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -175,128 +201,92 @@ class _HostelHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.fromLTRB(18, 16, 10, 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppTheme.primaryDark, AppTheme.primary],
         ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.18),
-            blurRadius: 26,
-            offset: const Offset(0, 13),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(22),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: const Icon(
-                  Icons.apartment_rounded,
-                  size: 29,
-                  color: Colors.white,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isAdmin
-                          ? Icons.verified_user_outlined
-                          : Icons.person_outline,
-                      size: 15,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isAdmin ? 'Administrator' : 'Member',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Text(
-            groupName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.fromLTRB(15, 12, 8, 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.13),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Text(
+                  groupName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isAdmin ? 'Administrator' : 'Member',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Invitation code: tap to copy.
+          Material(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onCopyCode,
+              child: Tooltip(
+                message: 'Copy invitation code',
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'INVITATION CODE',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.66),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'CODE',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.66),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          Text(
+                            inviteCode,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      SelectableText(
-                        inviteCode,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2.5,
-                        ),
+                      const SizedBox(width: 10),
+                      const Icon(
+                        Icons.copy_rounded,
+                        size: 17,
+                        color: Colors.white,
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Copy invitation code',
-                  onPressed: onCopyCode,
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.14),
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.copy_rounded, size: 20),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -312,6 +302,9 @@ class _DashboardTile extends StatelessWidget {
     required this.color,
     required this.backgroundColor,
     required this.onTap,
+    this.subtitle,
+    this.onAdd,
+    this.addTooltip,
   });
 
   final IconData icon;
@@ -320,6 +313,14 @@ class _DashboardTile extends StatelessWidget {
   final Color backgroundColor;
   final VoidCallback onTap;
 
+  /// A single line under the title.
+  final Widget? subtitle;
+
+  /// When set, a + button in the corner adds a record directly, while
+  /// tapping the rest of the card opens the full screen.
+  final VoidCallback? onAdd;
+  final String? addTooltip;
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -327,28 +328,53 @@ class _DashboardTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(17),
+          padding: const EdgeInsets.fromLTRB(15, 14, 12, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(icon, color: color, size: 25),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 23),
+                  ),
+                  const Spacer(),
+                  if (onAdd != null)
+                    IconButton.filled(
+                      tooltip: addTooltip,
+                      onPressed: onAdd,
+                      style: IconButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        fixedSize: const Size(40, 40),
+                      ),
+                      icon: const Icon(Icons.add, size: 22),
+                    ),
+                ],
               ),
               const Spacer(),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.25),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                height: 1.25,
+                              ),
+                        ),
+                        ?subtitle,
+                      ],
                     ),
                   ),
                   const Icon(
@@ -417,19 +443,25 @@ class _SubscriptionBannerState extends State<_SubscriptionBanner> {
         final isActive = subscription.isActive(DateTime.now());
         final isSuspended = subscription.accessDisabled;
 
+        final canEdit = subscription.canEdit(DateTime.now());
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SubscriptionStatusCard(
-              subscription: subscription,
-              isLoading: isLoading,
-              action: widget.isAdmin && !isLoading && !isSuspended
-                  ? FilledButton(
-                      onPressed: _openActivation,
-                      child: Text(isActive ? 'Extend' : 'Activate'),
-                    )
-                  : null,
-            ),
+            // While the hostel can be edited there is nothing to say
+            // here; its remaining days are shown in Hostel Details.
+            if (!isLoading && !canEdit) ...[
+              const SizedBox(height: 12),
+              SubscriptionStatusCard(
+                subscription: subscription,
+                action: widget.isAdmin && !isSuspended
+                    ? FilledButton(
+                        onPressed: _openActivation,
+                        child: Text(isActive ? 'Extend' : 'Activate'),
+                      )
+                    : null,
+              ),
+            ],
             if (!isLoading && !isActive && !isSuspended && !widget.isAdmin)
               const Padding(
                 padding: EdgeInsets.only(top: 6),
@@ -440,6 +472,78 @@ class _SubscriptionBannerState extends State<_SubscriptionBanner> {
               ),
             if (!isSuspended) widget.child,
           ],
+        );
+      },
+    );
+  }
+}
+
+/// The signed-in member's meals for today, in one short line.
+class _TodayMealText extends StatefulWidget {
+  const _TodayMealText({required this.groupId});
+
+  final String groupId;
+
+  @override
+  State<_TodayMealText> createState() => _TodayMealTextState();
+}
+
+class _TodayMealTextState extends State<_TodayMealText> {
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _todayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final now = DateTime.now();
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    // A single document: this member's own entry for today.
+    _todayEntry = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .collection('meals')
+        .doc('${uid}_${now.year}-$month-$day')
+        .snapshots();
+  }
+
+  static String _quantity(num? value) {
+    final number = (value ?? 0).toDouble();
+    return number % 1 == 0
+        ? number.toInt().toString()
+        : number.toStringAsFixed(1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _todayEntry,
+      builder: (context, snapshot) {
+        final entry = snapshot.data?.data();
+
+        final String text;
+        if (!snapshot.hasData) {
+          text = '';
+        } else if (entry == null) {
+          text = 'Today: not entered';
+        } else {
+          final total =
+              ((entry['lunch'] as num?) ?? 0) +
+              ((entry['dinner'] as num?) ?? 0);
+          text = 'Today: ${_quantity(total)}';
+        }
+
+        return Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: entry == null ? AppTheme.warning : AppTheme.success,
+          ),
         );
       },
     );

@@ -10,6 +10,21 @@ import '../services/group_member_service.dart';
 import '../widgets/meal_counter.dart';
 import 'meal_ledger_screen.dart';
 
+/// Opens the Add Meal form, unless the hostel is read-only.
+Future<void> showMealForm(
+  BuildContext context, {
+  required String groupId,
+  required bool isAdmin,
+}) async {
+  if (!await ensureHostelEditable(context, groupId)) return;
+  if (!context.mounted) return;
+
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _MealFormDialog(groupId: groupId, isAdmin: isAdmin),
+  );
+}
+
 class MealScreen extends StatefulWidget {
   const MealScreen({super.key, required this.groupId, required this.isAdmin});
 
@@ -35,14 +50,11 @@ class _MealScreenState extends State<MealScreen> {
         .snapshots();
   }
 
-  Future<void> _openMealForm() async {
-    if (!await ensureHostelEditable(context, widget.groupId)) return;
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (_) =>
-          _MealFormDialog(groupId: widget.groupId, isAdmin: widget.isAdmin),
+  Future<void> _openMealForm() {
+    return showMealForm(
+      context,
+      groupId: widget.groupId,
+      isAdmin: widget.isAdmin,
     );
   }
 
@@ -254,6 +266,10 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   bool _isSaving = false;
   bool _hasEntry = false;
 
+  /// What a new entry starts with, since most days are one lunch and
+  /// one dinner. Nothing is recorded until the member taps Save.
+  static const double _defaultMeals = 1;
+
   // Identifies the newest entry request, so a slow earlier one
   // cannot overwrite the counters.
   int _loadRequest = 0;
@@ -345,8 +361,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     setState(() {
       _isLoadingEntry = true;
       _hasEntry = false;
-      _lunch = 0;
-      _dinner = 0;
+      _lunch = _defaultMeals;
+      _dinner = _defaultMeals;
     });
 
     try {
@@ -357,8 +373,13 @@ class _MealFormDialogState extends State<_MealFormDialog> {
 
       setState(() {
         _hasEntry = snapshot.exists;
-        _lunch = (data?['lunch'] as num?)?.toDouble() ?? 0;
-        _dinner = (data?['dinner'] as num?)?.toDouble() ?? 0;
+
+        // An existing entry shows what was saved. A new one starts at
+        // the usual one lunch and one dinner, ready to save or adjust.
+        if (snapshot.exists) {
+          _lunch = (data?['lunch'] as num?)?.toDouble() ?? 0;
+          _dinner = (data?['dinner'] as num?)?.toDouble() ?? 0;
+        }
       });
     } on FirebaseException {
       if (!mounted || request != _loadRequest) return;

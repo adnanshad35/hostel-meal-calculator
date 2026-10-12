@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/member_name_dialog.dart';
 import 'group_settings_screen.dart';
+import 'hostel_activation_screen.dart';
 
 class HostelDetailsScreen extends StatefulWidget {
   const HostelDetailsScreen({
@@ -31,6 +33,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _groupSubscription;
 
+  late final Stream<HostelSubscription> _subscriptionStream;
+
   Set<String> _admins = {};
 
   /// App users in the hostel. Members without the app are not counted.
@@ -46,6 +50,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       widget.groupId,
       activeOnly: false,
     );
+    _subscriptionStream = SubscriptionService.watch(widget.groupId);
     _groupSubscription = FirebaseFirestore.instance
         .collection('groups')
         .doc(widget.groupId)
@@ -436,6 +441,17 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     }
   }
 
+  void _openActivation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HostelActivationScreen(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
+        ),
+      ),
+    );
+  }
+
   void _openGroupSettings() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -629,6 +645,34 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 const SizedBox(height: 12),
               ],
               _HostelCard(groupName: widget.groupName, isAdmin: isGroupAdmin),
+              const SizedBox(height: 10),
+              // How long the hostel is active for.
+              StreamBuilder<HostelSubscription>(
+                stream: _subscriptionStream,
+                builder: (context, snapshot) {
+                  final subscription =
+                      snapshot.data ?? const HostelSubscription.none();
+                  final isLoading = !snapshot.hasData && !snapshot.hasError;
+
+                  return SubscriptionStatusCard(
+                    subscription: subscription,
+                    isLoading: isLoading,
+                    action:
+                        isGroupAdmin &&
+                            !isLoading &&
+                            !subscription.accessDisabled
+                        ? FilledButton(
+                            onPressed: _isBusy ? null : _openActivation,
+                            child: Text(
+                              subscription.isActive(DateTime.now())
+                                  ? 'Extend'
+                                  : 'Activate',
+                            ),
+                          )
+                        : null,
+                  );
+                },
+              ),
               if (widget.isAdmin) ...[
                 const SizedBox(height: 10),
                 Card(
@@ -643,9 +687,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       'Group Settings',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    subtitle: const Text(
-                      'Add members, control joining, reset a month',
-                    ),
+                    subtitle: const Text('Members, joining, month reset'),
                     trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
@@ -824,10 +866,7 @@ class _MemberCard extends StatelessWidget {
       'Nov',
       'Dec',
     ];
-    final verb = member.isAppUser ? 'Joined' : 'Added';
-
-    return '$type • $verb ${date.day} ${months[date.month - 1]} '
-        '${date.year}';
+    return '$type • ${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   @override

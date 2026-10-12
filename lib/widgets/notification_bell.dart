@@ -133,7 +133,10 @@ class _NotificationBellState extends State<NotificationBell> {
       icon: Badge(
         isLabelVisible: unread > 0,
         label: Text(unread > 9 ? '9+' : '$unread'),
-        child: const Icon(Icons.notifications_outlined, size: 26),
+        child: Icon(
+          _isGroup ? Icons.notifications_outlined : Icons.campaign_outlined,
+          size: 26,
+        ),
       ),
     );
   }

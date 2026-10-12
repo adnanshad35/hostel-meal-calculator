@@ -28,7 +28,6 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (!mounted) return;
 
       if (user?.emailVerified == true) {
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Email verified successfully.')),
         );
