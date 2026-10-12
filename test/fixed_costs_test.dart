@@ -77,18 +77,14 @@ void main() {
     expect(_of(settlements, 'adnan').finalTotal, 2500);
   });
 
-  test('former members keep their meal balance but pay no bill share',
-      () {
+  test('former members keep their meal balance but pay no bill share', () {
     final members = [
       _member('adnan'),
       _member('rahim'),
       _member('gone', exactBalance: -150, isFormer: true),
     ];
 
-    expect(
-      FixedCostsCalculator.billShare(members: members, bills: bills),
-      750,
-    );
+    expect(FixedCostsCalculator.billShare(members: members, bills: bills), 750);
 
     final settlements = FixedCostsCalculator.settle(
       members: members,
@@ -146,8 +142,7 @@ void main() {
     expect(_of(settlements, 'adnan').finalTotal, -250);
   });
 
-  test('no current members means no bill share and no division by zero',
-      () {
+  test('no current members means no bill share and no division by zero', () {
     expect(
       FixedCostsCalculator.billShare(
         members: [_member('gone', isFormer: true)],
@@ -183,18 +178,20 @@ void main() {
     });
 
     test('later months keep the last saved fixed costs', () {
-      expect(FixedCostsCalculator.resolve(saved, '2026-09')!.monthKey,
-          '2026-08');
-      expect(FixedCostsCalculator.resolve(saved, '2026-10')!.monthKey,
-          '2026-08');
+      expect(
+        FixedCostsCalculator.resolve(saved, '2026-09')!.monthKey,
+        '2026-08',
+      );
+      expect(
+        FixedCostsCalculator.resolve(saved, '2026-10')!.monthKey,
+        '2026-08',
+      );
     });
 
-    test('a change applies from its month on, never to earlier months',
-        () {
-      expect(
-        FixedCostsCalculator.resolve(saved, '2026-10')!.rents,
-        {'adnan': 3000.0},
-      );
+    test('a change applies from its month on, never to earlier months', () {
+      expect(FixedCostsCalculator.resolve(saved, '2026-10')!.rents, {
+        'adnan': 3000.0,
+      });
 
       final november = FixedCostsCalculator.resolve(saved, '2026-11')!;
       expect(november.rents, {'adnan': 3500.0});

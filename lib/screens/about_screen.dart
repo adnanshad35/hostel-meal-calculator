@@ -41,18 +41,14 @@ class _AboutScreenState extends State<AboutScreen> {
     var opened = false;
 
     try {
-      opened = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       opened = false;
     }
 
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(fallbackMessage)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(fallbackMessage)));
     }
   }
 
@@ -63,7 +59,8 @@ class _AboutScreenState extends State<AboutScreen> {
         path: _supportEmail,
         queryParameters: {'subject': 'HostelMate Feature Request'},
       ),
-      fallbackMessage: 'No email application was found. '
+      fallbackMessage:
+          'No email application was found. '
           'Please email $_supportEmail.',
     );
   }
@@ -73,9 +70,7 @@ class _AboutScreenState extends State<AboutScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('About'),
-      ),
+      appBar: AppBar(title: const Text('About')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
@@ -142,9 +137,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   const CircleAvatar(
                     radius: 52,
                     backgroundColor: AppTheme.surfaceSoft,
-                    backgroundImage: AssetImage(
-                      'assets/images/developer.jpg',
-                    ),
+                    backgroundImage: AssetImage('assets/images/developer.jpg'),
                   ),
                   const SizedBox(height: 14),
                   Text(

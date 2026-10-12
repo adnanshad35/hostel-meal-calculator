@@ -36,15 +36,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
 
-      await credential.user?.updateDisplayName(
-        _nameController.text.trim(),
-      );
+      await credential.user?.updateDisplayName(_nameController.text.trim());
 
       // Sent first, so a problem saving the profile can never leave
       // the new account without its verification email.
@@ -55,14 +53,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             .collection('users')
             .doc(credential.user!.uid)
             .set({
-          'uid': credential.user!.uid,
-          'fullName': _nameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'phoneNumber': _phoneController.text.trim(),
-          'role': 'member',
-          'groupId': null,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+              'uid': credential.user!.uid,
+              'fullName': _nameController.text.trim(),
+              'email': _emailController.text.trim(),
+              'phoneNumber': _phoneController.text.trim(),
+              'role': 'member',
+              'groupId': null,
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
       } on FirebaseException {
         // The account exists and can be verified. The profile is
         // created again when the user joins or creates a hostel.
@@ -72,15 +70,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Account created. Check your email to verify it.',
-          ),
+          content: Text('Account created. Check your email to verify it.'),
         ),
       );
 
-      Navigator.of(context).popUntil(
-        (route) => route.isFirst,
-      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
@@ -96,9 +90,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         message = 'Please check your internet connection.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -109,9 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-      ),
+      appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -123,9 +114,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Text(
                   'Join HostelMate',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -200,9 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [
-                    AutofillHints.telephoneNumber,
-                  ],
+                  autofillHints: const [AutofillHints.telephoneNumber],
                   decoration: const InputDecoration(
                     labelText: 'Phone number (optional)',
                     hintText: 'Example: +8801712345678',
@@ -214,13 +202,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     if (phone.isEmpty) return null;
 
-                    final normalized = phone.replaceAll(
-                      RegExp(r'[\s()-]'),
-                      '',
-                    );
+                    final normalized = phone.replaceAll(RegExp(r'[\s()-]'), '');
 
-                    if (!RegExp(r'^\+?[0-9]{8,15}$')
-                        .hasMatch(normalized)) {
+                    if (!RegExp(r'^\+?[0-9]{8,15}$').hasMatch(normalized)) {
                       return 'Please enter a valid phone number.';
                     }
 
@@ -281,9 +265,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Create Account'),
                   ),

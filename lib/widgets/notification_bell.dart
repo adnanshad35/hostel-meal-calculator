@@ -13,11 +13,7 @@ import '../services/notification_service.dart';
 /// any notice the user has not seen yet. With a [groupId] it shows
 /// that hostel's announcements and activity.
 class NotificationBell extends StatefulWidget {
-  const NotificationBell({
-    super.key,
-    this.groupId,
-    this.isAdmin = false,
-  });
+  const NotificationBell({super.key, this.groupId, this.isAdmin = false});
 
   final String? groupId;
   final bool isAdmin;
@@ -27,8 +23,7 @@ class NotificationBell extends StatefulWidget {
 }
 
 class _NotificationBellState extends State<NotificationBell> {
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _userSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSubscription;
   StreamSubscription<List<AppNotification>>? _notificationsSubscription;
 
   bool _hasUserData = false;
@@ -52,16 +47,13 @@ class _NotificationBellState extends State<NotificationBell> {
         .collection('users')
         .doc(_currentUserId)
         .snapshots()
-        .listen(
-      (snapshot) {
-        setState(() {
-          _hasUserData = true;
-          _seenAt = (snapshot.data()?[seenField] as Timestamp?)?.toDate();
-        });
-        _showUnseenNotice();
-      },
-      onError: (_) {},
-    );
+        .listen((snapshot) {
+          setState(() {
+            _hasUserData = true;
+            _seenAt = (snapshot.data()?[seenField] as Timestamp?)?.toDate();
+          });
+          _showUnseenNotice();
+        }, onError: (_) {});
 
     final stream = _isGroup
         ? NotificationService.watchGroup(widget.groupId!)
@@ -88,10 +80,7 @@ class _NotificationBellState extends State<NotificationBell> {
   Future<void> _showUnseenNotice() async {
     if (_isGroup || !_hasUserData || _isShowingNotice || !mounted) return;
 
-    final notice = NotificationService.newestUnseen(
-      _items,
-      seenAt: _seenAt,
-    );
+    final notice = NotificationService.newestUnseen(_items, seenAt: _seenAt);
 
     if (notice == null || _shownNoticeIds.contains(notice.id)) return;
 

@@ -30,11 +30,7 @@ void main() {
       isAnnouncement: true,
     ),
     _item('old-expense', DateTime(2026, 10, 12, 9), actorId: 'rahim'),
-    _item(
-      'old-announcement',
-      DateTime(2026, 10, 11),
-      isAnnouncement: true,
-    ),
+    _item('old-announcement', DateTime(2026, 10, 11), isAnnouncement: true),
   ];
 
   group('unreadCount', () {
@@ -105,16 +101,10 @@ void main() {
 
     test('returns nothing once everything has been seen', () {
       expect(
-        NotificationService.newestUnseen(
-          items,
-          seenAt: DateTime(2026, 10, 13),
-        ),
+        NotificationService.newestUnseen(items, seenAt: DateTime(2026, 10, 13)),
         isNull,
       );
-      expect(
-        NotificationService.newestUnseen(const [], seenAt: null),
-        isNull,
-      );
+      expect(NotificationService.newestUnseen(const [], seenAt: null), isNull);
     });
   });
 
@@ -123,10 +113,7 @@ void main() {
       expect(NotificationService.wordCount(''), 0);
       expect(NotificationService.wordCount('   '), 0);
       expect(NotificationService.wordCount('Rent'), 1);
-      expect(
-        NotificationService.wordCount('  Rent is due\non   Friday. '),
-        5,
-      );
+      expect(NotificationService.wordCount('  Rent is due\non   Friday. '), 5);
     });
 
     test('fifty words is the announcement limit', () {

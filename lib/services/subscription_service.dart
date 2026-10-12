@@ -35,12 +35,12 @@ class HostelSubscription {
 
   /// A hostel that has never been activated.
   const HostelSubscription.none()
-      : periodStart = null,
-        days = 0,
-        voucherCode = null,
-        isSaving = false,
-        editingDisabled = false,
-        accessDisabled = false;
+    : periodStart = null,
+      days = 0,
+      voucherCode = null,
+      isSaving = false,
+      editingDisabled = false,
+      accessDisabled = false;
 
   final DateTime? periodStart;
   final int days;
@@ -214,9 +214,7 @@ class SubscriptionService {
 
   static FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
-  static DocumentReference<Map<String, dynamic>> _subscription(
-    String groupId,
-  ) {
+  static DocumentReference<Map<String, dynamic>> _subscription(String groupId) {
     return _firestore.collection('subscriptions').doc(groupId);
   }
 
@@ -250,36 +248,38 @@ class SubscriptionService {
       return {'days': current.days + addDays};
     }
 
-    return {
-      'periodStart': FieldValue.serverTimestamp(),
-      'days': addDays,
-    };
+    return {'periodStart': FieldValue.serverTimestamp(), 'days': addDays};
   }
 
   static Stream<HostelSubscription> watch(String groupId) {
-    return _subscription(groupId).snapshots().map(
-          (snapshot) => HostelSubscription.fromData(snapshot.data()),
-        );
+    return _subscription(groupId)
+        .snapshots()
+        .map((snapshot) => HostelSubscription.fromData(snapshot.data()));
   }
 
   static Stream<PaymentInfo> watchPaymentInfo() {
-    return _paymentInfo
-        .snapshots()
-        .map((snapshot) => PaymentInfo.fromData(snapshot.data()));
+    return _paymentInfo.snapshots().map(
+      (snapshot) => PaymentInfo.fromData(snapshot.data()),
+    );
   }
 
-  /// A hostel's own payment reports, newest first.
+  /// The payments the signed-in admin reported for a hostel, newest
+  /// first.
   static Stream<List<PaymentRequest>> watchGroupPayments(String groupId) {
-    return _payments.where('groupId', isEqualTo: groupId).snapshots().map(
-      (snapshot) {
-        return snapshot.docs.map(PaymentRequest.fromDocument).toList()
-          ..sort((a, b) {
-            final aTime = a.createdAt ?? DateTime.now();
-            final bTime = b.createdAt ?? DateTime.now();
-            return bTime.compareTo(aTime);
-          });
-      },
-    );
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return _payments
+        .where('groupId', isEqualTo: groupId)
+        .where('submittedBy', isEqualTo: uid)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map(PaymentRequest.fromDocument).toList()
+            ..sort((a, b) {
+              final aTime = a.createdAt ?? DateTime.now();
+              final bTime = b.createdAt ?? DateTime.now();
+              return bTime.compareTo(aTime);
+            });
+        });
   }
 
   /// Activates or extends a hostel with a voucher. Hostel admins only.
@@ -296,22 +296,17 @@ class SubscriptionService {
     }
 
     final voucherReference = _vouchers.doc(voucherCode);
-    final redemption =
-        voucherReference.collection('redemptions').doc(groupId);
+    final redemption = voucherReference.collection('redemptions').doc(groupId);
 
     try {
       final voucherSnapshot = await voucherReference.get();
       if (!voucherSnapshot.exists) {
-        throw const SubscriptionException(
-          'This voucher code is not valid.',
-        );
+        throw const SubscriptionException('This voucher code is not valid.');
       }
 
       final voucher = Voucher.fromDocument(voucherSnapshot);
       if (!voucher.active || voucher.days <= 0) {
-        throw const SubscriptionException(
-          'This voucher is no longer active.',
-        );
+        throw const SubscriptionException('This voucher is no longer active.');
       }
 
       final current = HostelSubscription.fromData(
@@ -320,21 +315,13 @@ class SubscriptionService {
 
       final batch = _firestore.batch();
 
-      batch.set(
-        _subscription(groupId),
-        {
-          ...extensionFields(
-            current,
-            addDays: voucher.days,
-            now: DateTime.now(),
-          ),
-          'voucherCode': voucherCode,
-          'lastSource': 'voucher',
-          'updatedBy': user.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(_subscription(groupId), {
+        ...extensionFields(current, addDays: voucher.days, now: DateTime.now()),
+        'voucherCode': voucherCode,
+        'lastSource': 'voucher',
+        'updatedBy': user.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       batch.set(redemption, {
         'groupId': groupId,
@@ -417,16 +404,12 @@ class SubscriptionService {
 
     final batch = _firestore.batch();
 
-    batch.set(
-      _subscription(groupId),
-      {
-        ...extensionFields(current, addDays: days, now: DateTime.now()),
-        'lastSource': source,
-        'updatedBy': user.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    batch.set(_subscription(groupId), {
+      ...extensionFields(current, addDays: days, now: DateTime.now()),
+      'lastSource': source,
+      'updatedBy': user.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     if (payment != null) {
       batch.update(_payments.doc(payment.trxId), {
@@ -473,9 +456,9 @@ class SubscriptionService {
       _firestore.collection('config').doc('app');
 
   static Stream<AppConfig> watchAppConfig() {
-    return _appConfig
-        .snapshots()
-        .map((snapshot) => AppConfig.fromData(snapshot.data()));
+    return _appConfig.snapshots().map(
+      (snapshot) => AppConfig.fromData(snapshot.data()),
+    );
   }
 
   static Future<AppConfig> loadAppConfig() async {

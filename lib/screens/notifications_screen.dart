@@ -50,9 +50,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final minute = time.minute.toString().padLeft(2, '0');
     final clock = '$hour:$minute ${time.hour < 12 ? 'AM' : 'PM'}';
 
-    final isToday = time.year == now.year &&
-        time.month == now.month &&
-        time.day == now.day;
+    final isToday =
+        time.year == now.year && time.month == now.month && time.day == now.day;
     if (isToday) return 'Today, $clock';
 
     final day = time.day.toString().padLeft(2, '0');
@@ -69,8 +68,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           error is FirebaseException && error.code == 'permission-denied'
               ? 'You do not have permission to do this.'
               : error is FirebaseException
-                  ? error.message ?? fallback
-                  : fallback,
+              ? error.message ?? fallback
+              : fallback,
         ),
       ),
     );
@@ -127,9 +126,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Delete'),
             ),
@@ -176,9 +173,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load notifications.'),
-            );
+            return const Center(child: Text('Unable to load notifications.'));
           }
 
           final items = snapshot.data ?? const <AppNotification>[];
@@ -191,7 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   _isGroup
                       ? 'No hostel notifications yet.'
                       : 'No notices yet. Updates and important news '
-                          'about the app will appear here.',
+                            'about the app will appear here.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -365,10 +360,7 @@ class _AnnouncementDialogState extends State<_AnnouncementDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Send'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Send')),
       ],
     );
   }

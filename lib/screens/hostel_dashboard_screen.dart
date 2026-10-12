@@ -10,8 +10,7 @@ import 'hostel_details_screen.dart';
 import 'meal_screen.dart';
 import 'monthly_summary_screen.dart';
 
-class HostelDashboardScreen
-    extends StatelessWidget {
+class HostelDashboardScreen extends StatelessWidget {
   const HostelDashboardScreen({
     super.key,
     required this.groupId,
@@ -27,22 +26,13 @@ class HostelDashboardScreen
   final String? memberName;
   final String role;
 
-  Future<void> _copyInviteCode(
-    BuildContext context,
-  ) async {
-    await Clipboard.setData(
-      ClipboardData(text: inviteCode),
-    );
+  Future<void> _copyInviteCode(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: inviteCode));
 
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Invitation code copied.',
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Invitation code copied.')));
   }
 
   @override
@@ -53,21 +43,13 @@ class HostelDashboardScreen
       appBar: AppBar(
         title: const Text('Hostel Dashboard'),
         actions: [
-          NotificationBell(
-            groupId: groupId,
-            isAdmin: isAdmin,
-          ),
+          NotificationBell(groupId: groupId, isAdmin: isAdmin),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            32,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             _HostelHeader(
               groupName: groupName,
@@ -86,104 +68,87 @@ class HostelDashboardScreen
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-            const SizedBox(height: 22),
-            Text(
-              'Management',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge,
-            ),
-            const SizedBox(height: 14),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics:
-                  const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.08,
-              children: [
-                _DashboardTile(
-                  icon:
-                      Icons.restaurant_outlined,
-                  title: 'Meals',
-                  color: AppTheme.primary,
-                  backgroundColor:
-                      const Color(0xFFE4F3EB),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            MealScreen(
-                          groupId: groupId,
-                          isAdmin: isAdmin,
-                        ),
+                  const SizedBox(height: 22),
+                  Text(
+                    'Management',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 14),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.08,
+                    children: [
+                      _DashboardTile(
+                        icon: Icons.restaurant_outlined,
+                        title: 'Meals',
+                        color: AppTheme.primary,
+                        backgroundColor: const Color(0xFFE4F3EB),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MealScreen(
+                                groupId: groupId,
+                                isAdmin: isAdmin,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-                _DashboardTile(
-                  icon:
-                      Icons.receipt_long_outlined,
-                  title: 'Expenses',
-                  color:
-                      const Color(0xFFD78116),
-                  backgroundColor:
-                      const Color(0xFFFFF1DB),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ExpenseScreen(
-                          groupId: groupId,
-                          isAdmin: isAdmin,
-                        ),
+                      _DashboardTile(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'Expenses',
+                        color: const Color(0xFFD78116),
+                        backgroundColor: const Color(0xFFFFF1DB),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ExpenseScreen(
+                                groupId: groupId,
+                                isAdmin: isAdmin,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-                _DashboardTile(
-                  icon:
-                      Icons.calculate_outlined,
-                  title: 'Monthly\nCalculation',
-                  color:
-                      const Color(0xFF4869A4),
-                  backgroundColor:
-                      const Color(0xFFE8EEF8),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            MonthlySummaryScreen(
-                          groupId: groupId,
-                          isAdmin: isAdmin,
-                        ),
+                      _DashboardTile(
+                        icon: Icons.calculate_outlined,
+                        title: 'Monthly\nCalculation',
+                        color: const Color(0xFF4869A4),
+                        backgroundColor: const Color(0xFFE8EEF8),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MonthlySummaryScreen(
+                                groupId: groupId,
+                                isAdmin: isAdmin,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-                _DashboardTile(
-                  icon: Icons.info_outline_rounded,
-                  title: 'Hostel\nDetails',
-                  color:
-                      const Color(0xFF7956A8),
-                  backgroundColor:
-                      const Color(0xFFF0E9F8),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            HostelDetailsScreen(
-                          groupId: groupId,
-                          groupName: groupName,
-                          isAdmin: isAdmin,
-                        ),
+                      _DashboardTile(
+                        icon: Icons.info_outline_rounded,
+                        title: 'Hostel\nDetails',
+                        color: const Color(0xFF7956A8),
+                        backgroundColor: const Color(0xFFF0E9F8),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => HostelDetailsScreen(
+                                groupId: groupId,
+                                groupName: groupName,
+                                isAdmin: isAdmin,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ],
-            ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -215,24 +180,19 @@ class _HostelHeader extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            AppTheme.primaryDark,
-            AppTheme.primary,
-          ],
+          colors: [AppTheme.primaryDark, AppTheme.primary],
         ),
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primary
-                .withValues(alpha: 0.18),
+            color: AppTheme.primary.withValues(alpha: 0.18),
             blurRadius: 26,
             offset: const Offset(0, 13),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -240,10 +200,8 @@ class _HostelHeader extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: Colors.white
-                      .withValues(alpha: 0.15),
-                  borderRadius:
-                      BorderRadius.circular(17),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(17),
                 ),
                 child: const Icon(
                   Icons.apartment_rounded,
@@ -253,37 +211,30 @@ class _HostelHeader extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white
-                      .withValues(alpha: 0.14),
-                  borderRadius:
-                      BorderRadius.circular(20),
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       isAdmin
-                          ? Icons
-                              .verified_user_outlined
+                          ? Icons.verified_user_outlined
                           : Icons.person_outline,
                       size: 15,
                       color: Colors.white,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isAdmin
-                          ? 'Administrator'
-                          : 'Member',
+                      isAdmin ? 'Administrator' : 'Member',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
-                        fontWeight:
-                            FontWeight.w700,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -303,35 +254,23 @@ class _HostelHeader extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.fromLTRB(
-              15,
-              12,
-              8,
-              12,
-            ),
+            padding: const EdgeInsets.fromLTRB(15, 12, 8, 12),
             decoration: BoxDecoration(
-              color: Colors.white
-                  .withValues(alpha: 0.13),
-              borderRadius:
-                  BorderRadius.circular(15),
+              color: Colors.white.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(15),
             ),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'INVITATION CODE',
                         style: TextStyle(
-                          color: Colors.white
-                              .withValues(
-                            alpha: 0.66,
-                          ),
+                          color: Colors.white.withValues(alpha: 0.66),
                           fontSize: 10,
-                          fontWeight:
-                              FontWeight.w700,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: 1.1,
                         ),
                       ),
@@ -341,8 +280,7 @@ class _HostelHeader extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
-                          fontWeight:
-                              FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 2.5,
                         ),
                       ),
@@ -353,14 +291,10 @@ class _HostelHeader extends StatelessWidget {
                   tooltip: 'Copy invitation code',
                   onPressed: onCopyCode,
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.white
-                        .withValues(alpha: 0.14),
+                    backgroundColor: Colors.white.withValues(alpha: 0.14),
                     foregroundColor: Colors.white,
                   ),
-                  icon: const Icon(
-                    Icons.copy_rounded,
-                    size: 20,
-                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 20),
                 ),
               ],
             ),
@@ -395,47 +329,32 @@ class _DashboardTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(17),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
                   color: backgroundColor,
-                  borderRadius:
-                      BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 25,
-                ),
+                child: Icon(icon, color: color, size: 25),
               ),
               const Spacer(),
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: Text(
                       title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(
-                            fontWeight:
-                                FontWeight.w700,
-                            height: 1.25,
-                          ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.25),
                     ),
                   ),
                   const Icon(
-                    Icons
-                        .arrow_forward_rounded,
+                    Icons.arrow_forward_rounded,
                     size: 19,
-                    color:
-                        AppTheme.textSecondary,
+                    color: AppTheme.textSecondary,
                   ),
                 ],
               ),
@@ -493,8 +412,7 @@ class _SubscriptionBannerState extends State<_SubscriptionBanner> {
     return StreamBuilder<HostelSubscription>(
       stream: _stream,
       builder: (context, snapshot) {
-        final subscription =
-            snapshot.data ?? const HostelSubscription.none();
+        final subscription = snapshot.data ?? const HostelSubscription.none();
         final isLoading = !snapshot.hasData && !snapshot.hasError;
         final isActive = subscription.isActive(DateTime.now());
         final isSuspended = subscription.accessDisabled;
@@ -512,10 +430,7 @@ class _SubscriptionBannerState extends State<_SubscriptionBanner> {
                     )
                   : null,
             ),
-            if (!isLoading &&
-                !isActive &&
-                !isSuspended &&
-                !widget.isAdmin)
+            if (!isLoading && !isActive && !isSuspended && !widget.isAdmin)
               const Padding(
                 padding: EdgeInsets.only(top: 6),
                 child: Text(

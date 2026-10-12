@@ -85,12 +85,11 @@ class MaintenanceScreen extends StatelessWidget {
                 Text(
                   message.isEmpty
                       ? 'HostelMate is being updated. Please check '
-                          'back in a little while.'
+                            'back in a little while.'
                       : message,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 32),
                 TextButton(

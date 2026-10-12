@@ -163,8 +163,12 @@ void main() {
         meals: [
           _meal('adnan', '2026-10-01', lunch: 1, dinner: 1),
           for (var day = 2; day <= 10; day++)
-            _meal('rahim', '2026-10-${day.toString().padLeft(2, '0')}',
-                lunch: 1, dinner: 1),
+            _meal(
+              'rahim',
+              '2026-10-${day.toString().padLeft(2, '0')}',
+              lunch: 1,
+              dinner: 1,
+            ),
         ],
         expenses: [_expense('rahim', DateTime(2026, 10, 1), 2800)],
         minimumMeals: 10,
@@ -327,12 +331,7 @@ void main() {
       final result = _calculate(
         meals: const [
           MealRecord(id: 'a', userId: 'adnan', monthKey: '2026-10', lunch: 1),
-          MealRecord(
-            id: 'b',
-            userId: 'adnan',
-            dateKey: '2026-10-07',
-            lunch: 1,
-          ),
+          MealRecord(id: 'b', userId: 'adnan', dateKey: '2026-10-07', lunch: 1),
           MealRecord(id: 'adnan_2026-10-09', userId: 'adnan', lunch: 1),
           MealRecord(id: 'adnan_2026-09-09', userId: 'adnan', lunch: 1),
         ],
@@ -341,8 +340,7 @@ void main() {
       expect(_member(result, 'Adnan').actualMeals, 3);
     });
 
-    test('expenses count from the first to the last moment of the month',
-        () {
+    test('expenses count from the first to the last moment of the month', () {
       final result = _calculate(
         expenses: [
           _expense('adnan', DateTime(2026, 9, 30, 23, 59), 1),
@@ -382,8 +380,7 @@ void main() {
   });
 
   group('former members', () {
-    test('someone with meals who left is included under their saved name',
-        () {
+    test('someone with meals who left is included under their saved name', () {
       final result = _calculate(
         meals: [
           _meal('adnan', '2026-10-01', lunch: 1),
@@ -438,9 +435,11 @@ void main() {
       meals: [_meal('gone', '2026-10-01', lunch: 1, userName: 'Salam')],
     );
 
-    expect(
-      result.members.map((member) => member.name),
-      ['Karim', 'Adnan', 'Rahim', 'Salam'],
-    );
+    expect(result.members.map((member) => member.name), [
+      'Karim',
+      'Adnan',
+      'Rahim',
+      'Salam',
+    ]);
   });
 }

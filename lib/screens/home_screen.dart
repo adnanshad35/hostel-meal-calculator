@@ -15,38 +15,23 @@ import 'profile_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  Future<void> _openCreateGroup(
-    BuildContext context,
-  ) async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => const CreateGroupScreen(),
-      ),
-    );
+  Future<void> _openCreateGroup(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
   }
 
-  Future<void> _openJoinGroup(
-    BuildContext context,
-  ) async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => const JoinGroupScreen(),
-      ),
-    );
+  Future<void> _openJoinGroup(BuildContext context) async {
+    await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(builder: (_) => const JoinGroupScreen()));
   }
 
   void _openProfile(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ProfileScreen(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
-  String _readUserName(
-    User user,
-    Map<String, dynamic>? userData,
-  ) {
+  String _readUserName(User user, Map<String, dynamic>? userData) {
     final possibleNames = [
       userData?['name'],
       userData?['displayName'],
@@ -55,8 +40,7 @@ class HomeScreen extends StatelessWidget {
     ];
 
     for (final value in possibleNames) {
-      if (value is String &&
-          value.trim().isNotEmpty) {
+      if (value is String && value.trim().isNotEmpty) {
         return value.trim();
       }
     }
@@ -66,17 +50,12 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user =
-        FirebaseAuth.instance.currentUser!;
+    final user = FirebaseAuth.instance.currentUser!;
 
     return Scaffold(
       appBar: AppBar(
         title: const Row(
-          children: [
-            _AppLogo(),
-            SizedBox(width: 11),
-            Text('HostelMate'),
-          ],
+          children: [_AppLogo(), SizedBox(width: 11), Text('HostelMate')],
         ),
         actions: [
           const NotificationBell(),
@@ -85,28 +64,21 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               _openProfile(context);
             },
-            icon: const Icon(
-              Icons.account_circle_outlined,
-              size: 28,
-            ),
+            icon: const Icon(Icons.account_circle_outlined, size: 28),
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: StreamBuilder<
-            DocumentSnapshot<Map<String, dynamic>>>(
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .snapshots(),
           builder: (context, userSnapshot) {
-            if (userSnapshot.connectionState ==
-                    ConnectionState.waiting &&
+            if (userSnapshot.connectionState == ConnectionState.waiting &&
                 !userSnapshot.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
             if (userSnapshot.hasError) {
@@ -116,21 +88,15 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
-            final userData =
-                userSnapshot.data?.data();
+            final userData = userSnapshot.data?.data();
 
-            final groupId =
-                userData?['groupId'] as String?;
+            final groupId = userData?['groupId'] as String?;
 
-            final role =
-                userData?['role'] as String? ??
-                    'member';
+            final role = userData?['role'] as String? ?? 'member';
 
-            final name =
-                _readUserName(user, userData);
+            final name = _readUserName(user, userData);
 
-            if (groupId == null ||
-                groupId.isEmpty) {
+            if (groupId == null || groupId.isEmpty) {
               return _NoHostelView(
                 onCreateGroup: () {
                   _openCreateGroup(context);
@@ -141,65 +107,47 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
-            return StreamBuilder<
-                DocumentSnapshot<
-                    Map<String, dynamic>>>(
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('groups')
                   .doc(groupId)
                   .snapshots(),
               builder: (context, groupSnapshot) {
-                if (groupSnapshot.connectionState ==
-                        ConnectionState.waiting &&
+                if (groupSnapshot.connectionState == ConnectionState.waiting &&
                     !groupSnapshot.hasData) {
-                  return const Center(
-                    child:
-                        CircularProgressIndicator(),
-                  );
+                  return const Center(child: CircularProgressIndicator());
                 }
 
                 if (groupSnapshot.hasError ||
                     !groupSnapshot.hasData ||
                     !groupSnapshot.data!.exists) {
                   return const _PageMessage(
-                    icon:
-                        Icons.apartment_outlined,
+                    icon: Icons.apartment_outlined,
                     title: 'Hostel not found',
                   );
                 }
 
-                final group =
-                    groupSnapshot.data!.data()!;
+                final group = groupSnapshot.data!.data()!;
 
-                final groupName =
-                    group['name'] as String? ??
-                        'Hostel Group';
+                final groupName = group['name'] as String? ?? 'Hostel Group';
 
-                final inviteCode =
-                    group['inviteCode']
-                            as String? ??
-                        '';
+                final inviteCode = group['inviteCode'] as String? ?? '';
 
-                final memberIds =
-                    List<String>.from(
-                  group['memberIds'] as List? ??
-                      [],
+                final memberIds = List<String>.from(
+                  group['memberIds'] as List? ?? [],
                 );
 
                 return _HostelView(
                   groupId: groupId,
                   groupName: groupName,
-                  memberCount:
-                      memberIds.length,
+                  memberCount: memberIds.length,
                   onOpenHostel: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) =>
-                            HostelDashboardScreen(
+                        builder: (_) => HostelDashboardScreen(
                           groupId: groupId,
                           groupName: groupName,
-                          inviteCode:
-                              inviteCode,
+                          inviteCode: inviteCode,
                           memberName: name,
                           role: role,
                         ),
@@ -217,10 +165,7 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _NoHostelView extends StatelessWidget {
-  const _NoHostelView({
-    required this.onCreateGroup,
-    required this.onJoinGroup,
-  });
+  const _NoHostelView({required this.onCreateGroup, required this.onJoinGroup});
 
   final VoidCallback onCreateGroup;
   final VoidCallback onJoinGroup;
@@ -231,17 +176,12 @@ class _NoHostelView extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Container(
-          constraints: const BoxConstraints(
-            maxWidth: 460,
-          ),
+          constraints: const BoxConstraints(maxWidth: 460),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: AppTheme.surface,
-            borderRadius:
-                BorderRadius.circular(24),
-            border: Border.all(
-              color: const Color(0xFFE2E9E5),
-            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFE2E9E5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -251,8 +191,7 @@ class _NoHostelView extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceSoft,
-                  borderRadius:
-                      BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: const Icon(
                   Icons.apartment_rounded,
@@ -263,28 +202,21 @@ class _NoHostelView extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 'No Hostel Yet',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
                 'Create a hostel or join with a code.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: onCreateGroup,
-                  icon: const Icon(
-                    Icons.add_rounded,
-                  ),
-                  label:
-                      const Text('Create Hostel'),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Create Hostel'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -292,11 +224,8 @@ class _NoHostelView extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: onJoinGroup,
-                  icon: const Icon(
-                    Icons.group_add_outlined,
-                  ),
-                  label:
-                      const Text('Join Hostel'),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Join Hostel'),
                 ),
               ),
             ],
@@ -328,95 +257,63 @@ class _HostelView extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 480,
-          ),
+          constraints: const BoxConstraints(maxWidth: 480),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius:
-                  BorderRadius.circular(26),
+              borderRadius: BorderRadius.circular(26),
               onTap: onOpenHostel,
               child: Ink(
                 decoration: BoxDecoration(
-                  gradient:
-                      const LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
-                    end:
-                        Alignment.bottomRight,
-                    colors: [
-                      AppTheme.primaryDark,
-                      AppTheme.primary,
-                    ],
+                    end: Alignment.bottomRight,
+                    colors: [AppTheme.primaryDark, AppTheme.primary],
                   ),
-                  borderRadius:
-                      BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(26),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primary
-                          .withValues(
-                        alpha: 0.20,
-                      ),
+                      color: AppTheme.primary.withValues(alpha: 0.20),
                       blurRadius: 28,
-                      offset:
-                          const Offset(0, 14),
+                      offset: const Offset(0, 14),
                     ),
                   ],
                 ),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.all(26),
+                  padding: const EdgeInsets.all(26),
                   child: Column(
-                    mainAxisSize:
-                        MainAxisSize.min,
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
                           Container(
                             width: 60,
                             height: 60,
-                            decoration:
-                                BoxDecoration(
-                              color: Colors.white
-                                  .withValues(
-                                alpha: 0.15,
-                              ),
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(19),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(19),
                             ),
                             child: const Icon(
-                              Icons
-                                  .apartment_rounded,
+                              Icons.apartment_rounded,
                               size: 32,
                               color: Colors.white,
                             ),
                           ),
                           const Spacer(),
                           Container(
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 8,
                             ),
-                            decoration:
-                                BoxDecoration(
-                              color: Colors.white
-                                  .withValues(
-                                alpha: 0.14,
-                              ),
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: _MemberCountText(
                               key: ValueKey(groupId),
                               groupId: groupId,
-                              initialCount:
-                                  memberCount,
+                              initialCount: memberCount,
                             ),
                           ),
                         ],
@@ -427,28 +324,19 @@ class _HostelView extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 28,
-                          fontWeight:
-                              FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
                         ),
                       ),
                       const SizedBox(height: 26),
                       Container(
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 15,
                           vertical: 13,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white
-                              .withValues(
-                            alpha: 0.13,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(
-                            15,
-                          ),
+                          color: Colors.white.withValues(alpha: 0.13),
+                          borderRadius: BorderRadius.circular(15),
                         ),
                         child: const Row(
                           children: [
@@ -456,14 +344,12 @@ class _HostelView extends StatelessWidget {
                               'Enter Hostel',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontWeight:
-                                    FontWeight.w700,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             Spacer(),
                             Icon(
-                              Icons
-                                  .arrow_forward_rounded,
+                              Icons.arrow_forward_rounded,
                               color: Colors.white,
                               size: 21,
                             ),
@@ -504,10 +390,7 @@ class _AppLogo extends StatelessWidget {
 }
 
 class _PageMessage extends StatelessWidget {
-  const _PageMessage({
-    required this.icon,
-    required this.title,
-  });
+  const _PageMessage({required this.icon, required this.title});
 
   final IconData icon;
   final String title;
@@ -520,18 +403,12 @@ class _PageMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 48,
-              color: AppTheme.primary,
-            ),
+            Icon(icon, size: 48, color: AppTheme.primary),
             const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
           ],
         ),
@@ -539,6 +416,7 @@ class _PageMessage extends StatelessWidget {
     );
   }
 }
+
 /// Live count of the hostel's active members, including members
 /// who do not use the app.
 class _MemberCountText extends StatefulWidget {

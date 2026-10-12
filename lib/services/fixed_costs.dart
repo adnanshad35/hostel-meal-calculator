@@ -108,10 +108,11 @@ class FixedCostsCalculator {
     Map<String, Map<String, dynamic>> settingsByMonth,
     String monthKey,
   ) {
-    final candidates = settingsByMonth.keys
-        .where((key) => key.compareTo(monthKey) <= 0)
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final candidates =
+        settingsByMonth.keys
+            .where((key) => key.compareTo(monthKey) <= 0)
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
 
     for (final key in candidates) {
       final data = settingsByMonth[key]!;

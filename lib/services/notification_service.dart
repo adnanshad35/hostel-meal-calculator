@@ -29,8 +29,7 @@ class AppNotification {
       message: data['message'] as String? ?? '',
       // A notification that is still being saved has no server time
       // yet, so it counts as happening now.
-      createdAt:
-          (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isAnnouncement: isAnnouncement ?? data['type'] == 'announcement',
       actorId: data['actorId'] as String?,
     );
@@ -90,14 +89,14 @@ class NotificationService {
     bool? isAnnouncement,
   }) {
     return query.snapshots().map(
-          (snapshot) => [
-            for (final document in snapshot.docs)
-              AppNotification.fromDocument(
-                document,
-                isAnnouncement: isAnnouncement,
-              ),
-          ],
-        );
+      (snapshot) => [
+        for (final document in snapshot.docs)
+          AppNotification.fromDocument(
+            document,
+            isAnnouncement: isAnnouncement,
+          ),
+      ],
+    );
   }
 
   /// App notices for every user, newest first.

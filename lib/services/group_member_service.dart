@@ -17,16 +17,12 @@ class GroupMemberService {
     return _firestore.collection('groups').doc(groupId);
   }
 
-  static CollectionReference<Map<String, dynamic>> _members(
-    String groupId,
-  ) {
+  static CollectionReference<Map<String, dynamic>> _members(String groupId) {
     return _group(groupId).collection('members');
   }
 
   static Query<Map<String, dynamic>> _groupUsers(String groupId) {
-    return _firestore
-        .collection('users')
-        .where('groupId', isEqualTo: groupId);
+    return _firestore.collection('users').where('groupId', isEqualTo: groupId);
   }
 
   static List<GroupMember> _sorted(Iterable<GroupMember> members) {
@@ -53,9 +49,8 @@ class GroupMemberService {
   }) {
     late final StreamController<List<GroupMember>> controller;
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-        membersSubscription;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-        usersSubscription;
+    membersSubscription;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? usersSubscription;
 
     void watchUsers() {
       usersSubscription ??= _groupUsers(groupId).snapshots().listen(
@@ -83,13 +78,10 @@ class GroupMemberService {
 
           usersSubscription?.cancel();
           usersSubscription = null;
-          controller.add(
-            _sorted(snapshot.docs.map(GroupMember.fromDocument)),
-          );
+          controller.add(_sorted(snapshot.docs.map(GroupMember.fromDocument)));
         },
         onError: (Object error, StackTrace stackTrace) {
-          if (error is FirebaseException &&
-              error.code == 'permission-denied') {
+          if (error is FirebaseException && error.code == 'permission-denied') {
             watchUsers();
           } else {
             controller.addError(error, stackTrace);
@@ -132,9 +124,8 @@ class GroupMemberService {
   ///
   /// Best effort: failures are ignored and retried on the next call.
   static Future<void> sync(String groupId) {
-    return _runningSyncs[groupId] ??= _sync(groupId).whenComplete(
-      () => _runningSyncs.remove(groupId),
-    );
+    return _runningSyncs[groupId] ??= _sync(groupId)
+        .whenComplete(() => _runningSyncs.remove(groupId));
   }
 
   static Future<void> _sync(String groupId) async {
@@ -154,9 +145,7 @@ class GroupMemberService {
       final memberIds = List<String>.from(
         groupData['memberIds'] as List? ?? [],
       );
-      final admins = List<String>.from(
-        groupData['admins'] as List? ?? [],
-      );
+      final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
       if (!memberIds.contains(user.uid)) return;
 
@@ -265,10 +254,9 @@ class GroupMemberService {
     required String memberId,
     required bool active,
   }) async {
-    await _members(groupId).doc(memberId).update({
-      'active': active,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await _members(groupId)
+        .doc(memberId)
+        .update({'active': active, 'updatedAt': FieldValue.serverTimestamp()});
   }
 
   /// Promotes an app user to administrator or changes them back to
@@ -295,9 +283,7 @@ class GroupMemberService {
       );
 
       if (!admins.contains(currentUserId)) {
-        throw Exception(
-          'Only an administrator can change member roles.',
-        );
+        throw Exception('Only an administrator can change member roles.');
       }
 
       if (makeAdmin) {
@@ -333,8 +319,7 @@ class GroupMemberService {
   static Future<void> leaveGroup(String groupId) async {
     final currentUser = FirebaseAuth.instance.currentUser!;
     final groupReference = _group(groupId);
-    final userReference =
-        _firestore.collection('users').doc(currentUser.uid);
+    final userReference = _firestore.collection('users').doc(currentUser.uid);
 
     await _firestore.runTransaction((transaction) async {
       final groupSnapshot = await transaction.get(groupReference);
@@ -348,9 +333,7 @@ class GroupMemberService {
       final memberIds = List<String>.from(
         groupData['memberIds'] as List? ?? [],
       );
-      final admins = List<String>.from(
-        groupData['admins'] as List? ?? [],
-      );
+      final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
       if (!memberIds.contains(currentUser.uid)) {
         throw Exception('You are no longer a member of this hostel.');
@@ -413,18 +396,14 @@ class GroupMemberService {
       final memberIds = List<String>.from(
         groupData['memberIds'] as List? ?? [],
       );
-      final admins = List<String>.from(
-        groupData['admins'] as List? ?? [],
-      );
+      final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
       if (!admins.contains(currentUserId)) {
         throw Exception('Only an administrator can remove members.');
       }
 
       if (!memberIds.contains(memberId)) {
-        throw Exception(
-          '${member.name} is no longer a member of this hostel.',
-        );
+        throw Exception('${member.name} is no longer a member of this hostel.');
       }
 
       if (admins.contains(memberId) && admins.length <= 1) {
@@ -472,12 +451,11 @@ class GroupMemberService {
     final meals = _group(groupId).collection('meals');
     final expenses = _group(groupId).collection('expenses');
 
-    final shadowMeals =
-        await meals.where('userId', isEqualTo: shadow.id).get();
-    final userMeals =
-        await meals.where('userId', isEqualTo: appUser.id).get();
-    final shadowExpenses =
-        await expenses.where('paidById', isEqualTo: shadow.id).get();
+    final shadowMeals = await meals.where('userId', isEqualTo: shadow.id).get();
+    final userMeals = await meals.where('userId', isEqualTo: appUser.id).get();
+    final shadowExpenses = await expenses
+        .where('paidById', isEqualTo: shadow.id)
+        .get();
 
     final takenDates = {
       for (final meal in userMeals.docs) meal.data()['dateKey'],

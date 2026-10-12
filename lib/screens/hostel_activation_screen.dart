@@ -6,8 +6,18 @@ import '../theme/app_theme.dart';
 
 String formatSubscriptionDate(DateTime date) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -26,8 +36,7 @@ class HostelActivationScreen extends StatefulWidget {
   final String groupName;
 
   @override
-  State<HostelActivationScreen> createState() =>
-      _HostelActivationScreenState();
+  State<HostelActivationScreen> createState() => _HostelActivationScreenState();
 }
 
 class _HostelActivationScreenState extends State<HostelActivationScreen> {
@@ -63,9 +72,8 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _redeemVoucher() async {
@@ -131,9 +139,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Activate Hostel'),
-      ),
+      appBar: AppBar(title: const Text('Activate Hostel')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
@@ -141,8 +147,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
             stream: _subscription,
             builder: (context, snapshot) {
               return SubscriptionStatusCard(
-                subscription:
-                    snapshot.data ?? const HostelSubscription.none(),
+                subscription: snapshot.data ?? const HostelSubscription.none(),
                 isLoading: !snapshot.hasData && !snapshot.hasError,
                 hostelName: widget.groupName,
               );
@@ -165,9 +170,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                   textCapitalization: TextCapitalization.characters,
                   textInputAction: TextInputAction.done,
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'[a-zA-Z0-9]'),
-                    ),
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
                     LengthLimitingTextInputFormatter(20),
                   ],
                   decoration: const InputDecoration(
@@ -219,8 +222,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                           children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     'Send money to',
@@ -248,8 +250,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                       if (info.bkashNumber.isNotEmpty &&
                           info.instructions.isNotEmpty)
                         const SizedBox(height: 10),
-                      if (info.instructions.isNotEmpty)
-                        Text(info.instructions),
+                      if (info.instructions.isNotEmpty) Text(info.instructions),
                     ],
                   ),
                 ),
@@ -272,9 +273,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                   textCapitalization: TextCapitalization.characters,
                   textInputAction: TextInputAction.next,
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'[a-zA-Z0-9]'),
-                    ),
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
                     LengthLimitingTextInputFormatter(20),
                   ],
                   decoration: const InputDecoration(
@@ -283,8 +282,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                     prefixIcon: Icon(Icons.receipt_long_outlined),
                   ),
                   validator: (value) {
-                    final id =
-                        SubscriptionService.normalizeCode(value ?? '');
+                    final id = SubscriptionService.normalizeCode(value ?? '');
                     if (!SubscriptionService.isValidCode(id)) {
                       return 'Enter the ID exactly as bKash shows it.';
                     }
@@ -323,8 +321,10 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                   validator: (value) {
-                    final digits =
-                        (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                    final digits = (value ?? '').replaceAll(
+                      RegExp(r'[^0-9]'),
+                      '',
+                    );
                     if (digits.length < 10) {
                       return 'Enter the number you paid from.';
                     }
@@ -340,9 +340,7 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Submit Payment'),
                   ),
@@ -410,18 +408,20 @@ class SubscriptionStatusCard extends StatelessWidget {
       subtitle = hostelName ?? '';
     } else if (subscription.accessDisabled) {
       title = 'Suspended';
-      subtitle = 'This hostel has been suspended by HostelMate. '
+      subtitle =
+          'This hostel has been suspended by HostelMate. '
           'Please contact support.';
     } else if (subscription.editingDisabled) {
       title = 'Read-only';
-      subtitle = 'Editing has been switched off for this hostel by '
+      subtitle =
+          'Editing has been switched off for this hostel by '
           'HostelMate. Records can be viewed but not changed.';
     } else if (isActive) {
       title = until == null
           ? 'Active'
           : daysLeft == 1
-              ? 'Active · 1 day left'
-              : 'Active · $daysLeft days left';
+          ? 'Active · 1 day left'
+          : 'Active · $daysLeft days left';
       subtitle = until == null
           ? 'Activating…'
           : 'Until ${formatSubscriptionDate(until)}';
@@ -430,24 +430,24 @@ class SubscriptionStatusCard extends StatelessWidget {
       subtitle = until == null
           ? 'This hostel has not been activated yet.'
           : 'Ended on ${formatSubscriptionDate(until)}. Records can '
-              'be viewed but not changed.';
+                'be viewed but not changed.';
     }
 
     final canEdit = subscription.canEdit(now);
     final color = isLoading
         ? AppTheme.textSecondary
         : subscription.accessDisabled
-            ? AppTheme.danger
-            : canEdit
-                ? AppTheme.success
-                : AppTheme.warning;
+        ? AppTheme.danger
+        : canEdit
+        ? AppTheme.success
+        : AppTheme.warning;
 
     return Card(
       color: isLoading || canEdit
           ? AppTheme.surfaceSoft
           : subscription.accessDisabled
-              ? const Color(0xFFFCE8E8)
-              : const Color(0xFFFFF2DA),
+          ? const Color(0xFFFCE8E8)
+          : const Color(0xFFFFF2DA),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Row(
@@ -456,8 +456,8 @@ class SubscriptionStatusCard extends StatelessWidget {
               subscription.accessDisabled
                   ? Icons.block
                   : canEdit
-                      ? Icons.verified_outlined
-                      : Icons.lock_outline,
+                  ? Icons.verified_outlined
+                  : Icons.lock_outline,
               color: color,
               size: 28,
             ),
@@ -504,11 +504,11 @@ class PaymentCard extends StatelessWidget {
     final (label, color) = switch (payment.status) {
       PaymentStatus.pending => ('Waiting for review', AppTheme.warning),
       PaymentStatus.approved => (
-          payment.daysGranted > 0
-              ? 'Approved · ${payment.daysGranted} days added'
-              : 'Approved',
-          AppTheme.success,
-        ),
+        payment.daysGranted > 0
+            ? 'Approved · ${payment.daysGranted} days added'
+            : 'Approved',
+        AppTheme.success,
+      ),
       PaymentStatus.rejected => ('Rejected', AppTheme.danger),
     };
 

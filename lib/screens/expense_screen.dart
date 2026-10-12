@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/notification_service.dart';
 
@@ -22,6 +23,9 @@ class ExpenseScreen extends StatelessWidget {
     BuildContext context, {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
+    if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+
     await showDialog<void>(
       context: context,
       builder: (_) => _ExpenseFormDialog(
@@ -35,10 +39,7 @@ class ExpenseScreen extends StatelessWidget {
   void _openTotalExpenses(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => TotalExpensesScreen(
-          groupId: groupId,
-          isAdmin: isAdmin,
-        ),
+        builder: (_) => TotalExpensesScreen(groupId: groupId, isAdmin: isAdmin),
       ),
     );
   }
@@ -47,10 +48,7 @@ class ExpenseScreen extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MyExpensesScreen(
-          groupId: groupId,
-          currentUserId: uid,
-        ),
+        builder: (_) => MyExpensesScreen(groupId: groupId, currentUserId: uid),
       ),
     );
   }
@@ -60,9 +58,7 @@ class ExpenseScreen extends StatelessWidget {
     final currentUser = FirebaseAuth.instance.currentUser!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expense Update'),
-      ),
+      appBar: AppBar(title: const Text('Expense Update')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openExpenseForm(context),
         icon: const Icon(Icons.add),
@@ -80,9 +76,7 @@ class ExpenseScreen extends StatelessWidget {
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load expenses.'),
-            );
+            return const Center(child: Text('Unable to load expenses.'));
           }
 
           final expenses = _currentMonthExpenses(snapshot.data);
@@ -170,9 +164,7 @@ class ExpenseScreen extends StatelessWidget {
                     title: Text(
                       '${expenses.length} expense'
                       '${expenses.length == 1 ? '' : 's'} this month',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     subtitle: const Text(
                       'Tap Total Expense to view the full list.',
@@ -204,6 +196,9 @@ class TotalExpensesScreen extends StatelessWidget {
     BuildContext context, {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
+    if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+
     await showDialog<void>(
       context: context,
       builder: (_) => _ExpenseFormDialog(
@@ -234,9 +229,7 @@ class TotalExpensesScreen extends StatelessWidget {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Delete'),
             ),
@@ -251,16 +244,12 @@ class TotalExpensesScreen extends StatelessWidget {
 
     try {
       await expense.reference.delete();
-      messenger.showSnackBar(
-        SnackBar(content: Text('"$name" was deleted.')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('"$name" was deleted.')));
     } on FirebaseException catch (error) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            error.code == 'permission-denied'
-                ? 'Only an administrator can delete expenses.'
-                : error.message ?? 'Unable to delete the expense.',
+            saveErrorMessage(error, fallback: 'Unable to delete the expense.'),
           ),
         ),
       );
@@ -272,9 +261,7 @@ class TotalExpensesScreen extends StatelessWidget {
     final currentUser = FirebaseAuth.instance.currentUser!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Total Expenses'),
-      ),
+      appBar: AppBar(title: const Text('Total Expenses')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openExpenseForm(context),
         icon: const Icon(Icons.add),
@@ -293,9 +280,7 @@ class TotalExpensesScreen extends StatelessWidget {
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load expenses.'),
-            );
+            return const Center(child: Text('Unable to load expenses.'));
           }
 
           final expenses = _currentMonthExpenses(snapshot.data);
@@ -312,14 +297,10 @@ class TotalExpensesScreen extends StatelessWidget {
             );
           }
 
-          final total = expenses.fold<double>(
-            0,
-            (currentTotal, expense) {
-              final amount = expense.data()['amount'];
-              return currentTotal +
-                  (amount is num ? amount.toDouble() : 0);
-            },
-          );
+          final total = expenses.fold<double>(0, (currentTotal, expense) {
+            final amount = expense.data()['amount'];
+            return currentTotal + (amount is num ? amount.toDouble() : 0);
+          });
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -334,9 +315,7 @@ class TotalExpensesScreen extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
+                        style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
                               color: const Color(0xFF2E7D32),
                               fontWeight: FontWeight.bold,
@@ -356,8 +335,7 @@ class TotalExpensesScreen extends StatelessWidget {
                 final amount = data['amount'];
                 final date = (data['date'] as Timestamp?)?.toDate();
 
-                final canEdit =
-                    isAdmin || paidById == currentUser.uid;
+                final canEdit = isAdmin || paidById == currentUser.uid;
 
                 return Card(
                   child: ListTile(
@@ -366,35 +344,24 @@ class TotalExpensesScreen extends StatelessWidget {
                     ),
                     title: Text(
                       name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text(
-                      '${_formatDate(date)}\nPaid by $paidByName',
-                    ),
+                    subtitle: Text('${_formatDate(date)}\nPaid by $paidByName'),
                     isThreeLine: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           '৳${_formatAmount(amount)}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         if (isAdmin)
                           PopupMenuButton<String>(
                             tooltip: 'Expense options',
                             onSelected: (action) {
                               if (action == 'edit') {
-                                _openExpenseForm(
-                                  context,
-                                  expense: expense,
-                                );
+                                _openExpenseForm(context, expense: expense);
                               } else {
                                 _deleteExpense(
                                   context,
@@ -404,10 +371,7 @@ class TotalExpensesScreen extends StatelessWidget {
                               }
                             },
                             itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Edit'),
-                              ),
+                              PopupMenuItem(value: 'edit', child: Text('Edit')),
                               PopupMenuItem(
                                 value: 'delete',
                                 child: Text(
@@ -422,10 +386,7 @@ class TotalExpensesScreen extends StatelessWidget {
                           IconButton(
                             tooltip: 'Edit expense',
                             onPressed: () {
-                              _openExpenseForm(
-                                context,
-                                expense: expense,
-                              );
+                              _openExpenseForm(context, expense: expense);
                             },
                             icon: const Icon(Icons.edit_outlined),
                           ),
@@ -460,6 +421,9 @@ class MyExpensesScreen extends StatelessWidget {
     BuildContext context, {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
+    if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+
     await showDialog<void>(
       context: context,
       builder: (_) => _ExpenseFormDialog(
@@ -473,9 +437,7 @@ class MyExpensesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Expenses'),
-      ),
+      appBar: AppBar(title: const Text('My Expenses')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openExpenseForm(context),
         icon: const Icon(Icons.add),
@@ -568,9 +530,7 @@ class MyExpensesScreen extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
+                        style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
                               color: const Color(0xFF2E7D32),
                               fontWeight: FontWeight.bold,
@@ -594,9 +554,7 @@ class MyExpensesScreen extends StatelessWidget {
                     ),
                     title: Text(
                       name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(_formatDate(date)),
                     trailing: Row(
@@ -604,21 +562,14 @@ class MyExpensesScreen extends StatelessWidget {
                       children: [
                         Text(
                           '৳${_formatAmount(amount)}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 4),
                         IconButton(
                           tooltip: 'Edit expense',
                           onPressed: () {
-                            _openExpenseForm(
-                              context,
-                              expense: expense,
-                            );
+                            _openExpenseForm(context, expense: expense);
                           },
                           icon: const Icon(Icons.edit_outlined),
                         ),
@@ -673,9 +624,7 @@ class _SummaryTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
+                      style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -689,19 +638,11 @@ class _SummaryTile extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 value,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(color: color, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),
@@ -799,17 +740,13 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
     _amountController = TextEditingController(
       text: amount is num
-          ? (amount % 1 == 0
-              ? amount.toInt().toString()
-              : amount.toString())
+          ? (amount % 1 == 0 ? amount.toInt().toString() : amount.toString())
           : '',
     );
 
-    _selectedDate =
-        (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+    _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
 
-    _selectedMemberId =
-        data?['paidById'] as String? ?? _currentUser.uid;
+    _selectedMemberId = data?['paidById'] as String? ?? _currentUser.uid;
 
     if (widget.isAdmin && !_isEditing) {
       _watchMembers();
@@ -827,8 +764,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   void _watchMembers() {
     _isLoadingMembers = true;
 
-    _membersSubscription =
-        GroupMemberService.watch(widget.groupId).listen(
+    _membersSubscription = GroupMemberService.watch(widget.groupId).listen(
       (activeMembers) {
         final members = [...activeMembers];
 
@@ -891,9 +827,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   Future<void> _openCalculator() async {
     final result = await showDialog<double>(
       context: context,
-      builder: (_) => _CalculatorDialog(
-        initialValue: _amountController.text.trim(),
-      ),
+      builder: (_) =>
+          _CalculatorDialog(initialValue: _amountController.text.trim()),
     );
 
     if (!mounted) return;
@@ -909,18 +844,14 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (widget.isAdmin &&
-        !_isEditing &&
-        _selectedMemberId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a member.')),
-      );
+    if (widget.isAdmin && !_isEditing && _selectedMemberId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a member.')));
       return;
     }
 
-    final parsedAmount = double.tryParse(
-      _amountController.text.trim(),
-    );
+    final parsedAmount = double.tryParse(_amountController.text.trim());
 
     if (parsedAmount == null || parsedAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -942,8 +873,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final paidByName = widget.isAdmin && !_isEditing
         ? selectedMember?.name ?? 'Member'
         : _currentUser.displayName?.trim().isNotEmpty == true
-            ? _currentUser.displayName!.trim()
-            : _currentUser.email ?? 'Member';
+        ? _currentUser.displayName!.trim()
+        : _currentUser.email ?? 'Member';
 
     setState(() => _isSaving = true);
 
@@ -969,10 +900,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'paidById': paidById,
           'paidByName': paidByName,
           'enteredBy': _currentUser.uid,
-          'enteredByName':
-              _currentUser.displayName?.trim().isNotEmpty == true
-                  ? _currentUser.displayName!.trim()
-                  : _currentUser.email ?? 'Member',
+          'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
+              ? _currentUser.displayName!.trim()
+              : _currentUser.email ?? 'Member',
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -986,7 +916,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           NotificationService.notifyGroup(
             groupId: widget.groupId,
             title: 'New expense',
-            message: '${_nameController.text.trim()} · ৳$amountText, '
+            message:
+                '${_nameController.text.trim()} · ৳$amountText, '
                 'paid by $paidByName',
           ),
         );
@@ -998,7 +929,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.message ?? 'Unable to save expense.'),
+          content: Text(
+            saveErrorMessage(error, fallback: 'Unable to save expense.'),
+          ),
         ),
       );
     } finally {
@@ -1014,8 +947,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final month = _selectedDate.month.toString().padLeft(2, '0');
     final formattedDate = '$day/$month/${_selectedDate.year}';
 
-    final existingPaidByName =
-        widget.expense?.data()?['paidByName'] as String?;
+    final existingPaidByName = widget.expense?.data()?['paidByName'] as String?;
 
     return AlertDialog(
       title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
@@ -1185,16 +1117,12 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSaving
-              ? null
-              : () => Navigator.of(context).pop(),
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _isSaving ||
-                  (widget.isAdmin &&
-                      !_isEditing &&
-                      _isLoadingMembers)
+          onPressed:
+              _isSaving || (widget.isAdmin && !_isEditing && _isLoadingMembers)
               ? null
               : _saveExpense,
           child: _isSaving
@@ -1267,8 +1195,7 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
     final current = _controller.text;
     _controller.value = TextEditingValue(
       text: current + text,
-      selection:
-          TextSelection.collapsed(offset: current.length + text.length),
+      selection: TextSelection.collapsed(offset: current.length + text.length),
     );
     _onChanged(_controller.text);
   }
@@ -1315,10 +1242,7 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(10),
@@ -1460,18 +1384,12 @@ class _Key extends StatelessWidget {
         onPressed: disabled ? null : onTap,
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          foregroundColor:
-              highlight ? const Color(0xFF2E7D32) : null,
-          side: highlight
-              ? const BorderSide(color: Color(0xFF2E7D32))
-              : null,
+          foregroundColor: highlight ? const Color(0xFF2E7D32) : null,
+          side: highlight ? const BorderSide(color: Color(0xFF2E7D32)) : null,
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );

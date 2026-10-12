@@ -40,8 +40,7 @@ class UpdateService {
   /// Returns the available update, or null when the app is up to date
   /// or the check could not be completed.
   static Future<AppUpdate?> check() async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 6);
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
 
     try {
       final info = await PackageInfo.fromPlatform();
@@ -49,8 +48,9 @@ class UpdateService {
       final request = await client.getUrl(Uri.parse(_latestReleaseUrl));
       request.followRedirects = false;
 
-      final response =
-          await request.close().timeout(const Duration(seconds: 8));
+      final response = await request.close().timeout(
+        const Duration(seconds: 8),
+      );
       final location = response.headers.value(HttpHeaders.locationHeader);
       await response.drain<void>();
 

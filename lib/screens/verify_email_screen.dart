@@ -71,9 +71,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           ? 'Please wait before requesting another email.'
           : error.message ?? 'Unable to resend the verification email.';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -127,18 +126,17 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   Text(
                     'We sent a verification link to',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                    style: Theme.of(context).textTheme.bodyLarge
+                        ?.copyWith(color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 6),
                   SelectableText(
                     email,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 28),
                   Card(

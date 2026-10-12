@@ -54,8 +54,7 @@ void main() {
       );
     });
 
-    test('counts as active while the server is still saving the start',
-        () {
+    test('counts as active while the server is still saving the start', () {
       final saving = HostelSubscription.fromData({
         'periodStart': null,
         'days': 30,
@@ -114,8 +113,9 @@ void main() {
       expect(plain.accessDisabled, isFalse);
 
       // Switches saved for a hostel that was never activated.
-      final onlySwitches =
-          HostelSubscription.fromData(const {'accessDisabled': true});
+      final onlySwitches = HostelSubscription.fromData(const {
+        'accessDisabled': true,
+      });
       expect(onlySwitches.accessDisabled, isTrue);
       expect(onlySwitches.isSaving, isFalse);
       expect(onlySwitches.isActive(during), isFalse);
@@ -187,9 +187,6 @@ void main() {
   test('payment info knows when nothing has been set', () {
     expect(const PaymentInfo().isEmpty, isTrue);
     expect(PaymentInfo.fromData(null).isEmpty, isTrue);
-    expect(
-      PaymentInfo.fromData(const {'bkashNumber': '017'}).isEmpty,
-      isFalse,
-    );
+    expect(PaymentInfo.fromData(const {'bkashNumber': '017'}).isEmpty, isFalse);
   });
 }

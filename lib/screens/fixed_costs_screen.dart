@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
@@ -38,8 +39,8 @@ class FixedCostsScreen extends StatefulWidget {
 
 class _BillRow {
   _BillRow({String name = '', String amount = ''})
-      : name = TextEditingController(text: name),
-        amount = TextEditingController(text: amount);
+    : name = TextEditingController(text: name),
+      amount = TextEditingController(text: amount);
 
   final TextEditingController name;
   final TextEditingController amount;
@@ -171,9 +172,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            error.code == 'permission-denied'
-                ? 'Only an administrator can change rent and bills.'
-                : error.message ?? 'Unable to save rent and bills.',
+            saveErrorMessage(error, fallback: 'Unable to save rent and bills.'),
           ),
         ),
       );
@@ -189,9 +188,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fixed Costs'),
-      ),
+      appBar: AppBar(title: const Text('Fixed Costs')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -250,9 +247,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
                       enabled: !_isSaving,
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Bill',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Bill'),
                       validator: (value) {
                         final hasAmount = _amount(row.amount) > 0;
                         if (hasAmount &&
@@ -282,8 +277,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
                   ),
                   IconButton(
                     tooltip: 'Remove bill',
-                    onPressed:
-                        _isSaving ? null : () => _removeBillRow(row),
+                    onPressed: _isSaving ? null : () => _removeBillRow(row),
                     icon: const Icon(
                       Icons.close,
                       color: AppTheme.textSecondary,

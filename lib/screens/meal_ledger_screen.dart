@@ -48,9 +48,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
   }
 
   String _displayQuantity(double value) {
-    return value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(1);
+    return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
   String _monthName(int month) {
@@ -91,23 +89,17 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
         .snapshots();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Monthly Meal Ledger'),
-      ),
+      appBar: AppBar(title: const Text('Monthly Meal Ledger')),
       body: StreamBuilder<List<GroupMember>>(
         stream: _membersStream,
         builder: (context, usersSnapshot) {
           if (usersSnapshot.connectionState == ConnectionState.waiting &&
               !usersSnapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (usersSnapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load group members.'),
-            );
+            return const Center(child: Text('Unable to load group members.'));
           }
 
           final members = usersSnapshot.data ?? [];
@@ -115,11 +107,8 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: mealsStream,
             builder: (context, mealsSnapshot) {
-              if (mealsSnapshot.connectionState ==
-                  ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
+              if (mealsSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
 
               if (mealsSnapshot.hasError) {
@@ -137,8 +126,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                 final userId = data['userId'] as String? ?? '';
 
                 entryMap['$dateKey|$userId'] = data;
-                groupMonthlyTotal +=
-                    (data['total'] as num?)?.toDouble() ?? 0;
+                groupMonthlyTotal += (data['total'] as num?)?.toDouble() ?? 0;
               }
 
               return ListView(
@@ -157,17 +145,12 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   '${_monthName(now.month)} ${now.year}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 Text('${members.length} members'),
                               ],
@@ -179,9 +162,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                               const Text('Total meals'),
                               Text(
                                 _displayQuantity(groupMonthlyTotal),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
+                                style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
                                       color: const Color(0xFF2E7D32),
                                       fontWeight: FontWeight.bold,
@@ -225,9 +206,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                         groupId: groupId,
                         isAdmin: isAdmin,
                         date: DateTime(now.year, now.month, day),
-                        dateKey: _dateKey(
-                          DateTime(now.year, now.month, day),
-                        ),
+                        dateKey: _dateKey(DateTime(now.year, now.month, day)),
                         todayKey: todayKey,
                         members: members,
                         entryMap: entryMap,
@@ -299,9 +278,7 @@ class _DateMealCard extends StatelessWidget {
         ),
         title: Text(
           '${_weekdayName(date.weekday)}${isToday ? ' • Today' : ''}',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
           '$submittedCount of ${members.length} members submitted',
@@ -370,17 +347,10 @@ class _MemberMealRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entry == null) {
       return ListTile(
-        leading: const Icon(
-          Icons.help_outline,
-          color: Colors.orange,
-        ),
+        leading: const Icon(Icons.help_outline, color: Colors.orange),
         title: Text(memberName),
-        subtitle: Text(
-          isAdmin ? 'Not entered • Tap to add' : 'Not entered',
-        ),
-        trailing: isAdmin
-            ? const Icon(Icons.edit_outlined)
-            : null,
+        subtitle: Text(isAdmin ? 'Not entered • Tap to add' : 'Not entered'),
+        trailing: isAdmin ? const Icon(Icons.edit_outlined) : null,
         onTap: isAdmin ? () => _openEditor(context) : null,
       );
     }
@@ -390,10 +360,7 @@ class _MemberMealRow extends StatelessWidget {
     final total = (entry!['total'] as num?)?.toDouble() ?? 0;
 
     return ListTile(
-      leading: const Icon(
-        Icons.check_circle_outline,
-        color: Colors.green,
-      ),
+      leading: const Icon(Icons.check_circle_outline, color: Colors.green),
       title: Text(memberName),
       subtitle: Text(
         'Lunch: ${displayQuantity(lunch)}   '
@@ -405,9 +372,8 @@ class _MemberMealRow extends StatelessWidget {
               children: [
                 Text(
                   displayQuantity(total),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 8),
                 const Icon(Icons.edit_outlined),
@@ -415,9 +381,8 @@ class _MemberMealRow extends StatelessWidget {
             )
           : Text(
               displayQuantity(total),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
       onTap: isAdmin ? () => _openEditor(context) : null,
     );

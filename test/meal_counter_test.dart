@@ -36,8 +36,7 @@ void main() {
     expect(MealCounter.format(0), '0');
   });
 
-  testWidgets('typing and the buttons both change the value',
-      (tester) async {
+  testWidgets('typing and the buttons both change the value', (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);

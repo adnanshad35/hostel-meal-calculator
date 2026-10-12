@@ -70,14 +70,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .collection('users')
           .doc(_currentUser.uid)
           .set({
-        'phoneNumber': phone,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'phoneNumber': phone,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone number updated.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Phone number updated.')));
     } on FirebaseException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,8 +98,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final providers =
-        _currentUser.providerData.map((p) => p.providerId).toList();
+    final providers = _currentUser.providerData
+        .map((p) => p.providerId)
+        .toList();
     final hasPasswordProvider = providers.contains('password');
 
     if (!hasPasswordProvider) {
@@ -140,23 +140,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reset link sent to $email')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Reset link sent to $email')));
     } on FirebaseAuthException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Unable to send reset link.'),
-        ),
+        SnackBar(content: Text(error.message ?? 'Unable to send reset link.')),
       );
     }
   }
 
   void _openAbout(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AboutScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const AboutScreen()));
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -191,9 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-      ),
+      appBar: AppBar(title: const Text('Profile')),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _userStream,
         builder: (context, snapshot) {
@@ -203,9 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load your profile.'),
-            );
+            return const Center(child: Text('Unable to load your profile.'));
           }
 
           final userData = snapshot.data?.data();
@@ -245,10 +237,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? 'Add your phone number'
                               : phone,
                           trailingIcon: Icons.edit_outlined,
-                          onTap: () => _editPhoneNumber(
-                            context,
-                            currentPhone: phone,
-                          ),
+                          onTap: () =>
+                              _editPhoneNumber(context, currentPhone: phone),
                         ),
                         const _TileDivider(),
                         _ProfileTile(
@@ -363,8 +353,7 @@ class _PhoneNumberDialogState extends State<_PhoneNumberDialog> {
             if (enteredPhone.isEmpty) {
               return 'Please enter your phone number.';
             }
-            final normalized =
-                enteredPhone.replaceAll(RegExp(r'[\s()-]'), '');
+            final normalized = enteredPhone.replaceAll(RegExp(r'[\s()-]'), '');
             if (!RegExp(r'^\+?[0-9]{8,15}$').hasMatch(normalized)) {
               return 'Please enter a valid phone number.';
             }
@@ -378,10 +367,7 @@ class _PhoneNumberDialogState extends State<_PhoneNumberDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Save'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
       ],
     );
   }
@@ -558,10 +544,7 @@ class _ProfileTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: _ProfileIconBox(
         icon: icon,
         backgroundColor: iconBackground,
@@ -569,10 +552,7 @@ class _ProfileTile extends StatelessWidget {
       ),
       title: Text(
         title,
-        style: TextStyle(
-          color: titleColor,
-          fontWeight: FontWeight.w700,
-        ),
+        style: TextStyle(color: titleColor, fontWeight: FontWeight.w700),
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 3),
@@ -635,9 +615,8 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: AppTheme.textSecondary,
-          ),
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(color: AppTheme.textSecondary),
     );
   }
 }

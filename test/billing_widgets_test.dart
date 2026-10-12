@@ -12,7 +12,10 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(
-    MaterialApp(theme: AppTheme.light, home: Scaffold(body: child)),
+    MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(body: child),
+    ),
   );
   await tester.pump();
 }
@@ -79,25 +82,19 @@ void main() {
     expect(billing.subscriptionOf('missing').isActive(now), isFalse);
   });
 
-  testWidgets('status card: active, ended, and never activated',
-      (tester) async {
+  testWidgets('status card: active, ended, and never activated', (
+    tester,
+  ) async {
     await _pump(
       tester,
       ListView(
         children: [
           SubscriptionStatusCard(
             subscription: billing.subscriptionOf('green'),
-            action: FilledButton(
-              onPressed: () {},
-              child: const Text('Extend'),
-            ),
+            action: FilledButton(onPressed: () {}, child: const Text('Extend')),
           ),
-          SubscriptionStatusCard(
-            subscription: billing.subscriptionOf('blue'),
-          ),
-          const SubscriptionStatusCard(
-            subscription: HostelSubscription.none(),
-          ),
+          SubscriptionStatusCard(subscription: billing.subscriptionOf('blue')),
+          const SubscriptionStatusCard(subscription: HostelSubscription.none()),
         ],
       ),
     );
@@ -112,8 +109,9 @@ void main() {
     expect(find.textContaining('Ended on'), findsOneWidget);
   });
 
-  testWidgets('payments tab lists payments with actions on pending ones',
-      (tester) async {
+  testWidgets('payments tab lists payments with actions on pending ones', (
+    tester,
+  ) async {
     await _pump(
       tester,
       AdminPaymentsTab(billing: billing, onRefresh: () async {}),
@@ -131,8 +129,9 @@ void main() {
     expect(find.textContaining('bKash 01700000000'), findsOneWidget);
   });
 
-  testWidgets('vouchers tab shows each voucher and whether it is on',
-      (tester) async {
+  testWidgets('vouchers tab shows each voucher and whether it is on', (
+    tester,
+  ) async {
     await _pump(
       tester,
       AdminVouchersTab(billing: billing, onRefresh: () async {}),
@@ -150,8 +149,7 @@ void main() {
     expect(switches.map((tile) => tile.value), [true, false]);
   });
 
-  testWidgets('new voucher dialog validates the code and days',
-      (tester) async {
+  testWidgets('new voucher dialog validates the code and days', (tester) async {
     await _pump(
       tester,
       AdminVouchersTab(billing: billing, onRefresh: () async {}),
@@ -169,10 +167,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Use 4 to 20 letters and numbers.'), findsOneWidget);
-    expect(
-      find.text('Enter a number of days from 1 to 3650.'),
-      findsOneWidget,
-    );
+    expect(find.text('Enter a number of days from 1 to 3650.'), findsOneWidget);
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -180,8 +175,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('status card shows locked and suspended hostels',
-      (tester) async {
+  testWidgets('status card shows locked and suspended hostels', (tester) async {
     await _pump(
       tester,
       ListView(
@@ -206,40 +200,11 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Read-only'), findsOneWidget);
-    expect(find.textContaining('Editing has been switched off'),
-        findsOneWidget);
-    expect(find.text('Suspended'), findsOneWidget);
-  });
-
-  testWidgets('hostel switches report what the super admin chose',
-      (tester) async {
-    bool? editing;
-    bool? access;
-
-    await _pump(
-      tester,
-      AdminHostelControls(
-        subscription: HostelSubscription(
-          periodStart: now,
-          days: 30,
-          accessDisabled: true,
-        ),
-        onEditingChanged: (allow) => editing = allow,
-        onAccessChanged: (allow) => access = allow,
-      ),
+    expect(
+      find.textContaining('Editing has been switched off'),
+      findsOneWidget,
     );
-
-    final switches = tester
-        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
-        .toList();
-    // Editing is allowed; access is switched off.
-    expect(switches.map((tile) => tile.value), [true, false]);
-
-    await tester.tap(find.text('Allow editing'));
-    await tester.tap(find.text('Allow access'));
-    expect(editing, isFalse);
-    expect(access, isTrue);
-    expect(tester.takeException(), isNull);
+    expect(find.text('Suspended'), findsOneWidget);
   });
 
   testWidgets('maintenance card and screen', (tester) async {

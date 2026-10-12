@@ -51,9 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (error.code == 'network-request-failed') {
         message = 'Please check your internet connection.';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -62,9 +61,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void _openForgotPassword() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ForgotPasswordScreen(
-          initialEmail: _emailController.text.trim(),
-        ),
+        builder: (_) =>
+            ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
       ),
     );
   }
@@ -109,9 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       'Sign in to continue to HostelMate.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
+                      style: Theme.of(context).textTheme.bodyLarge
+                          ?.copyWith(color: AppTheme.textSecondary),
                     ),
                     const SizedBox(height: 32),
                     Card(
@@ -210,8 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         TextButton(
-                          onPressed:
-                              _isLoading ? null : widget.onCreateAccount,
+                          onPressed: _isLoading ? null : widget.onCreateAccount,
                           child: const Text('Create Account'),
                         ),
                       ],

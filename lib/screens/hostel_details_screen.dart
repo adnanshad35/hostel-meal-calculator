@@ -29,7 +29,7 @@ class HostelDetailsScreen extends StatefulWidget {
 class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   late final Stream<List<GroupMember>> _membersStream;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _groupSubscription;
+  _groupSubscription;
 
   Set<String> _admins = {};
   bool _isBusy = false;
@@ -47,13 +47,10 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         .collection('groups')
         .doc(widget.groupId)
         .snapshots()
-        .listen(
-      (snapshot) {
-        final admins = snapshot.data()?['admins'] as List? ?? [];
-        setState(() => _admins = Set<String>.from(admins));
-      },
-      onError: (_) {},
-    );
+        .listen((snapshot) {
+          final admins = snapshot.data()?['admins'] as List? ?? [];
+          setState(() => _admins = Set<String>.from(admins));
+        }, onError: (_) {});
   }
 
   @override
@@ -72,9 +69,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       await action();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(successMessage)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(successMessage)));
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,9 +86,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
       );
     } finally {
@@ -105,10 +99,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   Future<void> _renameMember(GroupMember member) async {
     final name = await showDialog<String>(
       context: context,
-      builder: (_) => MemberNameDialog(
-        title: 'Edit Name',
-        initialName: member.name,
-      ),
+      builder: (_) =>
+          MemberNameDialog(title: 'Edit Name', initialName: member.name),
     );
 
     if (name == null || name == member.name || !mounted) return;
@@ -141,9 +133,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Deactivate'),
             ),
@@ -181,9 +171,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   ) async {
     if (appUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No app users are available to link.'),
-        ),
+        const SnackBar(content: Text('No app users are available to link.')),
       );
       return;
     }
@@ -196,8 +184,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           children: [
             for (final candidate in appUsers)
               SimpleDialogOption(
-                onPressed: () =>
-                    Navigator.of(dialogContext).pop(candidate),
+                onPressed: () => Navigator.of(dialogContext).pop(candidate),
                 child: Row(
                   children: [
                     _MemberAvatar(member: candidate),
@@ -287,8 +274,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   'Deactivate',
                   style: TextStyle(color: AppTheme.danger),
                 ),
-                onTap: () =>
-                    Navigator.of(sheetContext).pop('deactivate'),
+                onTap: () => Navigator.of(sheetContext).pop('deactivate'),
               ),
               const SizedBox(height: 8),
             ],
@@ -317,9 +303,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(
-            makeAdmin ? 'Promote Member' : 'Remove Admin Role',
-          ),
+          title: Text(makeAdmin ? 'Promote Member' : 'Remove Admin Role'),
           content: Text(
             makeAdmin
                 ? 'Promote ${member.name} to administrator?'
@@ -370,9 +354,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Remove Member'),
             ),
@@ -412,9 +394,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 )
               else
                 ListTile(
-                  leading: const Icon(
-                    Icons.admin_panel_settings_outlined,
-                  ),
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
                   title: const Text('Make administrator'),
                   onTap: () => Navigator.of(sheetContext).pop('promote'),
                 ),
@@ -461,8 +441,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   }
 
   Future<void> _leaveHostel() async {
-    final isOnlyAdmin =
-        _admins.contains(_currentUserId) && _admins.length <= 1;
+    final isOnlyAdmin = _admins.contains(_currentUserId) && _admins.length <= 1;
 
     if (isOnlyAdmin) {
       await showDialog<void>(
@@ -502,9 +481,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Leave Hostel'),
             ),
@@ -543,9 +520,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     final isGroupAdmin = widget.isAdmin || _admins.contains(_currentUserId);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hostel Details'),
-      ),
+      appBar: AppBar(title: const Text('Hostel Details')),
       body: StreamBuilder<List<GroupMember>>(
         stream: _membersStream,
         builder: (context, snapshot) {
@@ -555,25 +530,25 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Unable to load members.'),
-            );
+            return const Center(child: Text('Unable to load members.'));
           }
 
           final members = snapshot.data ?? [];
-          final activeMembers =
-              members.where((member) => member.active).toList();
-          final appUsers =
-              activeMembers.where((member) => member.isAppUser).toList();
+          final activeMembers = members
+              .where((member) => member.active)
+              .toList();
+          final appUsers = activeMembers
+              .where((member) => member.isAppUser)
+              .toList();
           final deactivatedMembers = widget.isAdmin
               ? members
-                  .where(
-                    (member) =>
-                        !member.active &&
-                        !member.isAppUser &&
-                        member.linkedTo == null,
-                  )
-                  .toList()
+                    .where(
+                      (member) =>
+                          !member.active &&
+                          !member.isAppUser &&
+                          member.linkedTo == null,
+                    )
+                    .toList()
               : <GroupMember>[];
 
           return ListView(
@@ -583,10 +558,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 const LinearProgressIndicator(),
                 const SizedBox(height: 12),
               ],
-              _HostelCard(
-                groupName: widget.groupName,
-                isAdmin: isGroupAdmin,
-              ),
+              _HostelCard(groupName: widget.groupName, isAdmin: isGroupAdmin),
               if (widget.isAdmin) ...[
                 const SizedBox(height: 10),
                 Card(
@@ -613,9 +585,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 activeMembers.length == 1
                     ? '1 member'
                     : '${activeMembers.length} members',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 10),
               for (final member in activeMembers) ...[
@@ -628,12 +599,11 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   onTap: !widget.isAdmin || _isBusy
                       ? null
                       : member.isAppUser
-                          ? () => _showAppUserOptions(member)
-                          : () => _showOptions(member, appUsers),
-                  onLongPress:
-                      widget.isAdmin && !member.isAppUser && !_isBusy
-                          ? () => _linkMember(member, appUsers)
-                          : null,
+                      ? () => _showAppUserOptions(member)
+                      : () => _showOptions(member, appUsers),
+                  onLongPress: widget.isAdmin && !member.isAppUser && !_isBusy
+                      ? () => _linkMember(member, appUsers)
+                      : null,
                 ),
                 const SizedBox(height: 10),
               ],
@@ -642,20 +612,15 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 const Text(
                   'Tap a member to manage them. Long-press a member '
                   'without the app to link them to their app account.',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                 ),
               ],
               if (deactivatedMembers.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 Text(
                   'Deactivated',
-                  style:
-                      Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 10),
                 for (final member in deactivatedMembers) ...[
@@ -705,10 +670,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
 
 /// The hostel's name and the signed-in member's position in it.
 class _HostelCard extends StatelessWidget {
-  const _HostelCard({
-    required this.groupName,
-    required this.isAdmin,
-  });
+  const _HostelCard({required this.groupName, required this.isAdmin});
 
   final String groupName;
   final bool isAdmin;
@@ -718,10 +680,7 @@ class _HostelCard extends StatelessWidget {
     return Card(
       color: AppTheme.surfaceSoft,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: const Icon(
           Icons.apartment_outlined,
           color: AppTheme.primary,
@@ -768,14 +727,24 @@ class _MemberCard extends StatelessWidget {
     final type = !member.isAppUser
         ? 'Shadow Member'
         : isGroupAdmin
-            ? 'Administrator'
-            : 'App User';
+        ? 'Administrator'
+        : 'App User';
     final date = member.addedAt;
     if (date == null) return type;
 
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final verb = member.isAppUser ? 'Joined' : 'Added';
 
@@ -790,10 +759,7 @@ class _MemberCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         onLongPress: onLongPress,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 6,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: _MemberAvatar(member: member),
         title: Row(
           children: [

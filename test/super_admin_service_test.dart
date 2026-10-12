@@ -51,17 +51,17 @@ void main() {
   );
 
   test('users are listed newest first, undated ones last by name', () {
-    expect(
-      snapshot.users.map((user) => user.id),
-      ['karim', 'rahim', 'adnan', 'babul', 'salam'],
-    );
+    expect(snapshot.users.map((user) => user.id), [
+      'karim',
+      'rahim',
+      'adnan',
+      'babul',
+      'salam',
+    ]);
   });
 
   test('hostels are listed by name, ignoring case', () {
-    expect(
-      snapshot.hostels.map((hostel) => hostel.id),
-      ['blue', 'green'],
-    );
+    expect(snapshot.hostels.map((hostel) => hostel.id), ['blue', 'green']);
   });
 
   test('counts users in and outside hostels', () {
@@ -88,10 +88,10 @@ void main() {
   test('lists a hostel\'s members by name', () {
     final green = snapshot.hostels.firstWhere((h) => h.id == 'green');
 
-    expect(
-      snapshot.membersOf(green).map((user) => user.id),
-      ['adnan', 'rahim'],
-    );
+    expect(snapshot.membersOf(green).map((user) => user.id), [
+      'adnan',
+      'rahim',
+    ]);
   });
 
   test('a hostel admin is an admin who is actually in a hostel', () {
@@ -128,10 +128,13 @@ void main() {
     });
 
     test('can be listed oldest first, undated users still last', () {
-      expect(
-        snapshot.searchUsers('', oldestFirst: true).map((u) => u.id),
-        ['adnan', 'rahim', 'karim', 'babul', 'salam'],
-      );
+      expect(snapshot.searchUsers('', oldestFirst: true).map((u) => u.id), [
+        'adnan',
+        'rahim',
+        'karim',
+        'babul',
+        'salam',
+      ]);
       expect(
         snapshot.searchUsers('green', oldestFirst: true).map((u) => u.id),
         ['adnan', 'rahim'],
@@ -140,10 +143,9 @@ void main() {
   });
 
   test('searching hostels matches by name', () {
-    expect(
-      snapshot.searchHostels('house').map((hostel) => hostel.id),
-      ['blue'],
-    );
+    expect(snapshot.searchHostels('house').map((hostel) => hostel.id), [
+      'blue',
+    ]);
     expect(snapshot.searchHostels(''), hasLength(2));
     expect(snapshot.searchHostels('zzz'), isEmpty);
   });

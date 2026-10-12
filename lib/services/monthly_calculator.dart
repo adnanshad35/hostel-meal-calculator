@@ -184,7 +184,8 @@ class MonthlyCalculator {
       final userId = meal.userId;
       if (userId == null) continue;
 
-      final belongsToMonth = meal.monthKey == selectedMonthKey ||
+      final belongsToMonth =
+          meal.monthKey == selectedMonthKey ||
           meal.dateKey?.startsWith(selectedMonthKey) == true ||
           meal.id.contains('_$selectedMonthKey-');
 
@@ -241,8 +242,7 @@ class MonthlyCalculator {
     }
 
     final totalExpense = memberPaidExpenses + shopDue;
-    final mealRate =
-        totalMealNumber > 0 ? totalExpense / totalMealNumber : 0.0;
+    final mealRate = totalMealNumber > 0 ? totalExpense / totalMealNumber : 0.0;
 
     final completedCalculations = calculations.map((calculation) {
       final mealExpense = calculation.mealNumber * mealRate;

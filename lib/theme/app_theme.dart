@@ -19,32 +19,29 @@ class AppTheme {
   static const Color danger = Color(0xFFD64545);
 
   static ThemeData get light {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: primary,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: primary,
-      onPrimary: Colors.white,
-      primaryContainer: const Color(0xFFD8F2E5),
-      onPrimaryContainer: primaryDark,
-      secondary: secondary,
-      surface: surface,
-      error: danger,
-      onError: Colors.white,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: primary,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: primary,
+          onPrimary: Colors.white,
+          primaryContainer: const Color(0xFFD8F2E5),
+          onPrimaryContainer: primaryDark,
+          secondary: secondary,
+          surface: surface,
+          error: danger,
+          onError: Colors.white,
+        );
 
     final cardShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
-      side: const BorderSide(
-        color: Color(0xFFE3E9E5),
-      ),
+      side: const BorderSide(color: Color(0xFFE3E9E5)),
     );
 
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(
-        color: Color(0xFFD8E0DB),
-      ),
+      borderSide: const BorderSide(color: Color(0xFFD8E0DB)),
     );
 
     return ThemeData(
@@ -95,20 +92,9 @@ class AppTheme {
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: TextStyle(
-          color: textPrimary,
-          fontSize: 16,
-          height: 1.45,
-        ),
-        bodyMedium: TextStyle(
-          color: textSecondary,
-          fontSize: 14,
-          height: 1.45,
-        ),
-        labelLarge: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-        ),
+        bodyLarge: TextStyle(color: textPrimary, fontSize: 16, height: 1.45),
+        bodyMedium: TextStyle(color: textSecondary, fontSize: 14, height: 1.45),
+        labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
       ),
 
       cardTheme: CardThemeData(
@@ -125,35 +111,23 @@ class AppTheme {
           horizontal: 16,
           vertical: 16,
         ),
-        labelStyle: const TextStyle(
-          color: textSecondary,
-        ),
-        hintStyle: const TextStyle(
-          color: Color(0xFF98A19C),
-        ),
+        labelStyle: const TextStyle(color: textSecondary),
+        hintStyle: const TextStyle(color: Color(0xFF98A19C)),
         prefixIconColor: textSecondary,
         suffixIconColor: textSecondary,
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: primary,
-            width: 1.6,
-          ),
+          borderSide: const BorderSide(color: primary, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: danger,
-          ),
+          borderSide: const BorderSide(color: danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: danger,
-            width: 1.6,
-          ),
+          borderSide: const BorderSide(color: danger, width: 1.6),
         ),
       ),
 
@@ -161,21 +135,14 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor:
-              const Color(0xFFB7C4BC),
+          disabledBackgroundColor: const Color(0xFFB7C4BC),
           disabledForegroundColor: Colors.white,
           minimumSize: const Size(0, 52),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
 
@@ -183,45 +150,30 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           minimumSize: const Size(0, 52),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 14,
-          ),
-          side: const BorderSide(
-            color: Color(0xFFB8C9BF),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          side: const BorderSide(color: Color(0xFFB8C9BF)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
 
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          foregroundColor: textPrimary,
-        ),
+        style: IconButton.styleFrom(foregroundColor: textPrimary),
       ),
 
       listTileTheme: const ListTileThemeData(
         iconColor: primary,
         textColor: textPrimary,
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 6,
-        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       ),
 
       dividerTheme: const DividerThemeData(
@@ -232,21 +184,14 @@ class AppTheme {
 
       snackBarTheme: SnackBarThemeData(
         backgroundColor: textPrimary,
-        contentTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-        ),
+        contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
 
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         titleTextStyle: const TextStyle(
           color: textPrimary,
           fontSize: 21,
@@ -259,13 +204,9 @@ class AppTheme {
         ),
       ),
 
-      progressIndicatorTheme:
-          const ProgressIndicatorThemeData(
-        color: primary,
-      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: primary),
 
-      navigationBarTheme:
-          const NavigationBarThemeData(
+      navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: surface,
         indicatorColor: Color(0xFFD8F2E5),
         elevation: 0,

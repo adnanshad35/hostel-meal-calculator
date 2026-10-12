@@ -16,20 +16,16 @@ class GroupSettingsScreen extends StatefulWidget {
   final String groupName;
 
   @override
-  State<GroupSettingsScreen> createState() =>
-      _GroupSettingsScreenState();
+  State<GroupSettingsScreen> createState() => _GroupSettingsScreenState();
 }
 
-class _GroupSettingsScreenState
-    extends State<GroupSettingsScreen> {
+class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   bool _isResetting = false;
   bool _isAddingMember = false;
 
-  FirebaseFirestore get _firestore =>
-      FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
-  User get _currentUser =>
-      FirebaseAuth.instance.currentUser!;
+  User get _currentUser => FirebaseAuth.instance.currentUser!;
 
   String _monthKey(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -81,8 +77,7 @@ class _GroupSettingsScreenState
 
     final date = timestamp.toDate();
 
-    return !date.isBefore(firstDay) &&
-        date.isBefore(nextMonth);
+    return !date.isBefore(firstDay) && date.isBefore(nextMonth);
   }
 
   Future<void> _deleteDocuments(
@@ -119,8 +114,7 @@ class _GroupSettingsScreenState
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'This will permanently delete all meals, '
@@ -128,15 +122,11 @@ class _GroupSettingsScreenState
                       '$selectedMonthName.',
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Members and the hostel will not be deleted.',
-                    ),
+                    const Text('Members and the hostel will not be deleted.'),
                     const SizedBox(height: 18),
                     const Text(
                       'Type RESET to continue:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -162,13 +152,10 @@ class _GroupSettingsScreenState
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
                   onPressed: confirmationText == 'RESET'
                       ? () {
-                          Navigator.of(dialogContext)
-                              .pop(true);
+                          Navigator.of(dialogContext).pop(true);
                         }
                       : null,
                   child: const Text('Reset Month'),
@@ -197,43 +184,26 @@ class _GroupSettingsScreenState
 
       final groupData = groupSnapshot.data()!;
 
-      final admins = List<String>.from(
-        groupData['admins'] as List? ?? [],
-      );
+      final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
       if (!admins.contains(_currentUser.uid)) {
-        throw Exception(
-          'Only an administrator can reset a month.',
-        );
+        throw Exception('Only an administrator can reset a month.');
       }
 
-      final firstDay = DateTime(
-        selectedMonth.year,
-        selectedMonth.month,
-      );
+      final firstDay = DateTime(selectedMonth.year, selectedMonth.month);
 
-      final nextMonth = DateTime(
-        selectedMonth.year,
-        selectedMonth.month + 1,
-      );
+      final nextMonth = DateTime(selectedMonth.year, selectedMonth.month + 1);
 
-      final mealSnapshot =
-          await groupReference.collection('meals').get();
+      final mealSnapshot = await groupReference.collection('meals').get();
 
-      final expenseSnapshot =
-          await groupReference.collection('expenses').get();
+      final expenseSnapshot = await groupReference.collection('expenses').get();
 
-      final mealReferences =
-          <DocumentReference<Map<String, dynamic>>>[];
+      final mealReferences = <DocumentReference<Map<String, dynamic>>>[];
 
-      final expenseReferences =
-          <DocumentReference<Map<String, dynamic>>>[];
+      final expenseReferences = <DocumentReference<Map<String, dynamic>>>[];
 
       for (final meal in mealSnapshot.docs) {
-        if (_mealBelongsToMonth(
-          meal,
-          selectedMonthKey,
-        )) {
+        if (_mealBelongsToMonth(meal, selectedMonthKey)) {
           mealReferences.add(meal.reference);
         }
       }
@@ -243,12 +213,7 @@ class _GroupSettingsScreenState
         // reset would ever clear them and no calculation counts them.
         final hasNoDate = expense.data()['date'] is! Timestamp;
 
-        if (hasNoDate ||
-            _expenseBelongsToMonth(
-              expense,
-              firstDay,
-              nextMonth,
-            )) {
+        if (hasNoDate || _expenseBelongsToMonth(expense, firstDay, nextMonth)) {
           expenseReferences.add(expense.reference);
         }
       }
@@ -260,8 +225,7 @@ class _GroupSettingsScreenState
           .collection('monthlySettings')
           .doc(selectedMonthKey);
 
-      final monthlySettingSnapshot =
-          await monthlySettingReference.get();
+      final monthlySettingSnapshot = await monthlySettingReference.get();
 
       if (monthlySettingSnapshot.exists) {
         try {
@@ -289,15 +253,10 @@ class _GroupSettingsScreenState
     } catch (error) {
       if (!mounted) return;
 
-      final message = error
-          .toString()
-          .replaceFirst('Exception: ', '');
+      final message = error.toString().replaceFirst('Exception: ', '');
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 8),
-        ),
+        SnackBar(content: Text(message), duration: const Duration(seconds: 8)),
       );
     } finally {
       if (mounted) {
@@ -323,9 +282,9 @@ class _GroupSettingsScreenState
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$name was added to the hostel.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$name was added to the hostel.')));
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -347,41 +306,25 @@ class _GroupSettingsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Group Settings'),
-      ),
-      body: StreamBuilder<
-          DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _firestore
-            .collection('groups')
-            .doc(widget.groupId)
-            .snapshots(),
+      appBar: AppBar(title: const Text('Group Settings')),
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError ||
               !snapshot.hasData ||
               !snapshot.data!.exists) {
-            return const Center(
-              child: Text(
-                'Unable to load group settings.',
-              ),
-            );
+            return const Center(child: Text('Unable to load group settings.'));
           }
 
           final groupData = snapshot.data!.data()!;
 
-          final admins = List<String>.from(
-            groupData['admins'] as List? ?? [],
-          );
+          final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
-          final isAdmin =
-              admins.contains(_currentUser.uid);
+          final isAdmin = admins.contains(_currentUser.uid);
 
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -394,30 +337,20 @@ class _GroupSettingsScreenState
                     color: Color(0xFF2E7D32),
                   ),
                   title: Text(widget.groupName),
-                  subtitle: Text(
-                    isAdmin
-                        ? 'Administrator'
-                        : 'Member',
-                  ),
+                  subtitle: Text(isAdmin ? 'Administrator' : 'Member'),
                 ),
               ),
               if (isAdmin) ...[
                 const SizedBox(height: 20),
                 Text(
                   'Administrator Settings',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Card(
                   child: ListTile(
-                    leading: const Icon(
-                      Icons.person_add_alt_1_outlined,
-                    ),
+                    leading: const Icon(Icons.person_add_alt_1_outlined),
                     title: const Text(
                       'Add Member Without the App',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -430,17 +363,14 @@ class _GroupSettingsScreenState
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.chevron_right),
                     onTap: _isAddingMember ? null : _addShadowMember,
                   ),
                 ),
                 const SizedBox(height: 8),
-                if ((groupData['inviteCode'] as String? ?? '')
-                    .isNotEmpty) ...[
+                if ((groupData['inviteCode'] as String? ?? '').isNotEmpty) ...[
                   _InviteSwitchCard(
                     key: ValueKey(groupData['inviteCode']),
                     inviteCode: groupData['inviteCode'] as String,
@@ -449,10 +379,7 @@ class _GroupSettingsScreenState
                 ],
                 Card(
                   child: ListTile(
-                    leading: const Icon(
-                      Icons.restart_alt,
-                      color: Colors.red,
-                    ),
+                    leading: const Icon(Icons.restart_alt, color: Colors.red),
                     title: const Text(
                       'Reset Current Month',
                       style: TextStyle(
@@ -468,14 +395,9 @@ class _GroupSettingsScreenState
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child:
-                                CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(
-                            Icons.chevron_right,
-                          ),
+                        : const Icon(Icons.chevron_right),
                     onTap: _isResetting ? null : _resetCurrentMonth,
                   ),
                 ),
@@ -497,10 +419,7 @@ class _GroupSettingsScreenState
 
 /// Lets an admin switch the hostel's invitation code off and on.
 class _InviteSwitchCard extends StatefulWidget {
-  const _InviteSwitchCard({
-    super.key,
-    required this.inviteCode,
-  });
+  const _InviteSwitchCard({super.key, required this.inviteCode});
 
   final String inviteCode;
 
@@ -546,9 +465,7 @@ class _InviteSwitchCardState extends State<_InviteSwitchCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.message ?? 'Unable to update the invitation.',
-          ),
+          content: Text(error.message ?? 'Unable to update the invitation.'),
         ),
       );
     } finally {
@@ -577,8 +494,8 @@ class _InviteSwitchCardState extends State<_InviteSwitchCard> {
               data == null
                   ? 'Checking the invitation code…'
                   : isActive
-                      ? 'Anyone with the invitation code can join.'
-                      : 'The invitation code is switched off.',
+                  ? 'Anyone with the invitation code can join.'
+                  : 'The invitation code is switched off.',
             ),
             value: isActive,
             onChanged: data == null || _isSaving ? null : _setActive,

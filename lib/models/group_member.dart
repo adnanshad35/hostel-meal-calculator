@@ -23,9 +23,7 @@ class GroupMember {
 
     return GroupMember(
       id: document.id,
-      name: name is String && name.trim().isNotEmpty
-          ? name.trim()
-          : 'Member',
+      name: name is String && name.trim().isNotEmpty ? name.trim() : 'Member',
       isAppUser: data['isAppUser'] == true,
       userId: data['userId'] as String?,
       active: data['active'] != false,
@@ -73,11 +71,7 @@ class GroupMember {
   }
 
   static String readUserName(Map<String, dynamic> data) {
-    final possibleNames = [
-      data['name'],
-      data['displayName'],
-      data['fullName'],
-    ];
+    final possibleNames = [data['name'], data['displayName'], data['fullName']];
 
     for (final value in possibleNames) {
       if (value is String && value.trim().isNotEmpty) {

@@ -52,9 +52,8 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
   }
 
   void _openProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
   void _openNotices() {
@@ -143,11 +142,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
                   onOpenNotices: _openNotices,
                 ),
                 _UsersTab(data: data, onRefresh: _refresh),
-                _HostelsTab(
-                  data: data,
-                  billing: billing,
-                  onRefresh: _refresh,
-                ),
+                _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
                 AdminPaymentsTab(billing: billing, onRefresh: _refresh),
                 AdminVouchersTab(billing: billing, onRefresh: _refresh),
               ],
@@ -163,23 +158,21 @@ String _formatDate(DateTime? date) {
   if (date == null) return 'Unknown date';
 
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   return '${date.day} ${months[date.month - 1]} ${date.year}';
-}
-
-String _initials(String name) {
-  final words = name
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((word) => word.isNotEmpty)
-      .toList();
-
-  if (words.isEmpty) return '?';
-  if (words.length == 1) return words.first[0].toUpperCase();
-  return '${words.first[0]}${words.last[0]}'.toUpperCase();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -209,6 +202,30 @@ class _OverviewTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatTile(
+                  icon: Icons.people_outline,
+                  label: 'Total users',
+                  value: '${data.users.length}',
+                  color: AppTheme.primary,
+                  background: const Color(0xFFE4F3EB),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.how_to_reg_outlined,
+                  label: 'Users in hostels',
+                  value: '${data.usersInHostels}',
+                  color: const Color(0xFF7956A8),
+                  background: const Color(0xFFF0E9F8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
                   icon: Icons.apartment_outlined,
                   label: 'Hostels',
                   value: '${data.hostels.length}',
@@ -216,7 +233,21 @@ class _OverviewTab extends StatelessWidget {
                   background: const Color(0xFFE8EEF8),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.verified_outlined,
+                  label: 'Active hostels',
+                  value: '${billing.activeHostels(DateTime.now())}',
+                  color: AppTheme.success,
+                  background: const Color(0xFFE4F3EB),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
               Expanded(
                 child: _StatTile(
                   icon: Icons.payments_outlined,
@@ -226,13 +257,20 @@ class _OverviewTab extends StatelessWidget {
                   background: const Color(0xFFFCE8E8),
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.person_add_alt_1_outlined,
+                  label: 'New this week',
+                  value: '${data.newUsers(DateTime.now())}',
+                  color: const Color(0xFFD78116),
+                  background: const Color(0xFFFFF1DB),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
-          AdminMaintenanceCard(
-            config: billing.appConfig,
-            onRefresh: onRefresh,
-          ),
+          AdminMaintenanceCard(config: billing.appConfig, onRefresh: onRefresh),
           const SizedBox(height: 12),
           Card(
             clipBehavior: Clip.antiAlias,
@@ -251,9 +289,7 @@ class _OverviewTab extends StatelessWidget {
                 'App Notices',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
-              subtitle: const Text(
-                'Send a notice to every user of the app',
-              ),
+              subtitle: const Text('Send a notice to every user of the app'),
               trailing: const Icon(Icons.chevron_right),
             ),
           ),
@@ -287,27 +323,41 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(12),
+        child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: background,
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: color, size: 21),
             ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppTheme.textPrimary,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
                   ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-            Text(label),
           ],
         ),
       ),
@@ -392,33 +442,28 @@ class _UsersTabState extends State<_UsersTab>
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 16, 12, 32),
-        // Search, the count and sort row, the column titles, the users.
-        itemCount: users.length + 3,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        // Search, the count and sort row, then the users.
+        itemCount: users.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _SearchField(
-                controller: _searchController,
-                hint: 'Search name, email, phone or hostel',
-                onChanged: (_) => setState(() {}),
-              ),
+            return _SearchField(
+              controller: _searchController,
+              hint: 'Search name, email, phone or hostel',
+              onChanged: (_) => setState(() {}),
             );
           }
 
           if (index == 1) {
             return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 0, 4),
+              padding: const EdgeInsets.fromLTRB(4, 8, 0, 4),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       users.length == 1 ? '1 user' : '${users.length} users',
-                      style:
-                          Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(color: AppTheme.textSecondary),
                     ),
                   ),
                   TextButton.icon(
@@ -426,102 +471,27 @@ class _UsersTabState extends State<_UsersTab>
                       setState(() => _oldestFirst = !_oldestFirst);
                     },
                     icon: Icon(
-                      _oldestFirst
-                          ? Icons.arrow_upward
-                          : Icons.arrow_downward,
+                      _oldestFirst ? Icons.arrow_upward : Icons.arrow_downward,
                       size: 18,
                     ),
-                    label: Text(
-                      _oldestFirst ? 'Oldest first' : 'Newest first',
-                    ),
+                    label: Text(_oldestFirst ? 'Oldest first' : 'Newest first'),
                   ),
                 ],
               ),
             );
           }
 
-          if (index == 2) {
-            return const _UserRowLayout(
-              isHeader: true,
-              name: 'Name',
-              email: 'Email',
-              hostel: 'Hostel',
-            );
-          }
+          final user = users[index - 2];
 
-          final user = users[index - 3];
-
-          return _UserRow(
-            key: ValueKey(user.id),
-            data: widget.data,
-            user: user,
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _UserRow(
+              key: ValueKey(user.id),
+              data: widget.data,
+              user: user,
+            ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// The three columns of the user list: name, email, hostel.
-class _UserRowLayout extends StatelessWidget {
-  const _UserRowLayout({
-    required this.name,
-    required this.email,
-    required this.hostel,
-    this.isHeader = false,
-    this.isAdmin = false,
-  });
-
-  final String name;
-  final String email;
-  final String hostel;
-  final bool isHeader;
-  final bool isAdmin;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextStyle(
-      fontSize: isHeader ? 12 : 13,
-      fontWeight: isHeader ? FontWeight.w800 : FontWeight.w500,
-      color: isHeader ? AppTheme.textSecondary : AppTheme.textPrimary,
-    );
-
-    Widget cell(String text, int flex, {TextStyle? textStyle}) {
-      return Expanded(
-        flex: flex,
-        child: Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textStyle ?? style,
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5EAE7)),
-        ),
-      ),
-      child: Row(
-        children: [
-          cell(
-            name,
-            5,
-            textStyle: isHeader
-                ? style
-                : style.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: isAdmin ? AppTheme.primary : null,
-                  ),
-          ),
-          const SizedBox(width: 8),
-          cell(email, 7),
-          const SizedBox(width: 8),
-          cell(hostel, 5),
-        ],
       ),
     );
   }
@@ -568,7 +538,8 @@ class _UserRow extends StatelessWidget {
                 _DetailRow(
                   icon: Icons.apartment_outlined,
                   label: 'Hostel',
-                  value: hostel?.name ??
+                  value:
+                      hostel?.name ??
                       (user.groupId == null ? '' : 'Unknown hostel'),
                   emptyText: 'Not in a hostel',
                 ),
@@ -578,8 +549,8 @@ class _UserRow extends StatelessWidget {
                   value: user.groupId == null
                       ? ''
                       : user.isHostelAdmin
-                          ? 'Hostel administrator'
-                          : 'Member',
+                      ? 'Hostel administrator'
+                      : 'Member',
                   emptyText: 'None',
                 ),
                 _DetailRow(
@@ -598,15 +569,78 @@ class _UserRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hostel = data.hostelOf(user);
+    final contact = user.email.isNotEmpty ? user.email : user.phone;
+    final place =
+        hostel?.name ??
+        (user.groupId == null ? 'Not in a hostel' : 'Unknown hostel');
 
-    return InkWell(
-      onTap: () => _showDetails(context),
-      child: _UserRowLayout(
-        name: user.name,
-        email: user.email.isNotEmpty ? user.email : user.phone,
-        hostel: hostel?.name ?? (user.groupId == null ? '—' : 'Unknown'),
-        // Hostel admins are shown in green.
-        isAdmin: user.isHostelAdmin,
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showDetails(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              // Name on the left, with the admin tag when it applies.
+              Expanded(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (user.isHostelAdmin)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: _Chip(text: 'Admin'),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Email over hostel on the right.
+              Expanded(
+                flex: 6,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      contact.isEmpty ? 'No email' : contact,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      place,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hostel == null
+                            ? AppTheme.textSecondary
+                            : AppTheme.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -647,7 +681,8 @@ class _HostelsTabState extends State<_HostelsTab>
     final days = await askForDays(
       context,
       title: 'Add Days',
-      message: 'Activate or extend ${hostel.name} without a voucher '
+      message:
+          'Activate or extend ${hostel.name} without a voucher '
           'or payment.',
     );
 
@@ -655,23 +690,23 @@ class _HostelsTabState extends State<_HostelsTab>
 
     await runAdminAction(
       context,
-      action: () => SubscriptionService.grantDays(
-        groupId: hostel.id,
-        days: days,
-      ),
+      action: () =>
+          SubscriptionService.grantDays(groupId: hostel.id, days: days),
       successMessage: '$days days were added to ${hostel.name}.',
       onDone: widget.onRefresh,
     );
   }
 
   Future<void> _setDaysLeft(AdminHostel hostel) async {
-    final current =
-        widget.billing.subscriptionOf(hostel.id).daysLeft(DateTime.now());
+    final current = widget.billing
+        .subscriptionOf(hostel.id)
+        .daysLeft(DateTime.now());
 
     final days = await askForDays(
       context,
       title: 'Set Days Left',
-      message: '${hostel.name} has $current days left. Enter the new '
+      message:
+          '${hostel.name} has $current days left. Enter the new '
           'number, counted from today. Use 0 to end its period now.',
       initialDays: current,
       label: 'Days left',
@@ -683,10 +718,8 @@ class _HostelsTabState extends State<_HostelsTab>
 
     await runAdminAction(
       context,
-      action: () => SubscriptionService.setDaysLeft(
-        groupId: hostel.id,
-        days: days,
-      ),
+      action: () =>
+          SubscriptionService.setDaysLeft(groupId: hostel.id, days: days),
       successMessage: days == 0
           ? 'The period of ${hostel.name} has ended.'
           : '${hostel.name} now has $days days left.',
@@ -723,47 +756,85 @@ class _HostelsTabState extends State<_HostelsTab>
     );
   }
 
+  /// One line describing a hostel's state, and its colour.
+  static (String, Color) _statusOf(HostelSubscription subscription) {
+    final now = DateTime.now();
+    final daysLeft = subscription.daysLeft(now);
+
+    if (subscription.accessDisabled) {
+      return ('Suspended', AppTheme.danger);
+    }
+    if (subscription.editingDisabled) {
+      return ('Read-only · editing off', AppTheme.warning);
+    }
+    if (subscription.isActive(now)) {
+      return (
+        'Active · ${daysLeft == 1 ? '1 day' : '$daysLeft days'} left',
+        AppTheme.success,
+      );
+    }
+    return ('Read-only · not active', AppTheme.warning);
+  }
+
   void _showDetails(AdminHostel hostel) {
     final members = widget.data.membersOf(hostel);
     final subscription = widget.billing.subscriptionOf(hostel.id);
+    final (status, statusColor) = _statusOf(subscription);
+    final until = subscription.activeUntil;
 
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
+        final textTheme = Theme.of(sheetContext).textTheme;
+
+        void close() => Navigator.of(sheetContext).pop();
+
         return SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
             ),
             child: ListView(
               shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               children: [
                 Text(
                   hostel.name,
-                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  until == null || !subscription.isActive(DateTime.now())
+                      ? status
+                      : '$status · until ${formatSubscriptionDate(until)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                SubscriptionStatusCard(subscription: subscription),
-                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () {
-                          Navigator.of(sheetContext).pop();
+                          close();
                           _setDaysLeft(hostel);
                         },
-                        child: const Text('Set Days Left'),
+                        child: const Text('Set Days'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton(
                         onPressed: () {
-                          Navigator.of(sheetContext).pop();
+                          close();
                           _addDays(hostel);
                         },
                         child: const Text('Add Days'),
@@ -772,56 +843,41 @@ class _HostelsTabState extends State<_HostelsTab>
                   ],
                 ),
                 const SizedBox(height: 4),
-                AdminHostelControls(
-                  subscription: subscription,
-                  onEditingChanged: (allow) {
-                    Navigator.of(sheetContext).pop();
+                _SwitchLine(
+                  label: 'Allow editing',
+                  value: !subscription.editingDisabled,
+                  onChanged: (allow) {
+                    close();
                     _setControl(hostel, allowEditing: allow);
                   },
-                  onAccessChanged: (allow) {
-                    Navigator.of(sheetContext).pop();
+                ),
+                _SwitchLine(
+                  label: 'Allow access',
+                  value: !subscription.accessDisabled,
+                  onChanged: (allow) {
+                    close();
                     _setControl(hostel, allowAccess: allow);
                   },
                 ),
-                const Divider(height: 20),
-                _DetailRow(
-                  icon: Icons.event_outlined,
-                  label: 'Created',
-                  value: _formatDate(hostel.createdAt),
-                ),
-                _DetailRow(
-                  icon: Icons.key_outlined,
+                const Divider(height: 16),
+                _InfoLine(
                   label: 'Invitation code',
                   value: hostel.inviteCode,
                   canCopy: true,
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  members.length == 1
-                      ? '1 app user'
-                      : '${members.length} app users',
-                  style: Theme.of(sheetContext)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(color: AppTheme.textSecondary),
+                _InfoLine(
+                  label: 'Created',
+                  value: _formatDate(hostel.createdAt),
                 ),
-                const SizedBox(height: 4),
-                const Text('Members without the app are not listed here.'),
-                const SizedBox(height: 8),
+                _InfoLine(label: 'App users', value: '${members.length}'),
+                const Divider(height: 16),
                 for (final member in members)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: _Avatar(text: _initials(member.name)),
-                    title: Text(
-                      member.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle:
-                        member.email.isEmpty ? null : Text(member.email),
-                    trailing: hostel.adminIds.contains(member.id)
-                        ? const _Chip(text: 'Admin')
-                        : null,
+                  _MemberLine(
+                    name: member.name,
+                    email: member.email,
+                    isAdmin: hostel.adminIds.contains(member.id),
                   ),
+                if (members.isEmpty) const Text('No app users in this hostel.'),
               ],
             ),
           ),
@@ -854,60 +910,73 @@ class _HostelsTabState extends State<_HostelsTab>
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                hostels.length == 1
-                    ? '1 hostel'
-                    : '${hostels.length} hostels',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
+                hostels.length == 1 ? '1 hostel' : '${hostels.length} hostels',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(color: AppTheme.textSecondary),
               ),
             );
           }
 
           final hostel = hostels[index - 2];
           final memberCount = hostel.memberIds.length;
-          final now = DateTime.now();
-          final subscription = widget.billing.subscriptionOf(hostel.id);
-          final daysLeft = subscription.daysLeft(now);
-          final status = subscription.accessDisabled
-              ? 'Suspended'
-              : subscription.editingDisabled
-                  ? 'Read-only · editing switched off'
-                  : subscription.isActive(now)
-                      ? 'Active · '
-                          '${daysLeft == 1 ? '1 day' : '$daysLeft days'} left'
-                      : 'Read-only · not active';
+          final (status, statusColor) = _statusOf(
+            widget.billing.subscriptionOf(hostel.id),
+          );
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 8),
             child: Card(
               key: ValueKey(hostel.id),
               clipBehavior: Clip.antiAlias,
-              child: ListTile(
+              child: InkWell(
                 onTap: () => _showDetails(hostel),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                leading: const _Avatar(icon: Icons.apartment_outlined),
-                title: Text(
-                  hostel.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w700,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hostel.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              status,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        memberCount == 1 ? '1 user' : '$memberCount users',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ],
                   ),
                 ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: Text(
-                    '$status\n'
-                    '${memberCount == 1 ? '1 app user' : '$memberCount app users'}'
-                    ' • Created ${_formatDate(hostel.createdAt)}',
-                  ),
-                ),
-                isThreeLine: true,
-                trailing: const Icon(Icons.chevron_right),
               ),
             ),
           );
@@ -917,39 +986,150 @@ class _HostelsTabState extends State<_HostelsTab>
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Small shared pieces
-// ─────────────────────────────────────────────────────────────
-class _Avatar extends StatelessWidget {
-  const _Avatar({this.text, this.icon});
+/// A label with a switch, on one line.
+class _SwitchLine extends StatelessWidget {
+  const _SwitchLine({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
-  final String? text;
-  final IconData? icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 42,
-      height: 42,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceSoft,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: icon != null
-          ? Icon(icon, color: AppTheme.primary)
-          : Text(
-              text ?? '',
-              style: const TextStyle(
-                color: AppTheme.primary,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-              ),
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+        ),
+        Switch(value: value, onChanged: onChanged),
+      ],
     );
   }
 }
 
+/// A label and its value, on one line.
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({
+    required this.label,
+    required this.value,
+    this.canCopy = false,
+  });
+
+  final String label;
+  final String value;
+  final bool canCopy;
+
+  Future<void> _copy(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    await Clipboard.setData(ClipboardData(text: value));
+    navigator.pop();
+    messenger.showSnackBar(SnackBar(content: Text('$label copied.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = value.isNotEmpty;
+
+    return SizedBox(
+      height: 36,
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hasValue ? value : '—',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (canCopy && hasValue)
+            IconButton(
+              tooltip: 'Copy $label',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _copy(context),
+              icon: const Icon(Icons.copy_outlined, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One member of a hostel: name, email, and an admin tag, on one line.
+class _MemberLine extends StatelessWidget {
+  const _MemberLine({
+    required this.name,
+    required this.email,
+    required this.isAdmin,
+  });
+
+  final String name;
+  final String email;
+  final bool isAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 6,
+            child: Text(
+              email,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          if (isAdmin) ...[
+            const SizedBox(width: 8),
+            const _Chip(text: 'Admin'),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Small shared pieces
+// ─────────────────────────────────────────────────────────────
 class _Chip extends StatelessWidget {
   const _Chip({required this.text});
 

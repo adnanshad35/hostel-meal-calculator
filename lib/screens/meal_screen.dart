@@ -5,16 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../widgets/meal_counter.dart';
 import 'meal_ledger_screen.dart';
 
 class MealScreen extends StatefulWidget {
-  const MealScreen({
-    super.key,
-    required this.groupId,
-    required this.isAdmin,
-  });
+  const MealScreen({super.key, required this.groupId, required this.isAdmin});
 
   final String groupId;
   final bool isAdmin;
@@ -39,22 +36,21 @@ class _MealScreenState extends State<MealScreen> {
   }
 
   Future<void> _openMealForm() async {
+    if (!await ensureHostelEditable(context, widget.groupId)) return;
+    if (!mounted) return;
+
     await showDialog<void>(
       context: context,
-      builder: (_) => _MealFormDialog(
-        groupId: widget.groupId,
-        isAdmin: widget.isAdmin,
-      ),
+      builder: (_) =>
+          _MealFormDialog(groupId: widget.groupId, isAdmin: widget.isAdmin),
     );
   }
 
   void _openLedger() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MealLedgerScreen(
-          groupId: widget.groupId,
-          isAdmin: widget.isAdmin,
-        ),
+        builder: (_) =>
+            MealLedgerScreen(groupId: widget.groupId, isAdmin: widget.isAdmin),
       ),
     );
   }
@@ -62,10 +58,8 @@ class _MealScreenState extends State<MealScreen> {
   void _openMyMeals() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MyMealsScreen(
-          groupId: widget.groupId,
-          currentUserId: _user.uid,
-        ),
+        builder: (_) =>
+            MyMealsScreen(groupId: widget.groupId, currentUserId: _user.uid),
       ),
     );
   }
@@ -77,9 +71,7 @@ class _MealScreenState extends State<MealScreen> {
     final todayKey = _dateKey(now);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meal Update'),
-      ),
+      appBar: AppBar(title: const Text('Meal Update')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openMealForm,
         icon: const Icon(Icons.add),
@@ -95,9 +87,7 @@ class _MealScreenState extends State<MealScreen> {
             }
 
             if (snapshot.hasError) {
-              return const Center(
-                child: Text('Unable to load meals.'),
-              );
+              return const Center(child: Text('Unable to load meals.'));
             }
 
             double totalMealsMonthly = 0;
@@ -152,10 +142,7 @@ class _MealScreenState extends State<MealScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _TodayMealCard(
-                  entry: myEntryToday,
-                  onTap: _openMealForm,
-                ),
+                _TodayMealCard(entry: myEntryToday, onTap: _openMealForm),
               ],
             );
           },
@@ -181,19 +168,14 @@ String _monthKey(DateTime date) {
 }
 
 String _displayQuantity(double value) {
-  return value % 1 == 0
-      ? value.toInt().toString()
-      : value.toStringAsFixed(1);
+  return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
 }
 
 // ─────────────────────────────────────────────────────────────
 // Today's entry of the signed-in member
 // ─────────────────────────────────────────────────────────────
 class _TodayMealCard extends StatelessWidget {
-  const _TodayMealCard({
-    required this.entry,
-    required this.onTap,
-  });
+  const _TodayMealCard({required this.entry, required this.onTap});
 
   final Map<String, dynamic>? entry;
   final VoidCallback onTap;
@@ -207,10 +189,7 @@ class _TodayMealCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           onTap: onTap,
-          leading: const Icon(
-            Icons.info_outline,
-            color: Colors.orange,
-          ),
+          leading: const Icon(Icons.info_outline, color: Colors.orange),
           title: const Text(
             'Today\'s meals not entered',
             style: TextStyle(fontWeight: FontWeight.w700),
@@ -251,10 +230,7 @@ class _TodayMealCard extends StatelessWidget {
 // pick any member of the hostel
 // ─────────────────────────────────────────────────────────────
 class _MealFormDialog extends StatefulWidget {
-  const _MealFormDialog({
-    required this.groupId,
-    required this.isAdmin,
-  });
+  const _MealFormDialog({required this.groupId, required this.isAdmin});
 
   final String groupId;
   final bool isAdmin;
@@ -316,8 +292,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   void _watchMembers() {
     _isLoadingMembers = true;
 
-    _membersSubscription =
-        GroupMemberService.watch(widget.groupId).listen(
+    _membersSubscription = GroupMemberService.watch(widget.groupId).listen(
       (activeMembers) {
         final members = [...activeMembers];
 
@@ -337,8 +312,9 @@ class _MealFormDialogState extends State<_MealFormDialog> {
 
         if (!mounted) return;
 
-        final selectionRemoved =
-            !members.any((member) => member.id == _selectedMemberId);
+        final selectionRemoved = !members.any(
+          (member) => member.id == _selectedMemberId,
+        );
 
         setState(() {
           _members = members;
@@ -388,9 +364,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       if (!mounted || request != _loadRequest) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to load the meal entry.'),
-        ),
+        const SnackBar(content: Text('Unable to load the meal entry.')),
       );
     } finally {
       if (mounted && request == _loadRequest) {
@@ -468,7 +442,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     setState(() => _isSaving = true);
 
     final messenger = ScaffoldMessenger.of(context);
-    final displayedDate = '${_selectedDate.day}/${_selectedDate.month}/'
+    final displayedDate =
+        '${_selectedDate.day}/${_selectedDate.month}/'
         '${_selectedDate.year}';
 
     try {
@@ -489,8 +464,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
 
       if (!_isOwnEntry) {
         data['updatedBy'] = _currentUser.uid;
-        data['updatedByName'] =
-            _currentUser.displayName ?? 'Administrator';
+        data['updatedByName'] = _currentUser.displayName ?? 'Administrator';
         data['adminEdited'] = true;
       }
 
@@ -498,10 +472,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      await _mealCollection.doc(_entryId).set(
-            data,
-            SetOptions(merge: true),
-          );
+      await _mealCollection.doc(_entryId).set(data, SetOptions(merge: true));
 
       if (!mounted) return;
 
@@ -512,7 +483,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
             _isOwnEntry
                 ? 'Meals saved for $displayedDate.'
                 : 'Meals saved for $_selectedMemberName on '
-                    '$displayedDate.',
+                      '$displayedDate.',
           ),
         ),
       );
@@ -522,9 +493,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            error.code == 'permission-denied'
-                ? 'You do not have permission to save this entry.'
-                : 'Unable to save the meal entry.',
+            saveErrorMessage(error, fallback: 'Unable to save the meal entry.'),
           ),
         ),
       );
@@ -558,9 +527,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                 DropdownButtonFormField<String>(
                   // Rebuilt when the member list changes, so the
                   // selection can never point at a missing member.
-                  key: ValueKey(
-                    _members.map((member) => member.id).join(','),
-                  ),
+                  key: ValueKey(_members.map((member) => member.id).join(',')),
                   initialValue: _selectedMemberId,
                   isExpanded: true,
                   decoration: const InputDecoration(
@@ -632,8 +599,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed:
-              _isSaving ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -691,9 +657,7 @@ class _SummaryTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
+                      style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -707,19 +671,11 @@ class _SummaryTile extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 value,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(color: color, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),
@@ -750,9 +706,7 @@ class MyMealsScreen extends StatelessWidget {
   }
 
   String _displayQuantity(double value) {
-    return value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(1);
+    return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
   String _monthName(int month) {
@@ -798,9 +752,7 @@ class MyMealsScreen extends StatelessWidget {
         .snapshots();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Meals'),
-      ),
+      appBar: AppBar(title: const Text('My Meals')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (context, snapshot) {
@@ -820,15 +772,12 @@ class MyMealsScreen extends StatelessWidget {
             );
           }
 
-          final docs = (snapshot.data?.docs ?? [])
-              .where((d) {
-                final data = d.data();
-                final userId = data['userId'] as String?;
-                final dateKey = data['dateKey'] as String? ?? '';
-                return userId == currentUserId &&
-                    dateKey.startsWith(currentMonth);
-              })
-              .toList();
+          final docs = (snapshot.data?.docs ?? []).where((d) {
+            final data = d.data();
+            final userId = data['userId'] as String?;
+            final dateKey = data['dateKey'] as String? ?? '';
+            return userId == currentUserId && dateKey.startsWith(currentMonth);
+          }).toList();
 
           docs.sort((a, b) {
             final aKey = a.data()['dateKey'] as String? ?? '';
@@ -838,8 +787,7 @@ class MyMealsScreen extends StatelessWidget {
 
           double totalMeals = 0;
           for (final d in docs) {
-            totalMeals +=
-                (d.data()['total'] as num?)?.toDouble() ?? 0;
+            totalMeals += (d.data()['total'] as num?)?.toDouble() ?? 0;
           }
 
           return ListView(
@@ -862,9 +810,7 @@ class MyMealsScreen extends StatelessWidget {
                           children: [
                             Text(
                               '${_monthName(now.month)} ${now.year}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
+                              style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             Text('${docs.length} entries'),
@@ -877,9 +823,7 @@ class MyMealsScreen extends StatelessWidget {
                           const Text('My meals'),
                           Text(
                             _displayQuantity(totalMeals),
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(
                                   color: const Color(0xFF2E7D32),
                                   fontWeight: FontWeight.bold,
@@ -951,16 +895,15 @@ class _MyMealEntryTile extends StatelessWidget {
         ? '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}'
         : dateKey;
 
-    final weekday = parsedDate != null
-        ? weekdayName(parsedDate.weekday)
-        : '';
+    final weekday = parsedDate != null ? weekdayName(parsedDate.weekday) : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor:
-              Theme.of(context).colorScheme.surfaceContainerHighest,
+          backgroundColor: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest,
           child: Text(
             parsedDate != null ? parsedDate.day.toString() : '?',
             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -977,9 +920,9 @@ class _MyMealEntryTile extends StatelessWidget {
         trailing: Text(
           displayQuantity(total),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF2E7D32),
-              ),
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF2E7D32),
+          ),
         ),
       ),
     );

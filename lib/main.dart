@@ -16,9 +16,7 @@ import 'widgets/update_prompt.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const HostelMealApp());
 }
@@ -45,28 +43,20 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        if (snapshot.hasData &&
-            snapshot.data!.emailVerified) {
+        if (snapshot.hasData && snapshot.data!.emailVerified) {
           // The super admin manages the app instead of using a hostel.
           if (SuperAdminService.isSuperAdmin) {
-            return const UpdatePrompt(
-              child: SuperAdminScreen(),
-            );
+            return const UpdatePrompt(child: SuperAdminScreen());
           }
 
           return const UpdatePrompt(
-            child: MaintenanceGate(
-              child: HomeScreen(),
-            ),
+            child: MaintenanceGate(child: HomeScreen()),
           );
         }
 
@@ -84,11 +74,8 @@ class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
   void _openRegisterScreen(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const RegisterScreen(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
   }
 
   void _openLoginScreen(BuildContext context) {
@@ -96,12 +83,9 @@ class WelcomeScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => LoginScreen(
           onCreateAccount: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    const RegisterScreen(),
-              ),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
           },
         ),
       ),
@@ -113,23 +97,14 @@ class WelcomeScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            24,
-            48,
-            24,
-            24,
-          ),
+          padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight:
-                  MediaQuery.sizeOf(context).height -
-                      120,
+              minHeight: MediaQuery.sizeOf(context).height - 120,
             ),
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Align(
                   alignment: Alignment.center,
@@ -138,8 +113,7 @@ class WelcomeScreen extends StatelessWidget {
                     height: 104,
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceSoft,
-                      borderRadius:
-                          BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(30),
                     ),
                     child: const Icon(
                       Icons.restaurant_menu_rounded,
@@ -152,40 +126,29 @@ class WelcomeScreen extends StatelessWidget {
                 Text(
                   'HostelMate',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineLarge,
+                  style: Theme.of(context).textTheme.headlineLarge,
                 ),
                 const SizedBox(height: 14),
                 Text(
                   'A clear and simple way to manage '
                   'shared meals, expenses, and monthly balances.',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 44),
                 FilledButton(
-                  onPressed: () =>
-                      _openLoginScreen(context),
+                  onPressed: () => _openLoginScreen(context),
                   child: const Text('Sign In'),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: () =>
-                      _openRegisterScreen(context),
-                  child: const Text(
-                    'Create New Account',
-                  ),
+                  onPressed: () => _openRegisterScreen(context),
+                  child: const Text('Create New Account'),
                 ),
                 const SizedBox(height: 28),
                 const Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       Icons.shield_outlined,

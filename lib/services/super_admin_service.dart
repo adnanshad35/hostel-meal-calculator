@@ -95,9 +95,9 @@ class AdminSnapshot {
   AdminSnapshot({
     required List<AdminUser> users,
     required List<AdminHostel> hostels,
-  })  : users = [...users]..sort(_byNewestThenName),
-        hostels = [...hostels]
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }) : users = [...users]..sort(_byNewestThenName),
+       hostels = [...hostels]
+         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   final List<AdminUser> users;
   final List<AdminHostel> hostels;
@@ -112,17 +112,14 @@ class AdminSnapshot {
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   }
 
-  int get usersInHostels =>
-      users.where((user) => user.groupId != null).length;
+  int get usersInHostels => users.where((user) => user.groupId != null).length;
 
   int get usersWithoutHostel => users.length - usersInHostels;
 
   /// Accounts created in the seven days before [now].
   int newUsers(DateTime now) {
     final since = now.subtract(const Duration(days: 7));
-    return users
-        .where((user) => user.createdAt?.isAfter(since) == true)
-        .length;
+    return users.where((user) => user.createdAt?.isAfter(since) == true).length;
   }
 
   AdminHostel? hostelOf(AdminUser user) {
@@ -152,14 +149,15 @@ class AdminSnapshot {
             return user.name.toLowerCase().contains(text) ||
                 user.email.toLowerCase().contains(text) ||
                 user.phone.toLowerCase().contains(text) ||
-                (hostelOf(user)?.name.toLowerCase().contains(text) ??
-                    false);
+                (hostelOf(user)?.name.toLowerCase().contains(text) ?? false);
           }).toList();
 
     if (!oldestFirst) return matches;
 
-    final dated =
-        matches.where((user) => user.createdAt != null).toList().reversed;
+    final dated = matches
+        .where((user) => user.createdAt != null)
+        .toList()
+        .reversed;
     final undated = matches.where((user) => user.createdAt == null);
 
     return [...dated, ...undated];

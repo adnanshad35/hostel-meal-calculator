@@ -46,9 +46,8 @@ class AdminBilling {
       subscriptions.values.where((item) => item.canEdit(now)).length;
 
   /// Hostels whose latest voucher is [code].
-  int hostelsUsing(String code) => subscriptions.values
-      .where((item) => item.voucherCode == code)
-      .length;
+  int hostelsUsing(String code) =>
+      subscriptions.values.where((item) => item.voucherCode == code).length;
 }
 
 /// Runs a super admin action, reports the outcome, and reloads.
@@ -178,10 +177,7 @@ class _DaysDialogState extends State<_DaysDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(widget.confirmLabel),
-        ),
+        FilledButton(onPressed: _submit, child: Text(widget.confirmLabel)),
       ],
     );
   }
@@ -233,7 +229,8 @@ class AdminPaymentsTab extends StatelessWidget {
     final days = await askForDays(
       context,
       title: 'Approve Payment',
-      message: 'Confirm in bKash that ${payment.trxId} for '
+      message:
+          'Confirm in bKash that ${payment.trxId} for '
           '৳${payment.amount.toStringAsFixed(0)} was received, then '
           'choose how many days to give ${payment.groupName}.',
     );
@@ -269,9 +266,7 @@ class AdminPaymentsTab extends StatelessWidget {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Reject'),
             ),
@@ -339,10 +334,9 @@ class AdminPaymentsTab extends StatelessWidget {
             payments.isEmpty
                 ? 'No payments reported yet'
                 : '${billing.pendingPayments} waiting · '
-                    '${payments.length} in total',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
+                      '${payments.length} in total',
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 10),
           for (final payment in payments) ...[
@@ -408,10 +402,10 @@ class _PaymentInfoDialogState extends State<_PaymentInfoDialog> {
   @override
   void initState() {
     super.initState();
-    _numberController =
-        TextEditingController(text: widget.info.bkashNumber);
-    _instructionsController =
-        TextEditingController(text: widget.info.instructions);
+    _numberController = TextEditingController(text: widget.info.bkashNumber);
+    _instructionsController = TextEditingController(
+      text: widget.info.instructions,
+    );
   }
 
   @override
@@ -509,11 +503,7 @@ class AdminVouchersTab extends StatelessWidget {
     );
   }
 
-  Future<void> _setActive(
-    BuildContext context,
-    Voucher voucher,
-    bool active,
-  ) {
+  Future<void> _setActive(BuildContext context, Voucher voucher, bool active) {
     return runAdminAction(
       context,
       action: () => SubscriptionService.setVoucherActive(voucher, active),
@@ -572,8 +562,7 @@ class AdminVouchersTab extends StatelessWidget {
                     ].join('\n'),
                   ),
                   value: voucher.active,
-                  onChanged: (active) =>
-                      _setActive(context, voucher, active),
+                  onChanged: (active) => _setActive(context, voucher, active),
                 ),
               ),
               const SizedBox(height: 10),
@@ -642,8 +631,7 @@ class _VoucherDialogState extends State<_VoucherDialog> {
                   prefixIcon: Icon(Icons.confirmation_number_outlined),
                 ),
                 validator: (value) {
-                  final code =
-                      SubscriptionService.normalizeCode(value ?? '');
+                  final code = SubscriptionService.normalizeCode(value ?? '');
                   if (!SubscriptionService.isValidCode(code)) {
                     return 'Use 4 to 20 letters and numbers.';
                   }
@@ -720,7 +708,7 @@ class AdminMaintenanceCard extends StatelessWidget {
       ),
       successMessage: turnOn
           ? 'Maintenance mode is on. Users now see the maintenance '
-              'screen.'
+                'screen.'
           : 'Maintenance mode is off. The app is open again.',
       onDone: onRefresh,
     );
@@ -731,15 +719,10 @@ class AdminMaintenanceCard extends StatelessWidget {
     return Card(
       color: config.maintenance ? const Color(0xFFFFF2DA) : null,
       child: SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         secondary: Icon(
           Icons.build_circle_outlined,
-          color: config.maintenance
-              ? AppTheme.warning
-              : AppTheme.textSecondary,
+          color: config.maintenance ? AppTheme.warning : AppTheme.textSecondary,
           size: 30,
         ),
         title: const Text(
@@ -817,65 +800,8 @@ class _MaintenanceDialogState extends State<_MaintenanceDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_controller.text.trim()),
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: const Text('Turn On'),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Per-hostel switches (hostel details sheet)
-// ─────────────────────────────────────────────────────────────
-class AdminHostelControls extends StatelessWidget {
-  const AdminHostelControls({
-    super.key,
-    required this.subscription,
-    required this.onEditingChanged,
-    required this.onAccessChanged,
-  });
-
-  final HostelSubscription subscription;
-
-  /// Called with whether editing should be allowed.
-  final ValueChanged<bool> onEditingChanged;
-
-  /// Called with whether the hostel should be open to its members.
-  final ValueChanged<bool> onAccessChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Allow editing',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            subscription.editingDisabled
-                ? 'Off. Members can view records but not change them.'
-                : 'On, while the hostel\'s period is running.',
-          ),
-          value: !subscription.editingDisabled,
-          onChanged: onEditingChanged,
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Allow access',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            subscription.accessDisabled
-                ? 'Off. The hostel is suspended and closed to members.'
-                : 'On. Members can open the hostel.',
-          ),
-          value: !subscription.accessDisabled,
-          onChanged: onAccessChanged,
         ),
       ],
     );

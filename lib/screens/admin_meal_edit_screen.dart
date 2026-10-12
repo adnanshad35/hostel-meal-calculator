@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/error_messages.dart';
 import '../widgets/meal_counter.dart';
 
 class AdminMealEditScreen extends StatefulWidget {
@@ -27,8 +28,7 @@ class AdminMealEditScreen extends StatefulWidget {
   final bool hasEntry;
 
   @override
-  State<AdminMealEditScreen> createState() =>
-      _AdminMealEditScreenState();
+  State<AdminMealEditScreen> createState() => _AdminMealEditScreenState();
 }
 
 class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
@@ -45,9 +45,7 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
   }
 
   String _displayQuantity(double value) {
-    return value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(1);
+    return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
   Future<bool> _confirmLargeQuantity() async {
@@ -119,19 +117,12 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      await reference.set(
-        data,
-        SetOptions(merge: true),
-      );
+      await reference.set(data, SetOptions(merge: true));
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${widget.memberName}’s meal entry was saved.',
-          ),
-        ),
+        SnackBar(content: Text('${widget.memberName}’s meal entry was saved.')),
       );
 
       Navigator.of(context).pop(true);
@@ -141,9 +132,7 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            error.code == 'permission-denied'
-                ? 'Only an administrator can edit this member’s entry.'
-                : 'Unable to save the meal entry.',
+            saveErrorMessage(error, fallback: 'Unable to save the meal entry.'),
           ),
         ),
       );
@@ -160,28 +149,20 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
         '${widget.date.day}/${widget.date.month}/${widget.date.year}';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Member Meal'),
-      ),
+      appBar: AppBar(title: const Text('Edit Member Meal')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Card(
               child: ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.person_outline),
-                ),
+                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(
                   widget.memberName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(displayedDate),
-                trailing: const Chip(
-                  label: Text('Admin edit'),
-                ),
+                trailing: const Chip(label: Text('Admin edit')),
               ),
             ),
             const SizedBox(height: 16),
@@ -225,16 +206,12 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
               label: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  widget.hasEntry ? 'Update Entry' : 'Create Entry',
-                ),
+                child: Text(widget.hasEntry ? 'Update Entry' : 'Create Entry'),
               ),
             ),
             const SizedBox(height: 12),

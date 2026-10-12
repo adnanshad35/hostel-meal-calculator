@@ -41,8 +41,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       final firestore = FirebaseFirestore.instance;
       final code = _codeController.text.trim().toUpperCase();
 
-      final inviteSnapshot =
-          await firestore.collection('invites').doc(code).get();
+      final inviteSnapshot = await firestore
+          .collection('invites')
+          .doc(code)
+          .get();
 
       if (!inviteSnapshot.exists) {
         throw Exception('invalid-code');
@@ -65,20 +67,16 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         'memberIds': FieldValue.arrayUnion([user.uid]),
       });
 
-      batch.set(
-        userReference,
-        {
-          'uid': user.uid,
-          'fullName': user.displayName ?? 'Member',
-          'email': user.email,
-          'groupId': groupId,
-          'role': 'member',
-          // The security rules compare this with the group's code.
-          'joinCode': code,
-          'joinedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(userReference, {
+        'uid': user.uid,
+        'fullName': user.displayName ?? 'Member',
+        'email': user.email,
+        'groupId': groupId,
+        'role': 'member',
+        // The security rules compare this with the group's code.
+        'joinCode': code,
+        'joinedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       await batch.commit();
 
@@ -101,7 +99,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           content: Text(
             error.code == 'permission-denied'
                 ? 'This invitation code is not accepted. Ask your '
-                    'hostel admin whether joining is switched on.'
+                      'hostel admin whether joining is switched on.'
                 : 'Unable to join the group. Please try again.',
           ),
         ),
@@ -113,9 +111,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           ? 'This invitation code is no longer active.'
           : 'The invitation code is invalid.';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -126,9 +123,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Join Hostel Group'),
-      ),
+      appBar: AppBar(title: const Text('Join Hostel Group')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -146,9 +141,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                 Text(
                   'Enter your invitation code',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -161,10 +155,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                   textCapitalization: TextCapitalization.characters,
                   textAlign: TextAlign.center,
                   maxLength: 6,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 4,
-                      ),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 4),
                   decoration: const InputDecoration(
                     labelText: 'Invitation code',
                     hintText: 'ABC123',
@@ -185,9 +177,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.login),
                   label: const Padding(

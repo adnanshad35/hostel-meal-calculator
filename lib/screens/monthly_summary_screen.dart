@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
+import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
 import '../services/monthly_calculator.dart';
@@ -21,12 +22,10 @@ class MonthlySummaryScreen extends StatefulWidget {
   final bool isAdmin;
 
   @override
-  State<MonthlySummaryScreen> createState() =>
-      _MonthlySummaryScreenState();
+  State<MonthlySummaryScreen> createState() => _MonthlySummaryScreenState();
 }
 
-class _MonthlySummaryScreenState
-    extends State<MonthlySummaryScreen> {
+class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late DateTime _selectedMonth;
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _settingsStream;
@@ -61,24 +60,32 @@ class _MonthlySummaryScreenState
 
   String _monthName(DateTime date) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
 
   void _previousMonth() {
     setState(() {
-      _selectedMonth =
-          DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
     });
   }
 
   void _nextMonth() {
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);
-    final nextMonth =
-        DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+    final nextMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     if (nextMonth.isAfter(currentMonth)) return;
     setState(() => _selectedMonth = nextMonth);
   }
@@ -89,15 +96,13 @@ class _MonthlySummaryScreenState
 
   /// Converts normal ASCII letters/digits to their Unicode "bold" counterparts
   /// so the text STAYS BOLD when pasted into WhatsApp, Telegram, Notes, etc.
-    /// Wraps text in single asterisks. WhatsApp, Telegram, Signal,
+  /// Wraps text in single asterisks. WhatsApp, Telegram, Signal,
   /// Slack, and Discord render *this* as bold after paste.
   /// (WhatsApp does NOT support Unicode "mathematical bold"
   /// characters — they show up as broken boxes.)
   static String _bold(String input) => '*$input*';
 
-  Future<void> _copySummaryCard({
-    required MonthlyCalculation result,
-  }) async {
+  Future<void> _copySummaryCard({required MonthlyCalculation result}) async {
     final buffer = StringBuffer();
     buffer.writeln(_bold('HostelMate Monthly Summary'));
     buffer.writeln(_bold(_monthName(_selectedMonth)));
@@ -124,15 +129,12 @@ class _MonthlySummaryScreenState
 
     await Clipboard.setData(ClipboardData(text: buffer.toString().trim()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Summary copied.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Summary copied.')));
   }
 
   /// Copies the full table (all members) to clipboard.
-  Future<void> _copyFullTable({
-    required MonthlyCalculation result,
-  }) async {
+  Future<void> _copyFullTable({required MonthlyCalculation result}) async {
     final buffer = StringBuffer();
 
     buffer.writeln(_bold('HostelMate Monthly Calculation'));
@@ -167,8 +169,8 @@ class _MonthlySummaryScreenState
       final finalResult = member.finalBalance < 0
           ? '${_bold('Pay')} ৳${member.finalBalance.abs()}'
           : member.finalBalance > 0
-              ? '${_bold('Collect')} ৳${member.finalBalance}'
-              : _bold('Settled');
+          ? '${_bold('Collect')} ৳${member.finalBalance}'
+          : _bold('Settled');
 
       buffer.writeln('• ${_bold(member.name)}');
       buffer.writeln(
@@ -196,13 +198,12 @@ class _MonthlySummaryScreenState
 
     await Clipboard.setData(ClipboardData(text: buffer.toString().trim()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Full table copied.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Full table copied.')));
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Number dialog + monthly settings (unchanged)
+  // Number dialog + monthly settings
   // ─────────────────────────────────────────────────────────────
 
   Future<double?> _showNumberDialog({
@@ -222,8 +223,7 @@ class _MonthlySummaryScreenState
           content: TextFormField(
             initialValue: enteredValue,
             autofocus: true,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: label,
               hintText: hint,
@@ -267,12 +267,12 @@ class _MonthlySummaryScreenState
         .collection('monthlySettings')
         .doc(_monthKey(_selectedMonth))
         .set({
-      'minimumMeals': minimumMeals,
-      'shopDue': shopDue,
-      'monthKey': _monthKey(_selectedMonth),
-      'updatedBy': FirebaseAuth.instance.currentUser!.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'minimumMeals': minimumMeals,
+          'shopDue': shopDue,
+          'monthKey': _monthKey(_selectedMonth),
+          'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
   }
 
   Future<void> _setMinimumMeals({
@@ -295,7 +295,9 @@ class _MonthlySummaryScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.message ?? 'Unable to save minimum meals.'),
+          content: Text(
+            saveErrorMessage(error, fallback: 'Unable to save minimum meals.'),
+          ),
         ),
       );
     }
@@ -314,15 +316,14 @@ class _MonthlySummaryScreenState
     );
     if (due == null || !mounted) return;
     try {
-      await _saveMonthlySettings(
-        minimumMeals: minimumMeals,
-        shopDue: due,
-      );
+      await _saveMonthlySettings(minimumMeals: minimumMeals, shopDue: due);
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.message ?? 'Unable to save the shop due.'),
+          content: Text(
+            saveErrorMessage(error, fallback: 'Unable to save the shop due.'),
+          ),
         ),
       );
     }
@@ -335,18 +336,14 @@ class _MonthlySummaryScreenState
     final canGoNext = _selectedMonth.isBefore(currentMonth);
 
     final monthKey = _monthKey(_selectedMonth);
-    final groupReference =
-        _firestore.collection('groups').doc(widget.groupId);
+    final groupReference = _firestore.collection('groups').doc(widget.groupId);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Monthly Calculation'),
-      ),
+      appBar: AppBar(title: const Text('Monthly Calculation')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _settingsStream,
         builder: (context, settingsSnapshot) {
-          if (settingsSnapshot.connectionState ==
-                  ConnectionState.waiting &&
+          if (settingsSnapshot.connectionState == ConnectionState.waiting &&
               !settingsSnapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -357,23 +354,24 @@ class _MonthlySummaryScreenState
           }
 
           final settingsByMonth = <String, Map<String, dynamic>>{
-            for (final document in settingsSnapshot.data?.docs ??
-                <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+            for (final document
+                in settingsSnapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[])
               document.id: document.data(),
           };
           final settings = settingsByMonth[monthKey];
           final minimumMeals =
               (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
-          final shopDue =
-              (settings?['shopDue'] as num?)?.toDouble() ?? 0;
-          final fixedCosts =
-              FixedCostsCalculator.resolve(settingsByMonth, monthKey);
+          final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
+          final fixedCosts = FixedCostsCalculator.resolve(
+            settingsByMonth,
+            monthKey,
+          );
 
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: groupReference.collection('meals').snapshots(),
             builder: (context, mealSnapshot) {
-              if (mealSnapshot.connectionState ==
-                      ConnectionState.waiting &&
+              if (mealSnapshot.connectionState == ConnectionState.waiting &&
                   !mealSnapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -387,9 +385,7 @@ class _MonthlySummaryScreenState
                   if (expenseSnapshot.connectionState ==
                           ConnectionState.waiting &&
                       !expenseSnapshot.hasData) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                    return const Center(child: CircularProgressIndicator());
                   }
                   if (expenseSnapshot.hasError) {
                     return const Center(
@@ -403,24 +399,18 @@ class _MonthlySummaryScreenState
                       if (userSnapshot.connectionState ==
                               ConnectionState.waiting &&
                           !userSnapshot.hasData) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                        return const Center(child: CircularProgressIndicator());
                       }
                       if (userSnapshot.hasError) {
                         return const Center(
-                          child: Text(
-                            'Unable to load member information.',
-                          ),
+                          child: Text('Unable to load member information.'),
                         );
                       }
 
                       final members = (userSnapshot.data ?? [])
                           .map(
-                            (member) => CalcMember(
-                              id: member.id,
-                              name: member.name,
-                            ),
+                            (member) =>
+                                CalcMember(id: member.id, name: member.name),
                           )
                           .toList();
 
@@ -513,9 +503,7 @@ class _MonthlySummaryScreenState
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Reset'),
             ),
@@ -535,24 +523,26 @@ class _MonthlySummaryScreenState
           .collection('monthlySettings')
           .doc(monthKey)
           .set({
-        'rents': <String, double>{},
-        'sharedBills': <Map<String, dynamic>>[],
-        'minimumMeals': minimumMeals,
-        'shopDue': shopDue,
-        'monthKey': monthKey,
-        'updatedBy': FirebaseAuth.instance.currentUser!.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'rents': <String, double>{},
+            'sharedBills': <Map<String, dynamic>>[],
+            'minimumMeals': minimumMeals,
+            'shopDue': shopDue,
+            'monthKey': monthKey,
+            'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fixed costs were reset.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Fixed costs were reset.')));
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.message ?? 'Unable to reset fixed costs.'),
+          content: Text(
+            saveErrorMessage(error, fallback: 'Unable to reset fixed costs.'),
+          ),
         ),
       );
     }
@@ -561,9 +551,8 @@ class _MonthlySummaryScreenState
   Future<void> _copyText(String text, String confirmation) async {
     await Clipboard.setData(ClipboardData(text: text.trim()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(confirmation)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(confirmation)));
   }
 
   /// "will pay ৳X", "will receive ৳X", or "is settled".
@@ -584,9 +573,7 @@ class _MonthlySummaryScreenState
     buffer.writeln('');
 
     for (final member in result.members) {
-      buffer.writeln(
-        '• ${member.name} ${_resultPhrase(member.finalBalance)}',
-      );
+      buffer.writeln('• ${member.name} ${_resultPhrase(member.finalBalance)}');
     }
 
     return _copyText(buffer.toString(), 'Meal calculation copied.');
@@ -607,9 +594,7 @@ class _MonthlySummaryScreenState
       for (final bill in sharedBills) {
         buffer.writeln('• ${bill.name}: ৳${_amountText(bill.amount)}');
       }
-      buffer.writeln(
-        '${_bold('Each member')}: ৳${_amountText(billShare)}',
-      );
+      buffer.writeln('${_bold('Each member')}: ৳${_amountText(billShare)}');
       buffer.writeln('');
     }
 
@@ -640,9 +625,7 @@ class _MonthlySummaryScreenState
     final buffer = StringBuffer();
     buffer.writeln(_bold('HostelMate – Overall Calculation'));
     buffer.writeln(_bold(_monthName(_selectedMonth)));
-    buffer.writeln(
-      includesFixedCosts ? 'Meals + fixed costs' : 'Meals only',
-    );
+    buffer.writeln(includesFixedCosts ? 'Meals + fixed costs' : 'Meals only');
     buffer.writeln('');
 
     for (final settlement in settlements) {
@@ -671,8 +654,8 @@ class _MonthlySummaryScreenState
     final sharedBills = fixedCosts?.bills ?? const <SharedBill>[];
     final hasFixedCosts = rents.isNotEmpty || sharedBills.isNotEmpty;
     // Set when this month is using figures saved in an earlier month.
-    final carriedFrom = hasFixedCosts &&
-            fixedCosts!.monthKey != _monthKey(_selectedMonth)
+    final carriedFrom =
+        hasFixedCosts && fixedCosts!.monthKey != _monthKey(_selectedMonth)
         ? _monthName(_monthStartFromKey(fixedCosts.monthKey))
         : null;
     final settlements = FixedCostsCalculator.settle(
@@ -701,9 +684,9 @@ class _MonthlySummaryScreenState
                 _monthName(_selectedMonth),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ),
             IconButton(
@@ -889,20 +872,20 @@ class _MonthlySummaryScreenState
                           final finalResult = member.finalBalance < 0
                               ? 'Pay ৳${member.finalBalance.abs()}'
                               : member.finalBalance > 0
-                                  ? 'Collect ৳${member.finalBalance}'
-                                  : 'Settled';
+                              ? 'Collect ৳${member.finalBalance}'
+                              : 'Settled';
 
                           final resultColor = member.finalBalance < 0
                               ? AppTheme.danger
                               : member.finalBalance > 0
-                                  ? AppTheme.success
-                                  : AppTheme.textSecondary;
+                              ? AppTheme.success
+                              : AppTheme.textSecondary;
 
                           final mealText =
                               member.actualMeals < member.mealNumber
-                                  ? '${member.mealNumber.toStringAsFixed(2)}\n'
-                                      'Actual: ${member.actualMeals.toStringAsFixed(2)}'
-                                  : member.mealNumber.toStringAsFixed(2);
+                              ? '${member.mealNumber.toStringAsFixed(2)}\n'
+                                    'Actual: ${member.actualMeals.toStringAsFixed(2)}'
+                              : member.mealNumber.toStringAsFixed(2);
 
                           return DataRow(
                             cells: [
@@ -919,9 +902,7 @@ class _MonthlySummaryScreenState
                               ),
                               DataCell(Text(mealText)),
                               DataCell(
-                                Text(
-                                  '৳${member.spending.toStringAsFixed(2)}',
-                                ),
+                                Text('৳${member.spending.toStringAsFixed(2)}'),
                               ),
                               DataCell(
                                 Text(
@@ -930,10 +911,8 @@ class _MonthlySummaryScreenState
                               ),
                               DataCell(
                                 Column(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.center,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       finalResult,
@@ -1003,11 +982,11 @@ class _MonthlySummaryScreenState
                     Text(
                       widget.isAdmin
                           ? 'Add each member\'s rent and the shared bills '
-                              '(Wi-Fi, electricity, chef). Shared bills '
-                              'are divided equally, and everything stays '
-                              'the same each month until you change it.'
+                                '(Wi-Fi, electricity, chef). Shared bills '
+                                'are divided equally, and everything stays '
+                                'the same each month until you change it.'
                           : 'No rent or shared bills have been added '
-                              'for this hostel yet.',
+                                'for this hostel yet.',
                       textAlign: TextAlign.center,
                     ),
                     if (widget.isAdmin) ...[
@@ -1051,7 +1030,7 @@ class _MonthlySummaryScreenState
                       child: Text(
                         widget.isAdmin
                             ? 'Carried over from $carriedFrom. Update it '
-                                'if any bill changed this month.'
+                                  'if any bill changed this month.'
                             : 'Carried over from $carriedFrom.',
                       ),
                     ),
@@ -1147,10 +1126,7 @@ class _MonthlySummaryScreenState
                   : 'Meals only. No fixed costs this month.',
               rows: [
                 for (final settlement in settlements)
-                  _AmountRow.balance(
-                    settlement.name,
-                    settlement.finalTotal,
-                  ),
+                  _AmountRow.balance(settlement.name, settlement.finalTotal),
               ],
               onCopy: () => _copyOverall(
                 settlements: settlements,
@@ -1190,11 +1166,7 @@ class _AmountRow {
 
   /// An amount the member owes.
   factory _AmountRow.owed(String name, double amount) {
-    return _AmountRow(
-      name,
-      '৳${_amountText(amount)}',
-      AppTheme.textPrimary,
-    );
+    return _AmountRow(name, '৳${_amountText(amount)}', AppTheme.textPrimary);
   }
 
   final String name;
@@ -1313,10 +1285,7 @@ class _DetailsToggle extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         onTap: onTap,
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
         trailing: Icon(
           isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -1345,10 +1314,7 @@ class _FixedCostsDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final rents = settlements.where((item) => item.rent > 0).toList();
-    final totalRent = rents.fold<double>(
-      0,
-      (total, item) => total + item.rent,
-    );
+    final totalRent = rents.fold<double>(0, (total, item) => total + item.rent);
 
     Widget heading(String text) {
       return Padding(
@@ -1507,9 +1473,7 @@ class _SummaryCard extends StatelessWidget {
                     children: [
                       Text(
                         'Meal Rate',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
+                        style: Theme.of(context).textTheme.labelMedium
                             ?.copyWith(
                               color: AppTheme.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -1518,9 +1482,7 @@ class _SummaryCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         '৳${mealRate.toStringAsFixed(2)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
+                        style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               color: AppTheme.primary,
                               fontWeight: FontWeight.w900,
@@ -1580,14 +1542,12 @@ class _StrongInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: AppTheme.textPrimary,
-          fontWeight: FontWeight.w700,
-        );
+    final labelStyle = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w700);
     final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: emphasize ? AppTheme.primary : AppTheme.textPrimary,
-          fontWeight: emphasize ? FontWeight.w900 : FontWeight.w800,
-        );
+      color: emphasize ? AppTheme.primary : AppTheme.textPrimary,
+      fontWeight: emphasize ? FontWeight.w900 : FontWeight.w800,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1602,7 +1562,7 @@ class _StrongInfoRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Meal rate comparison widget (unchanged logic)
+// Meal rate comparison widget
 // ─────────────────────────────────────────────────────────────
 class _MealRateComparison extends StatelessWidget {
   const _MealRateComparison({
@@ -1646,9 +1606,8 @@ class _MealRateComparison extends StatelessWidget {
             if (previousRate == null || previousRate == 0) {
               return Text(
                 'No previous data',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AppTheme.textSecondary),
               );
             }
 
@@ -1659,22 +1618,19 @@ class _MealRateComparison extends StatelessWidget {
             final color = isIncrease
                 ? AppTheme.danger
                 : isDecrease
-                    ? AppTheme.success
-                    : AppTheme.textSecondary;
+                ? AppTheme.success
+                : AppTheme.textSecondary;
 
             final icon = isIncrease
                 ? Icons.arrow_upward
                 : isDecrease
-                    ? Icons.arrow_downward
-                    : Icons.remove;
+                ? Icons.arrow_downward
+                : Icons.remove;
 
             final sign = isIncrease ? '+' : '';
 
             return Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
@@ -1695,9 +1651,7 @@ class _MealRateComparison extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     'vs last month',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: color),
                   ),
                 ],
@@ -1729,8 +1683,7 @@ Future<double?> _previousMealRate({
       .doc(previousMonthKey)
       .get();
   final settings = settingsDoc.data();
-  final minimumMeals =
-      (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
+  final minimumMeals = (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
   final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
 
   final members = await GroupMemberService.fetchActive(groupId);
@@ -1754,9 +1707,7 @@ Future<double?> _previousMealRate({
   return result.mealRate;
 }
 
-MealRecord _mealRecord(
-  QueryDocumentSnapshot<Map<String, dynamic>> document,
-) {
+MealRecord _mealRecord(QueryDocumentSnapshot<Map<String, dynamic>> document) {
   return MealRecord.fromData(document.id, document.data());
 }
 
@@ -1796,14 +1747,14 @@ class _MemberCalculationCard extends StatelessWidget {
     final resultText = isPayable
         ? 'Pay ৳${member.finalBalance.abs()}'
         : isCollectable
-            ? 'Collect ৳${member.finalBalance}'
-            : 'Settled';
+        ? 'Collect ৳${member.finalBalance}'
+        : 'Settled';
 
     final resultColor = isPayable
         ? AppTheme.danger
         : isCollectable
-            ? AppTheme.success
-            : AppTheme.textSecondary;
+        ? AppTheme.success
+        : AppTheme.textSecondary;
 
     return Card(
       child: Padding(
@@ -1828,9 +1779,9 @@ class _MemberCalculationCard extends StatelessWidget {
                   child: Text(
                     member.name,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.textPrimary,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -1858,13 +1809,10 @@ class _MemberCalculationCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     resultText,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(
-                          color: resultColor,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: resultColor,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ],
@@ -1892,9 +1840,9 @@ class _CardValueRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Text(

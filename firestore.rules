@@ -34,6 +34,7 @@ service cloud.firestore {
       let path = /databases/$(database)/documents/subscriptions/$(groupId);
 
       return exists(path)
+        && get(path).data.get('periodStart', null) is timestamp
         && request.time < get(path).data.periodStart
           + duration.value(get(path).data.days, 'd')
         && get(path).data.get('editingDisabled', false) != true
@@ -307,19 +308,19 @@ service cloud.firestore {
       }
 
       match /monthlySettings/{monthKey} {
-  allow read: if canReadHostel(groupId);
+        allow read: if canReadHostel(groupId);
 
-  allow create, update: if isGroupAdmin(groupId)
-    && isHostelActive(groupId)
-    && request.resource.data.minimumMeals is number
-    && request.resource.data.minimumMeals >= 0
-    && request.resource.data.shopDue is number
-    && request.resource.data.shopDue >= 0
-    && request.resource.data.monthKey == monthKey;
+        allow create, update: if isGroupAdmin(groupId)
+          && isHostelActive(groupId)
+          && request.resource.data.minimumMeals is number
+          && request.resource.data.minimumMeals >= 0
+          && request.resource.data.shopDue is number
+          && request.resource.data.shopDue >= 0
+          && request.resource.data.monthKey == monthKey;
 
-  allow delete: if isGroupAdmin(groupId)
-    && isHostelActive(groupId);
-}
+        allow delete: if isGroupAdmin(groupId)
+          && isHostelActive(groupId);
+      }
 
       match /members/{memberId} {
         // An app user's entry: stored under their uid and active
@@ -401,6 +402,7 @@ service cloud.firestore {
         let redemption =
           /databases/$(database)/documents/vouchers/$(code)/redemptions/$(groupId);
         let stillActive = resource != null
+          && resource.data.get('periodStart', null) is timestamp
           && request.time < resource.data.periodStart
             + duration.value(resource.data.days, 'd');
 
@@ -463,6 +465,8 @@ service cloud.firestore {
     // the document id, so one payment cannot be reported twice.
     match /payments/{trxId} {
       allow read: if isSuperAdmin()
+        || (isSignedIn()
+          && resource.data.submittedBy == request.auth.uid)
         || isGroupAdmin(resource.data.groupId);
 
       allow create: if isGroupAdmin(request.resource.data.groupId)

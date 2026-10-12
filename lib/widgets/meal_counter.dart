@@ -33,9 +33,7 @@ class MealCounter extends StatefulWidget {
   }
 
   static String format(double value) {
-    return value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(1);
+    return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
   @override
@@ -49,9 +47,7 @@ class _MealCounterState extends State<MealCounter> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
-      text: MealCounter.format(widget.value),
-    );
+    _controller = TextEditingController(text: MealCounter.format(widget.value));
     _focusNode.addListener(_onFocusChanged);
   }
 
@@ -111,17 +107,12 @@ class _MealCounterState extends State<MealCounter> {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-        );
+    final textStyle = Theme.of(context).textTheme.titleMedium
+        ?.copyWith(fontWeight: FontWeight.bold);
 
     return Row(
       children: [
-        Icon(
-          widget.icon,
-          size: 24,
-          color: const Color(0xFF2E7D32),
-        ),
+        Icon(widget.icon, size: 24, color: const Color(0xFF2E7D32)),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -146,9 +137,7 @@ class _MealCounterState extends State<MealCounter> {
             enabled: widget.enabled,
             textAlign: TextAlign.center,
             style: textStyle,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               LengthLimitingTextInputFormatter(4),
