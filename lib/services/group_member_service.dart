@@ -373,6 +373,59 @@ class GroupMemberService {
     });
   }
 
+  /// Deletes a hostel whose only app user is the signed-in admin, and
+  /// frees them to create or join another one.
+  ///
+  /// The hostel's invitation code is switched off and the hostel
+  /// itself is removed. Throws an [Exception] with a readable message
+  /// when other app users are still in the hostel.
+  static Future<void> deleteHostel(String groupId) async {
+    final currentUser = FirebaseAuth.instance.currentUser!;
+    final groupReference = _group(groupId);
+
+    final groupSnapshot = await groupReference.get();
+    final groupData = groupSnapshot.data();
+
+    if (groupData == null) {
+      throw Exception('The hostel could not be found.');
+    }
+
+    final memberIds = List<String>.from(groupData['memberIds'] as List? ?? []);
+    final admins = List<String>.from(groupData['admins'] as List? ?? []);
+
+    if (!admins.contains(currentUser.uid)) {
+      throw Exception('Only an administrator can delete the hostel.');
+    }
+
+    if (memberIds.length != 1 || memberIds.single != currentUser.uid) {
+      throw Exception(
+        'Other members are still in this hostel. Remove them or make '
+        'one of them an administrator, then leave instead.',
+      );
+    }
+
+    final inviteCode = groupData['inviteCode'] as String? ?? '';
+    final batch = _firestore.batch();
+
+    if (inviteCode.isNotEmpty) {
+      batch.update(_firestore.collection('invites').doc(inviteCode), {
+        'active': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    batch.update(_firestore.collection('users').doc(currentUser.uid), {
+      'groupId': null,
+      'role': 'member',
+      'previousGroupId': groupId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.delete(groupReference);
+
+    await batch.commit();
+  }
+
   /// Removes an app user from the hostel. Their meals and expenses
   /// stay in the hostel records.
   static Future<void> removeAppUser({

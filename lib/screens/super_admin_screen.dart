@@ -238,7 +238,10 @@ class _OverviewTab extends StatelessWidget {
                 child: _StatTile(
                   icon: Icons.verified_outlined,
                   label: 'Active hostels',
-                  value: '${billing.activeHostels(DateTime.now())}',
+                  // Counted over existing hostels, so a deleted hostel's
+                  // leftover period is not included.
+                  value:
+                      '${data.hostels.where((hostel) => billing.subscriptionOf(hostel.id).canEdit(DateTime.now())).length}',
                   color: AppTheme.success,
                   background: const Color(0xFFE4F3EB),
                 ),

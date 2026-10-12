@@ -32,6 +32,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   _groupSubscription;
 
   Set<String> _admins = {};
+
+  /// App users in the hostel. Members without the app are not counted.
+  Set<String> _appUserIds = {};
   bool _isBusy = false;
 
   String get _currentUserId => FirebaseAuth.instance.currentUser!.uid;
@@ -49,7 +52,11 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         .snapshots()
         .listen((snapshot) {
           final admins = snapshot.data()?['admins'] as List? ?? [];
-          setState(() => _admins = Set<String>.from(admins));
+          final memberIds = snapshot.data()?['memberIds'] as List? ?? [];
+          setState(() {
+            _admins = Set<String>.from(admins);
+            _appUserIds = Set<String>.from(memberIds);
+          });
         }, onError: (_) {});
   }
 
@@ -440,6 +447,69 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
+  /// True when the signed-in admin is the only app user in the hostel.
+  /// They cannot leave, because a hostel needs an admin, so they are
+  /// offered deletion instead.
+  bool get _isAloneAsAdmin =>
+      _admins.contains(_currentUserId) &&
+      _appUserIds.length == 1 &&
+      _appUserIds.contains(_currentUserId);
+
+  Future<void> _deleteHostel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Hostel?'),
+          content: Text(
+            'Delete ${widget.groupName} and everything recorded in it? '
+            'You are its only member with an account.\n\n'
+            'This cannot be undone. Afterwards you can create or join '
+            'another hostel.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete Hostel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+
+    try {
+      await GroupMemberService.deleteHostel(widget.groupId);
+
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _isBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is FirebaseException
+                ? error.code == 'permission-denied'
+                      ? 'This hostel cannot be deleted while other '
+                            'members with accounts are in it.'
+                      : error.message ?? 'Unable to delete the hostel.'
+                : error.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _leaveHostel() async {
     final isOnlyAdmin = _admins.contains(_currentUserId) && _admins.length <= 1;
 
@@ -645,19 +715,27 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               Card(
                 clipBehavior: Clip.antiAlias,
                 child: ListTile(
-                  onTap: _isBusy ? null : _leaveHostel,
-                  leading: const Icon(
-                    Icons.exit_to_app,
+                  onTap: _isBusy
+                      ? null
+                      : _isAloneAsAdmin
+                      ? _deleteHostel
+                      : _leaveHostel,
+                  leading: Icon(
+                    _isAloneAsAdmin ? Icons.delete_outline : Icons.exit_to_app,
                     color: AppTheme.danger,
                   ),
-                  title: const Text(
-                    'Leave Hostel',
-                    style: TextStyle(
+                  title: Text(
+                    _isAloneAsAdmin ? 'Delete Hostel' : 'Leave Hostel',
+                    style: const TextStyle(
                       color: AppTheme.danger,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  subtitle: const Text('Leave this hostel group.'),
+                  subtitle: Text(
+                    _isAloneAsAdmin
+                        ? 'You are the only member with an account.'
+                        : 'Leave this hostel group.',
+                  ),
                 ),
               ),
             ],

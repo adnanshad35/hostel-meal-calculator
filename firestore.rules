@@ -209,7 +209,12 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if false;
+      // An admin who is the only app user left may delete the hostel,
+      // so they are never stuck in one they cannot leave.
+      allow delete: if isSignedIn()
+        && request.auth.uid in resource.data.admins
+        && resource.data.memberIds.size() == 1
+        && request.auth.uid in resource.data.memberIds;
 
       match /meals/{mealId} {
         allow read: if canReadHostel(groupId);
