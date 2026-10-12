@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:package_info_plus/package_info_plus.dart';
@@ -20,14 +19,23 @@ class AppUpdate {
 /// Checks the project's GitHub releases for a newer version.
 ///
 /// Publishing a release tagged with a higher version than the
-/// installed app (for example `v1.1.0`) is all it takes for users to
-/// be asked to update.
+/// installed app (for example `v1.1.0`), with the APK attached as
+/// `HostelMate.apk`, is all it takes for users to be asked to update.
 class UpdateService {
   UpdateService._();
 
-  static const String _latestReleaseUrl =
-      'https://api.github.com/repos/adnanshad35/hostel-meal-calculator'
-      '/releases/latest';
+  static const String _repository =
+      'https://github.com/adnanshad35/hostel-meal-calculator';
+
+  /// Redirects to the page of the newest release, whose address ends
+  /// with its tag. Used instead of the GitHub API because the API
+  /// allows only 60 requests an hour per network, which a hostel's
+  /// shared Wi-Fi or a mobile carrier can easily use up.
+  static const String _latestReleaseUrl = '$_repository/releases/latest';
+
+  /// Always serves the APK attached to the newest release.
+  static const String _downloadUrl =
+      '$_repository/releases/latest/download/HostelMate.apk';
 
   /// Returns the available update, or null when the app is up to date
   /// or the check could not be completed.
@@ -39,23 +47,14 @@ class UpdateService {
       final info = await PackageInfo.fromPlatform();
 
       final request = await client.getUrl(Uri.parse(_latestReleaseUrl));
-      request.headers.set(
-        HttpHeaders.acceptHeader,
-        'application/vnd.github+json',
-      );
+      request.followRedirects = false;
 
       final response =
           await request.close().timeout(const Duration(seconds: 8));
-      if (response.statusCode != HttpStatus.ok) return null;
+      final location = response.headers.value(HttpHeaders.locationHeader);
+      await response.drain<void>();
 
-      final body = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(seconds: 8));
-      final release = jsonDecode(body);
-      if (release is! Map<String, dynamic>) return null;
-
-      return updateFromRelease(release, installedVersion: info.version);
+      return updateFromLocation(location, installedVersion: info.version);
     } catch (_) {
       // Offline or unexpected response: stay quiet and retry next launch.
       return null;
@@ -64,45 +63,24 @@ class UpdateService {
     }
   }
 
-  /// Reads a GitHub release and returns it as an update when it is
-  /// newer than [installedVersion].
-  static AppUpdate? updateFromRelease(
-    Map<String, dynamic> release, {
+  /// Reads the address the latest-release link redirects to, such as
+  /// `.../releases/tag/v1.2.0`, and returns it as an update when its
+  /// version is newer than [installedVersion].
+  static AppUpdate? updateFromLocation(
+    String? location, {
     required String installedVersion,
   }) {
-    if (release['draft'] == true || release['prerelease'] == true) {
-      return null;
-    }
+    if (location == null) return null;
 
-    final tag = release['tag_name'];
-    if (tag is! String || !isNewer(tag, installedVersion)) return null;
+    final match = RegExp(r'/releases/tag/([^/?#]+)').firstMatch(location);
+    if (match == null) return null;
 
-    // Prefer a direct APK download, otherwise open the release page.
-    String? downloadUrl;
-    final assets = release['assets'];
-    if (assets is List) {
-      for (final asset in assets) {
-        if (asset is! Map) continue;
-        final name = asset['name'];
-        final url = asset['browser_download_url'];
-        if (name is String &&
-            url is String &&
-            name.toLowerCase().endsWith('.apk')) {
-          downloadUrl = url;
-          break;
-        }
-      }
-    }
-
-    downloadUrl ??= release['html_url'] as String?;
-    if (downloadUrl == null) return null;
-
-    final notes = release['body'];
+    final tag = Uri.decodeComponent(match.group(1)!);
+    if (!isNewer(tag, installedVersion)) return null;
 
     return AppUpdate(
       version: _numbers(tag).join('.'),
-      downloadUrl: downloadUrl,
-      notes: notes is String ? notes.trim() : '',
+      downloadUrl: _downloadUrl,
     );
   }
 

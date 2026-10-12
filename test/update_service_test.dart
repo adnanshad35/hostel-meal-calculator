@@ -33,84 +33,58 @@ void main() {
     });
   });
 
-  group('updateFromRelease', () {
-    Map<String, dynamic> release({
-      String tag = 'v1.1.0',
-      List<Map<String, dynamic>> assets = const [],
-      bool draft = false,
-      bool prerelease = false,
-      String? body,
-    }) {
-      return {
-        'tag_name': tag,
-        'html_url': 'https://github.com/owner/repo/releases/tag/$tag',
-        'draft': draft,
-        'prerelease': prerelease,
-        'body': body,
-        'assets': assets,
-      };
-    }
+  group('updateFromLocation', () {
+    const repo = 'https://github.com/adnanshad35/hostel-meal-calculator';
 
-    test('returns the APK download for a newer release', () {
-      final update = UpdateService.updateFromRelease(
-        release(
-          body: ' Shadow members. ',
-          assets: [
-            {'name': 'notes.txt', 'browser_download_url': 'https://x/notes'},
-            {
-              'name': 'HostelMate.APK',
-              'browser_download_url': 'https://x/app.apk',
-            },
-          ],
-        ),
-        installedVersion: '1.0.0',
+    test('a newer release tag becomes an update with the APK link', () {
+      final update = UpdateService.updateFromLocation(
+        '$repo/releases/tag/v1.2.1',
+        installedVersion: '1.2.0',
       );
 
       expect(update, isNotNull);
-      expect(update!.version, '1.1.0');
-      expect(update.downloadUrl, 'https://x/app.apk');
-      expect(update.notes, 'Shadow members.');
-    });
-
-    test('falls back to the release page without an APK', () {
-      final update = UpdateService.updateFromRelease(
-        release(),
-        installedVersion: '1.0.0',
-      );
-
+      expect(update!.version, '1.2.1');
       expect(
-        update!.downloadUrl,
-        'https://github.com/owner/repo/releases/tag/v1.1.0',
+        update.downloadUrl,
+        '$repo/releases/latest/download/HostelMate.apk',
       );
-      expect(update.notes, '');
     });
 
     test('returns nothing when the app is already up to date', () {
       expect(
-        UpdateService.updateFromRelease(release(), installedVersion: '1.1.0'),
+        UpdateService.updateFromLocation(
+          '$repo/releases/tag/v1.2.1',
+          installedVersion: '1.2.1',
+        ),
+        isNull,
+      );
+      expect(
+        UpdateService.updateFromLocation(
+          '$repo/releases/tag/v1.2.1',
+          installedVersion: '1.3.0',
+        ),
         isNull,
       );
     });
 
-    test('ignores drafts, pre-releases and malformed data', () {
+    test('ignores a missing redirect or a page without a tag', () {
       expect(
-        UpdateService.updateFromRelease(
-          release(draft: true),
+        UpdateService.updateFromLocation(null, installedVersion: '1.0.0'),
+        isNull,
+      );
+      // What the link redirects to when no release exists yet.
+      expect(
+        UpdateService.updateFromLocation(
+          '$repo/releases',
           installedVersion: '1.0.0',
         ),
         isNull,
       );
       expect(
-        UpdateService.updateFromRelease(
-          release(prerelease: true),
+        UpdateService.updateFromLocation(
+          '$repo/releases/tag/latest',
           installedVersion: '1.0.0',
         ),
-        isNull,
-      );
-      expect(
-        UpdateService.updateFromRelease(const {
-          'message': 'Not Found',
-        }, installedVersion: '1.0.0'),
         isNull,
       );
     });
