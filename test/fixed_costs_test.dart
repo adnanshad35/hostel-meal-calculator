@@ -158,6 +158,82 @@ void main() {
     expect(FixedCostsCalculator.billShare(members: [], bills: bills), 0);
   });
 
+  group('carrying fixed costs forward', () {
+    final saved = <String, Map<String, dynamic>>{
+      '2026-08': {
+        'rents': {'adnan': 3000},
+        'sharedBills': [
+          {'name': 'Wi-Fi', 'amount': 600},
+        ],
+      },
+      // Only meal settings were saved this month.
+      '2026-09': {'minimumMeals': 20, 'shopDue': 0},
+      '2026-11': {
+        'rents': {'adnan': 3500},
+        'sharedBills': <Map<String, dynamic>>[],
+      },
+    };
+
+    test('a month uses its own fixed costs when it has them', () {
+      final costs = FixedCostsCalculator.resolve(saved, '2026-08')!;
+
+      expect(costs.monthKey, '2026-08');
+      expect(costs.rents, {'adnan': 3000.0});
+      expect(costs.bills.single.name, 'Wi-Fi');
+    });
+
+    test('later months keep the last saved fixed costs', () {
+      expect(FixedCostsCalculator.resolve(saved, '2026-09')!.monthKey,
+          '2026-08');
+      expect(FixedCostsCalculator.resolve(saved, '2026-10')!.monthKey,
+          '2026-08');
+    });
+
+    test('a change applies from its month on, never to earlier months',
+        () {
+      expect(
+        FixedCostsCalculator.resolve(saved, '2026-10')!.rents,
+        {'adnan': 3000.0},
+      );
+
+      final november = FixedCostsCalculator.resolve(saved, '2026-11')!;
+      expect(november.rents, {'adnan': 3500.0});
+      expect(november.bills, isEmpty);
+
+      expect(
+        FixedCostsCalculator.resolve(saved, '2027-01')!.monthKey,
+        '2026-11',
+      );
+    });
+
+    test('a reset stops earlier costs from carrying forward', () {
+      final withReset = {
+        ...saved,
+        '2026-12': {
+          'rents': <String, dynamic>{},
+          'sharedBills': <Map<String, dynamic>>[],
+        },
+      };
+
+      final december = FixedCostsCalculator.resolve(withReset, '2026-12')!;
+      expect(december.isEmpty, isTrue);
+      expect(
+        FixedCostsCalculator.resolve(withReset, '2027-02')!.isEmpty,
+        isTrue,
+      );
+      // November is unaffected.
+      expect(
+        FixedCostsCalculator.resolve(withReset, '2026-11')!.isEmpty,
+        isFalse,
+      );
+    });
+
+    test('nothing saved yet gives nothing', () {
+      expect(FixedCostsCalculator.resolve(saved, '2026-07'), isNull);
+      expect(FixedCostsCalculator.resolve(const {}, '2026-10'), isNull);
+    });
+  });
+
   group('reading saved data', () {
     test('rents keep only positive numbers', () {
       expect(

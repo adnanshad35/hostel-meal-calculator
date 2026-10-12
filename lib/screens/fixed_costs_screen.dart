@@ -58,7 +58,6 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
   final List<_BillRow> _billRows = [];
 
   bool _isSaving = false;
-  bool _isCopying = false;
 
   CollectionReference<Map<String, dynamic>> get _monthlySettings =>
       FirebaseFirestore.instance
@@ -132,79 +131,6 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
   }
 
-  Future<void> _copyFromLastMonth() async {
-    setState(() => _isCopying = true);
-
-    try {
-      final previousMonth =
-          DateTime(widget.month.year, widget.month.month - 1);
-      final snapshot = await _monthlySettings
-          .doc(MonthlyCalculator.monthKey(previousMonth))
-          .get();
-
-      if (!mounted) return;
-
-      final data = snapshot.data();
-      final rents = FixedCostsCalculator.readRents(data?['rents']);
-      final bills = FixedCostsCalculator.readBills(data?['sharedBills']);
-
-      if (rents.isEmpty && bills.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Nothing was saved for last month.'),
-          ),
-        );
-        return;
-      }
-
-      final oldRows = List<_BillRow>.of(_billRows);
-
-      setState(() {
-        for (final entry in _rentControllers.entries) {
-          entry.value.text = _numberText(rents[entry.key]);
-        }
-
-        if (bills.isNotEmpty) {
-          _billRows
-            ..clear()
-            ..addAll([
-              for (final bill in bills)
-                _BillRow(
-                  name: bill.name,
-                  amount: _numberText(bill.amount),
-                ),
-            ]);
-        }
-      });
-
-      if (bills.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          for (final row in oldRows) {
-            row.dispose();
-          }
-        });
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Copied from last month. Review and save.'),
-        ),
-      );
-    } on FirebaseException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Unable to load last month.'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isCopying = false);
-      }
-    }
-  }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -261,33 +187,22 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isBusy = _isSaving || _isCopying;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Rent & Bills'),
+        title: const Text('Fixed Costs'),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.monthName,
-                    style: textTheme.titleLarge,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: isBusy ? null : _copyFromLastMonth,
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text('Copy last month'),
-                ),
-              ],
+            Text(widget.monthName, style: textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text(
+              'These apply from this month on, until you change them.',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // ─── Rent ───
             Text('Rent', style: textTheme.titleMedium),
@@ -388,7 +303,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: isBusy ? null : _save,
+              onPressed: _isSaving ? null : _save,
               child: _isSaving
                   ? const SizedBox(
                       width: 20,

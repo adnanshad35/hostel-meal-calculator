@@ -39,6 +39,23 @@ class MemberSettlement {
   int get finalTotal => exactTotal.round();
 }
 
+/// The rent and shared bills that apply to a month, and the month
+/// they were saved in.
+class FixedCosts {
+  const FixedCosts({
+    required this.monthKey,
+    required this.rents,
+    required this.bills,
+  });
+
+  /// The month these figures were entered for (`YYYY-MM`).
+  final String monthKey;
+  final Map<String, double> rents;
+  final List<SharedBill> bills;
+
+  bool get isEmpty => rents.isEmpty && bills.isEmpty;
+}
+
 /// Adds rent and equally shared bills to the monthly meal calculation.
 ///
 /// Rent is entered per member. Shared bills are divided equally among
@@ -78,6 +95,40 @@ class FixedCostsCalculator {
           billShare: member.isFormer ? 0 : share,
         ),
     ];
+  }
+
+  /// The fixed costs that apply to [monthKey]: the ones saved for that
+  /// month, or else the most recent ones saved before it. Fixed costs
+  /// therefore carry forward until an admin changes or resets them,
+  /// and editing a later month never changes an earlier one.
+  ///
+  /// [settingsByMonth] maps `YYYY-MM` keys to saved monthly settings.
+  /// Returns null when nothing has been saved up to that month.
+  static FixedCosts? resolve(
+    Map<String, Map<String, dynamic>> settingsByMonth,
+    String monthKey,
+  ) {
+    final candidates = settingsByMonth.keys
+        .where((key) => key.compareTo(monthKey) <= 0)
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    for (final key in candidates) {
+      final data = settingsByMonth[key]!;
+
+      // A month without these fields never had fixed costs saved.
+      if (!data.containsKey('rents') && !data.containsKey('sharedBills')) {
+        continue;
+      }
+
+      return FixedCosts(
+        monthKey: key,
+        rents: readRents(data['rents']),
+        bills: readBills(data['sharedBills']),
+      );
+    }
+
+    return null;
   }
 
   /// Reads the saved `rents` map, ignoring anything that is not a
