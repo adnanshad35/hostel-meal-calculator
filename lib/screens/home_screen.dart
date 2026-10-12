@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/group_member_service.dart';
 import '../theme/app_theme.dart';
 import 'create_group_screen.dart';
 import 'hostel_dashboard_screen.dart';
@@ -182,6 +185,7 @@ class HomeScreen extends StatelessWidget {
                 );
 
                 return _HostelView(
+                  groupId: groupId,
                   groupName: groupName,
                   memberCount:
                       memberIds.length,
@@ -303,12 +307,16 @@ class _NoHostelView extends StatelessWidget {
 
 class _HostelView extends StatelessWidget {
   const _HostelView({
+    required this.groupId,
     required this.groupName,
     required this.memberCount,
     required this.onOpenHostel,
   });
 
+  final String groupId;
   final String groupName;
+
+  /// App users only. Shown until the full member list has loaded.
   final int memberCount;
   final VoidCallback onOpenHostel;
 
@@ -402,16 +410,11 @@ class _HostelView extends StatelessWidget {
                                   BorderRadius
                                       .circular(20),
                             ),
-                            child: Text(
-                              '$memberCount '
-                              '${memberCount == 1 ? 'member' : 'members'}',
-                              style:
-                                  const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight:
-                                    FontWeight.w700,
-                              ),
+                            child: _MemberCountText(
+                              key: ValueKey(groupId),
+                              groupId: groupId,
+                              initialCount:
+                                  memberCount,
                             ),
                           ),
                         ],
@@ -530,6 +533,55 @@ class _PageMessage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+/// Live count of the hostel's active members, including members
+/// who do not use the app.
+class _MemberCountText extends StatefulWidget {
+  const _MemberCountText({
+    super.key,
+    required this.groupId,
+    required this.initialCount,
+  });
+
+  final String groupId;
+  final int initialCount;
+
+  @override
+  State<_MemberCountText> createState() => _MemberCountTextState();
+}
+
+class _MemberCountTextState extends State<_MemberCountText> {
+  StreamSubscription<Object?>? _subscription;
+  int? _count;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = GroupMemberService.watch(widget.groupId).listen(
+      (members) => setState(() => _count = members.length),
+      onError: (_) {},
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _count ?? widget.initialCount;
+
+    return Text(
+      '$count ${count == 1 ? 'member' : 'members'}',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
       ),
     );
   }

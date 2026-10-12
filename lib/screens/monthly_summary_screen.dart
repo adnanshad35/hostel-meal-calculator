@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/group_member.dart';
+import '../services/group_member_service.dart';
 import '../theme/app_theme.dart';
 
 class MonthlySummaryScreen extends StatefulWidget {
@@ -25,6 +27,7 @@ class MonthlySummaryScreen extends StatefulWidget {
 class _MonthlySummaryScreenState
     extends State<MonthlySummaryScreen> {
   late DateTime _selectedMonth;
+  late final Stream<List<GroupMember>> _membersStream;
   bool _showMemberCards = true;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -35,6 +38,7 @@ class _MonthlySummaryScreenState
 
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
+    _membersStream = GroupMemberService.watch(widget.groupId);
   }
 
   String _monthKey(DateTime date) {
@@ -409,12 +413,8 @@ class _MonthlySummaryScreenState
                     );
                   }
 
-                  return StreamBuilder<
-                      QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _firestore
-                        .collection('users')
-                        .where('groupId', isEqualTo: widget.groupId)
-                        .snapshots(),
+                  return StreamBuilder<List<GroupMember>>(
+                    stream: _membersStream,
                     builder: (context, userSnapshot) {
                       if (userSnapshot.connectionState ==
                               ConnectionState.waiting &&
@@ -431,8 +431,13 @@ class _MonthlySummaryScreenState
                         );
                       }
 
-                      final members = (userSnapshot.data?.docs ?? [])
-                          .map(_memberFromDocument)
+                      final members = (userSnapshot.data ?? [])
+                          .map(
+                            (member) => _MemberInfo(
+                              id: member.id,
+                              name: member.name,
+                            ),
+                          )
                           .toList();
 
                       final result = _calculate(
@@ -459,27 +464,6 @@ class _MonthlySummaryScreenState
         },
       ),
     );
-  }
-
-  _MemberInfo _memberFromDocument(
-    QueryDocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final data = document.data();
-    final possibleNames = [
-      data['name'],
-      data['displayName'],
-      data['fullName'],
-    ];
-
-    String? memberName;
-    for (final value in possibleNames) {
-      if (value is String && value.trim().isNotEmpty) {
-        memberName = value.trim();
-        break;
-      }
-    }
-
-    return _MemberInfo(id: document.id, name: memberName ?? 'Member');
   }
 
   _CalculationResult _calculate({
@@ -1220,11 +1204,8 @@ Future<double?> _previousMealRate({
       (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
   final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
 
-  final usersSnapshot = await firestore
-      .collection('users')
-      .where('groupId', isEqualTo: groupId)
-      .get();
-  final memberIds = usersSnapshot.docs.map((d) => d.id).toSet();
+  final members = await GroupMemberService.fetchActive(groupId);
+  final memberIds = members.map((member) => member.id).toSet();
 
   final mealsSnapshot = await groupRef.collection('meals').get();
   final actualMeals = <String, double>{};

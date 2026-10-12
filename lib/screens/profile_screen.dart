@@ -1,12 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
-
-const String _supportEmail = 'adnanshad1035@gmail.com';
+import 'about_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,24 +15,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   User get _currentUser => FirebaseAuth.instance.currentUser!;
 
-  String _versionLabel = 'Version 1.0.0';
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream;
 
   @override
   void initState() {
     super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (!mounted) return;
-      setState(() {
-        _versionLabel = 'Version ${info.version}+${info.buildNumber}';
-      });
-    } catch (_) {
-      // Keep fallback label.
-    }
+    _userStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUser.uid)
+        .snapshots();
   }
 
   String _readName(Map<String, dynamic>? data) {
@@ -70,68 +58,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     BuildContext context, {
     required String currentPhone,
   }) async {
-    final formKey = GlobalKey<FormState>();
-    final controller = TextEditingController(text: currentPhone);
-
     final phone = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            currentPhone.trim().isEmpty
-                ? 'Add Phone Number'
-                : 'Update Phone Number',
-          ),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'Phone number',
-                hintText: 'Example: +8801712345678',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
-              validator: (value) {
-                final enteredPhone = value?.trim() ?? '';
-                if (enteredPhone.isEmpty) {
-                  return 'Please enter your phone number.';
-                }
-                final normalized =
-                    enteredPhone.replaceAll(RegExp(r'[\s()-]'), '');
-                if (!RegExp(r'^\+?[0-9]{8,15}$').hasMatch(normalized)) {
-                  return 'Please enter a valid phone number.';
-                }
-                return null;
-              },
-              onFieldSubmitted: (_) {
-                if (formKey.currentState!.validate()) {
-                  Navigator.of(dialogContext).pop(controller.text.trim());
-                }
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.of(dialogContext).pop(controller.text.trim());
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _PhoneNumberDialog(currentPhone: currentPhone),
     );
-
-    controller.dispose();
 
     if (phone == null || !context.mounted) return;
 
@@ -223,109 +153,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _requestFeature(BuildContext context) async {
-    final uri = Uri(
-      scheme: 'mailto',
-      path: _supportEmail,
-      queryParameters: {'subject': 'HostelMate Feature Request'},
-    );
-    final opened =
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'No email application was found. '
-            'Please email $_supportEmail.',
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _showAbout(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              _ProfileIconBox(
-                icon: Icons.home_work_outlined,
-                backgroundColor: AppTheme.surfaceSoft,
-                iconColor: AppTheme.primary,
-              ),
-              SizedBox(width: 12),
-              Expanded(child: Text('About HostelMate')),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'HostelMate helps hostel members manage '
-                  'meals, shared expenses, monthly meal '
-                  'rates, and individual balances clearly.',
-                ),
-                const SizedBox(height: 22),
-                const Text(
-                  'Designed for transparency',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Every member can view meal counts, '
-                  'expenses, calculations, and final '
-                  'pay-or-collect amounts.',
-                ),
-                const SizedBox(height: 22),
-                const Divider(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Developer',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Abu Adnan Shad',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                const Text(
-                  'Independent Flutter and Firebase project',
-                  style: TextStyle(color: AppTheme.textSecondary),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  _versionLabel,
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+  void _openAbout(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AboutScreen()),
     );
   }
 
@@ -365,10 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profile'),
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUser.uid)
-            .snapshots(),
+        stream: _userStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -385,13 +212,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final name = _readName(userData);
           final email = _currentUser.email ?? 'Not available';
           final phone = userData?['phoneNumber'] as String? ?? '';
-          final groupId = userData?['groupId'] as String?;
           final isAdmin = _readIsAdmin(userData);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               _ProfileHeader(
+                key: const Key('header'),
                 name: name,
                 email: email,
                 phone: phone,
@@ -399,77 +226,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 28),
 
-              // ─── My Group ───
-              if (groupId != null && groupId.isNotEmpty) ...[
-                const _SectionLabel(text: 'My Group'),
-                const SizedBox(height: 10),
-                _GroupCard(groupId: groupId, isAdmin: isAdmin),
-                const SizedBox(height: 24),
-              ],
-
               // ─── Account ───
-              const _SectionLabel(text: 'Account'),
-              const SizedBox(height: 10),
-              Card(
-                child: Column(
-                  children: [
-                    _ProfileTile(
-                      icon: Icons.phone_outlined,
-                      iconBackground: AppTheme.surfaceSoft,
-                      iconColor: AppTheme.primary,
-                      title: 'Phone Number',
-                      subtitle: phone.trim().isEmpty
-                          ? 'Add your phone number'
-                          : phone,
-                      onTap: () => _editPhoneNumber(
-                        context,
-                        currentPhone: phone,
-                      ),
+              Column(
+                key: const Key('account-section'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _SectionLabel(text: 'Account'),
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Column(
+                      children: [
+                        _ProfileTile(
+                          icon: Icons.phone_outlined,
+                          iconBackground: AppTheme.surfaceSoft,
+                          iconColor: AppTheme.primary,
+                          title: 'Phone Number',
+                          subtitle: phone.trim().isEmpty
+                              ? 'Add your phone number'
+                              : phone,
+                          trailingIcon: Icons.edit_outlined,
+                          onTap: () => _editPhoneNumber(
+                            context,
+                            currentPhone: phone,
+                          ),
+                        ),
+                        const _TileDivider(),
+                        _ProfileTile(
+                          icon: Icons.lock_outline_rounded,
+                          iconBackground: AppTheme.surfaceSoft,
+                          iconColor: AppTheme.primary,
+                          title: 'Change Password',
+                          subtitle: 'Send a reset link to your email',
+                          onTap: () => _changePassword(context),
+                        ),
+                      ],
                     ),
-                    const _TileDivider(),
-                    _ProfileTile(
-                      icon: Icons.lock_outline_rounded,
-                      iconBackground: AppTheme.surfaceSoft,
-                      iconColor: AppTheme.primary,
-                      title: 'Change Password',
-                      subtitle: 'Send a reset link to your email',
-                      onTap: () => _changePassword(context),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
-              const SizedBox(height: 24),
 
-              // ─── Help & Information ───
-              const _SectionLabel(text: 'Help & Information'),
-              const SizedBox(height: 10),
+              // ─── About ───
               Card(
-                child: Column(
-                  children: [
-                    _ProfileTile(
-                      icon: Icons.lightbulb_outline_rounded,
-                      iconBackground: const Color(0xFFFFF2DA),
-                      iconColor: AppTheme.warning,
-                      title: 'Request a Feature',
-                      subtitle: 'Share an idea or improvement',
-                      onTap: () => _requestFeature(context),
-                    ),
-                    const _TileDivider(),
-                    _ProfileTile(
-                      icon: Icons.info_outline_rounded,
-                      iconBackground: const Color(0xFFE8EDF8),
-                      iconColor: const Color(0xFF47659A),
-                      title: 'About App & Developer',
-                      subtitle: 'Learn more about HostelMate',
-                      onTap: () => _showAbout(context),
-                    ),
-                  ],
+                key: const Key('about-section'),
+                child: _ProfileTile(
+                  icon: Icons.info_outline_rounded,
+                  iconBackground: const Color(0xFFE8EDF8),
+                  iconColor: const Color(0xFF47659A),
+                  title: 'About App & Developer',
+                  subtitle: 'App details, developer, and feedback',
+                  onTap: () => _openAbout(context),
                 ),
               ),
               const SizedBox(height: 24),
 
               // ─── Sign Out ───
               Card(
+                key: const Key('signout-section'),
                 child: _ProfileTile(
                   icon: Icons.logout_rounded,
                   iconBackground: const Color(0xFFFCE8E8),
@@ -489,104 +302,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Group card — reads groups/{groupId} + live member count
+// Phone number dialog
 // ─────────────────────────────────────────────────────────────
-class _GroupCard extends StatelessWidget {
-  const _GroupCard({
-    required this.groupId,
-    required this.isAdmin,
-  });
 
-  final String groupId;
-  final bool isAdmin;
+/// Owns its text controller so it is disposed only after the dialog
+/// has fully closed.
+class _PhoneNumberDialog extends StatefulWidget {
+  const _PhoneNumberDialog({required this.currentPhone});
+
+  final String currentPhone;
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .snapshots(),
-        builder: (context, groupSnapshot) {
-          final groupData = groupSnapshot.data?.data();
-          final groupName =
-              (groupData?['name'] as String?)?.trim().isNotEmpty == true
-                  ? (groupData!['name'] as String).trim()
-                  : 'My Hostel';
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .where('groupId', isEqualTo: groupId)
-                .snapshots(),
-            builder: (context, membersSnapshot) {
-              final count = membersSnapshot.data?.docs.length ?? 0;
-
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                leading: const _ProfileIconBox(
-                  icon: Icons.home_work_outlined,
-                  backgroundColor: AppTheme.surfaceSoft,
-                  iconColor: AppTheme.primary,
-                ),
-                title: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        groupName,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (isAdmin) ...[
-                      const SizedBox(width: 8),
-                      const _AdminBadge(),
-                    ],
-                  ],
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: Text(
-                    count == 1
-                        ? '1 member'
-                        : '$count members',
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
+  State<_PhoneNumberDialog> createState() => _PhoneNumberDialogState();
 }
 
-class _AdminBadge extends StatelessWidget {
-  const _AdminBadge();
+class _PhoneNumberDialogState extends State<_PhoneNumberDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentPhone);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_controller.text.trim());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+    return AlertDialog(
+      title: Text(
+        widget.currentPhone.trim().isEmpty
+            ? 'Add Phone Number'
+            : 'Update Phone Number',
       ),
-      child: Text(
-        'Admin',
-        style: TextStyle(
-          color: AppTheme.primary,
-          fontWeight: FontWeight.w800,
-          fontSize: 11,
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'Phone number',
+            hintText: 'Example: +8801712345678',
+            prefixIcon: Icon(Icons.phone_outlined),
+          ),
+          validator: (value) {
+            final enteredPhone = value?.trim() ?? '';
+            if (enteredPhone.isEmpty) {
+              return 'Please enter your phone number.';
+            }
+            final normalized =
+                enteredPhone.replaceAll(RegExp(r'[\s()-]'), '');
+            if (!RegExp(r'^\+?[0-9]{8,15}$').hasMatch(normalized)) {
+              return 'Please enter a valid phone number.';
+            }
+            return null;
+          },
+          onFieldSubmitted: (_) => _submit(),
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
@@ -596,6 +392,7 @@ class _AdminBadge extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
+    super.key,
     required this.name,
     required this.email,
     required this.phone,
@@ -679,6 +476,7 @@ class _ProfileHeader extends StatelessWidget {
                     if (isAdmin) ...[
                       const SizedBox(width: 8),
                       Container(
+                        key: const ValueKey('admin-badge'),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 3,
@@ -739,6 +537,7 @@ class _ProfileTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onTap,
+    this.trailingIcon,
     this.iconBackground = AppTheme.surfaceSoft,
     this.iconColor = AppTheme.primary,
     this.titleColor = AppTheme.textPrimary,
@@ -748,6 +547,9 @@ class _ProfileTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
+
+  /// Replaces the default arrow shown on tappable tiles.
+  final IconData? trailingIcon;
   final Color iconBackground;
   final Color iconColor;
   final Color titleColor;
@@ -778,9 +580,9 @@ class _ProfileTile extends StatelessWidget {
       ),
       trailing: onTap == null
           ? null
-          : const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
+          : Icon(
+              trailingIcon ?? Icons.arrow_forward_ios_rounded,
+              size: trailingIcon == null ? 16 : 20,
               color: AppTheme.textSecondary,
             ),
     );

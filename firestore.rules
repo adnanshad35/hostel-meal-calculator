@@ -21,6 +21,14 @@ service cloud.firestore {
             .data.admins;
     }
 
+    // True for anyone in the group's member list, including members
+    // who do not use the app.
+    function isRegisteredMember(groupId, memberId) {
+      return exists(
+        /databases/$(database)/documents/groups/$(groupId)/members/$(memberId)
+      );
+    }
+
     match /users/{userId} {
       allow create: if isSignedIn()
         && request.auth.uid == userId;
@@ -129,9 +137,18 @@ service cloud.firestore {
         allow read: if isGroupMember(groupId);
 
         allow create: if isGroupMember(groupId)
-          && request.resource.data.userId in
-            get(/databases/$(database)/documents/groups/$(groupId))
-              .data.memberIds
+          && (
+            request.resource.data.userId in
+              get(/databases/$(database)/documents/groups/$(groupId))
+                .data.memberIds
+            || (
+              isGroupAdmin(groupId)
+              && isRegisteredMember(
+                groupId,
+                request.resource.data.userId
+              )
+            )
+          )
           && (
             request.resource.data.userId == request.auth.uid
             || isGroupAdmin(groupId)
@@ -156,9 +173,18 @@ service cloud.firestore {
         allow read: if isGroupMember(groupId);
 
         allow create: if isGroupMember(groupId)
-          && request.resource.data.paidById in
-            get(/databases/$(database)/documents/groups/$(groupId))
-              .data.memberIds
+          && (
+            request.resource.data.paidById in
+              get(/databases/$(database)/documents/groups/$(groupId))
+                .data.memberIds
+            || (
+              isGroupAdmin(groupId)
+              && isRegisteredMember(
+                groupId,
+                request.resource.data.paidById
+              )
+            )
+          )
           && (
             request.resource.data.paidById == request.auth.uid
             || isGroupAdmin(groupId)
@@ -211,6 +237,50 @@ service cloud.firestore {
 
   allow delete: if isGroupAdmin(groupId);
 }
+
+      match /members/{memberId} {
+        // An app user's entry: stored under their uid and active
+        // exactly while they are in the group.
+        function isAppUserEntry() {
+          return request.resource.data.isAppUser == true
+            && request.resource.data.userId == memberId
+            && request.resource.data.name is string
+            && request.resource.data.active == (
+              memberId in
+                get(/databases/$(database)/documents/groups/$(groupId))
+                  .data.memberIds
+            );
+        }
+
+        allow read: if isGroupMember(groupId);
+
+        // Admins manage every member, including non-app members.
+        // Any member may keep app user entries in sync with the group,
+        // but may only rename their own.
+        allow create: if (
+            isGroupAdmin(groupId)
+            && request.resource.data.name is string
+            && request.resource.data.active is bool
+          )
+          || (isGroupMember(groupId) && isAppUserEntry());
+
+        allow update: if (
+            isGroupAdmin(groupId)
+            && request.resource.data.name is string
+            && request.resource.data.active is bool
+          )
+          || (
+            isGroupMember(groupId)
+            && isAppUserEntry()
+            && (
+              memberId == request.auth.uid
+              || request.resource.data.name == resource.data.name
+            )
+          );
+
+        // Members are deactivated, never deleted.
+        allow delete: if false;
+      }
     }
 
     match /invites/{inviteCode} {

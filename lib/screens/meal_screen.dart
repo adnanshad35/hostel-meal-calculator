@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../models/group_member.dart';
+import '../services/group_member_service.dart';
 import 'meal_ledger_screen.dart';
 
 class MealScreen extends StatefulWidget {
@@ -18,16 +23,267 @@ class MealScreen extends StatefulWidget {
 }
 
 class _MealScreenState extends State<MealScreen> {
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+
+  User get _user => FirebaseAuth.instance.currentUser!;
+
+  @override
+  void initState() {
+    super.initState();
+    _mealsStream = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .collection('meals')
+        .snapshots();
+  }
+
+  Future<void> _openMealForm() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _MealFormDialog(
+        groupId: widget.groupId,
+        isAdmin: widget.isAdmin,
+      ),
+    );
+  }
+
+  void _openLedger() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MealLedgerScreen(
+          groupId: widget.groupId,
+          isAdmin: widget.isAdmin,
+        ),
+      ),
+    );
+  }
+
+  void _openMyMeals() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MyMealsScreen(
+          groupId: widget.groupId,
+          currentUserId: _user.uid,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final currentMonth = _monthKey(now);
+    final todayKey = _dateKey(now);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Meal Update'),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openMealForm,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Meal'),
+      ),
+      body: SafeArea(
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _mealsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text('Unable to load meals.'),
+              );
+            }
+
+            double totalMealsMonthly = 0;
+            double myMonthlyTotal = 0;
+            Map<String, dynamic>? myEntryToday;
+
+            for (final document in snapshot.data?.docs ?? []) {
+              final data = document.data();
+              final dateKey = data['dateKey'] as String? ?? '';
+              final userId = data['userId'] as String?;
+
+              if (!dateKey.startsWith(currentMonth)) continue;
+
+              final total = (data['total'] as num?)?.toDouble() ?? 0;
+
+              totalMealsMonthly += total;
+
+              if (userId == _user.uid) {
+                myMonthlyTotal += total;
+                if (dateKey == todayKey) {
+                  myEntryToday = data;
+                }
+              }
+            }
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: Icons.groups_outlined,
+                        title: 'Total Meals',
+                        value: _displayQuantity(totalMealsMonthly),
+                        subtitle: 'This month',
+                        color: const Color(0xFF2E7D32),
+                        onTap: _openLedger,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: Icons.person_outline,
+                        title: 'My Meals',
+                        value: _displayQuantity(myMonthlyTotal),
+                        subtitle: 'This month',
+                        color: const Color(0xFF2E7D32),
+                        onTap: _openMyMeals,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _TodayMealCard(
+                  entry: myEntryToday,
+                  onTap: _openMealForm,
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+String _dateKey(DateTime date) {
+  final year = date.year.toString();
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+
+  return '$year-$month-$day';
+}
+
+String _monthKey(DateTime date) {
+  final year = date.year.toString();
+  final month = date.month.toString().padLeft(2, '0');
+
+  return '$year-$month';
+}
+
+String _displayQuantity(double value) {
+  return value % 1 == 0
+      ? value.toInt().toString()
+      : value.toStringAsFixed(1);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Today's entry of the signed-in member
+// ─────────────────────────────────────────────────────────────
+class _TodayMealCard extends StatelessWidget {
+  const _TodayMealCard({
+    required this.entry,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic>? entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = this.entry;
+
+    if (entry == null) {
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: onTap,
+          leading: const Icon(
+            Icons.info_outline,
+            color: Colors.orange,
+          ),
+          title: const Text(
+            'Today\'s meals not entered',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text('Tap Add Meal to record them.'),
+        ),
+      );
+    }
+
+    final lunch = (entry['lunch'] as num?)?.toDouble() ?? 0;
+    final dinner = (entry['dinner'] as num?)?.toDouble() ?? 0;
+
+    return Card(
+      color: const Color(0xFFE8F5E9),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        onTap: onTap,
+        leading: const Icon(
+          Icons.check_circle_outline,
+          color: Color(0xFF2E7D32),
+        ),
+        title: const Text(
+          'Today\'s meals entered',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Lunch: ${_displayQuantity(lunch)}   '
+          'Dinner: ${_displayQuantity(dinner)}',
+        ),
+        trailing: const Icon(Icons.edit_outlined),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Meal form dialog — members record their own meals, admins can
+// pick any member of the hostel
+// ─────────────────────────────────────────────────────────────
+class _MealFormDialog extends StatefulWidget {
+  const _MealFormDialog({
+    required this.groupId,
+    required this.isAdmin,
+  });
+
+  final String groupId;
+  final bool isAdmin;
+
+  @override
+  State<_MealFormDialog> createState() => _MealFormDialogState();
+}
+
+class _MealFormDialogState extends State<_MealFormDialog> {
+  StreamSubscription<List<GroupMember>>? _membersSubscription;
+
+  List<GroupMember> _members = [];
+  late String _selectedMemberId;
   late DateTime _selectedDate;
 
   double _lunch = 0;
   double _dinner = 0;
 
-  bool _isLoading = true;
+  bool _isLoadingMembers = false;
+  bool _isLoadingEntry = true;
   bool _isSaving = false;
   bool _hasEntry = false;
 
-  User get _user => FirebaseAuth.instance.currentUser!;
+  // Identifies the newest entry request, so a slow earlier one
+  // cannot overwrite the counters.
+  int _loadRequest = 0;
+
+  User get _currentUser => FirebaseAuth.instance.currentUser!;
+
+  bool get _isOwnEntry => _selectedMemberId == _currentUser.uid;
 
   CollectionReference<Map<String, dynamic>> get _mealCollection =>
       FirebaseFirestore.instance
@@ -35,48 +291,92 @@ class _MealScreenState extends State<MealScreen> {
           .doc(widget.groupId)
           .collection('meals');
 
+  String get _entryId => '${_selectedMemberId}_${_dateKey(_selectedDate)}';
+
   @override
   void initState() {
     super.initState();
+    _selectedMemberId = _currentUser.uid;
     _selectedDate = DateTime.now();
+
+    if (widget.isAdmin) {
+      _watchMembers();
+    }
+
     _loadEntry();
   }
 
-  String _dateKey(DateTime date) {
-    final year = date.year.toString();
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '$year-$month-$day';
+  @override
+  void dispose() {
+    _membersSubscription?.cancel();
+    super.dispose();
   }
 
-  String _monthKey(DateTime date) {
-    final year = date.year.toString();
-    final month = date.month.toString().padLeft(2, '0');
+  void _watchMembers() {
+    _isLoadingMembers = true;
 
-    return '$year-$month';
+    _membersSubscription =
+        GroupMemberService.watch(widget.groupId).listen(
+      (activeMembers) {
+        final members = [...activeMembers];
+
+        if (!members.any((member) => member.id == _currentUser.uid)) {
+          members.add(
+            GroupMember(
+              id: _currentUser.uid,
+              name: _currentUser.displayName?.trim().isNotEmpty == true
+                  ? _currentUser.displayName!.trim()
+                  : _currentUser.email ?? 'Administrator',
+              isAppUser: true,
+              userId: _currentUser.uid,
+            ),
+          );
+          members.sort(GroupMember.compareByName);
+        }
+
+        if (!mounted) return;
+
+        final selectionRemoved =
+            !members.any((member) => member.id == _selectedMemberId);
+
+        setState(() {
+          _members = members;
+          _isLoadingMembers = false;
+          if (selectionRemoved) {
+            _selectedMemberId = _currentUser.uid;
+          }
+        });
+
+        if (selectionRemoved) {
+          _loadEntry();
+        }
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+
+        setState(() => _isLoadingMembers = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load members.')),
+        );
+      },
+    );
   }
-
-  String _displayDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
-  String _displayQuantity(double value) {
-    return value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(1);
-  }
-
-  String get _entryId => '${_user.uid}_${_dateKey(_selectedDate)}';
 
   Future<void> _loadEntry() async {
-    setState(() => _isLoading = true);
+    final request = ++_loadRequest;
+
+    setState(() {
+      _isLoadingEntry = true;
+      _hasEntry = false;
+      _lunch = 0;
+      _dinner = 0;
+    });
 
     try {
       final snapshot = await _mealCollection.doc(_entryId).get();
       final data = snapshot.data();
 
-      if (!mounted) return;
+      if (!mounted || request != _loadRequest) return;
 
       setState(() {
         _hasEntry = snapshot.exists;
@@ -84,7 +384,7 @@ class _MealScreenState extends State<MealScreen> {
         _dinner = (data?['dinner'] as num?)?.toDouble() ?? 0;
       });
     } on FirebaseException {
-      if (!mounted) return;
+      if (!mounted || request != _loadRequest) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -92,47 +392,42 @@ class _MealScreenState extends State<MealScreen> {
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (mounted && request == _loadRequest) {
+        setState(() => _isLoadingEntry = false);
       }
     }
   }
 
   Future<void> _selectDate() async {
     final now = DateTime.now();
-    final firstDate = DateTime(now.year, now.month);
-    final lastDate = DateTime(now.year, now.month + 1, 0);
 
     final selected = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
+      firstDate: DateTime(now.year, now.month),
+      lastDate: DateTime(now.year, now.month + 1, 0),
       helpText: 'Select a meal date',
     );
 
-    if (selected == null || selected == _selectedDate) return;
+    if (selected == null || selected == _selectedDate || !mounted) return;
 
-    setState(() {
-      _selectedDate = selected;
-      _lunch = 0;
-      _dinner = 0;
-      _hasEntry = false;
-    });
-
+    setState(() => _selectedDate = selected);
     await _loadEntry();
   }
 
-  void _changeLunch(double amount) {
-    setState(() {
-      _lunch = (_lunch + amount).clamp(0, double.infinity);
-    });
+  void _selectMember(String? memberId) {
+    if (memberId == null || memberId == _selectedMemberId) return;
+
+    setState(() => _selectedMemberId = memberId);
+    _loadEntry();
   }
 
-  void _changeDinner(double amount) {
-    setState(() {
-      _dinner = (_dinner + amount).clamp(0, double.infinity);
-    });
+  String get _selectedMemberName {
+    final member = _members
+        .where((member) => member.id == _selectedMemberId)
+        .firstOrNull;
+
+    return member?.name ?? 'Member';
   }
 
   Future<bool> _confirmLargeQuantity() async {
@@ -164,18 +459,24 @@ class _MealScreenState extends State<MealScreen> {
         false;
   }
 
-  Future<void> _saveEntry() async {
+  Future<void> _save() async {
     final confirmed = await _confirmLargeQuantity();
 
-    if (!confirmed) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _isSaving = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    final displayedDate = '${_selectedDate.day}/${_selectedDate.month}/'
+        '${_selectedDate.year}';
 
     try {
       final data = <String, dynamic>{
         'groupId': widget.groupId,
-        'userId': _user.uid,
-        'userName': _user.displayName ?? 'Member',
+        'userId': _selectedMemberId,
+        'userName': _isOwnEntry
+            ? _currentUser.displayName ?? 'Member'
+            : _selectedMemberName,
         'dateKey': _dateKey(_selectedDate),
         'date': Timestamp.fromDate(_selectedDate),
         'lunch': _lunch,
@@ -184,6 +485,13 @@ class _MealScreenState extends State<MealScreen> {
         'submitted': true,
         'updatedAt': FieldValue.serverTimestamp(),
       };
+
+      if (!_isOwnEntry) {
+        data['updatedBy'] = _currentUser.uid;
+        data['updatedByName'] =
+            _currentUser.displayName ?? 'Administrator';
+        data['adminEdited'] = true;
+      }
 
       if (!_hasEntry) {
         data['createdAt'] = FieldValue.serverTimestamp();
@@ -196,19 +504,21 @@ class _MealScreenState extends State<MealScreen> {
 
       if (!mounted) return;
 
-      setState(() => _hasEntry = true);
-
-      ScaffoldMessenger.of(context).showSnackBar(
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Meals saved for ${_displayDate(_selectedDate)}.',
+            _isOwnEntry
+                ? 'Meals saved for $displayedDate.'
+                : 'Meals saved for $_selectedMemberName on '
+                    '$displayedDate.',
           ),
         ),
       );
     } on FirebaseException catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             error.code == 'permission-denied'
@@ -224,186 +534,123 @@ class _MealScreenState extends State<MealScreen> {
     }
   }
 
-  void _openLedger() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MealLedgerScreen(
-          groupId: widget.groupId,
-          isAdmin: widget.isAdmin,
-        ),
-      ),
-    );
-  }
-
-  void _openMyMeals() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MyMealsScreen(
-          groupId: widget.groupId,
-          currentUserId: _user.uid,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currentMonth = _monthKey(DateTime.now());
+    final day = _selectedDate.day.toString().padLeft(2, '0');
+    final month = _selectedDate.month.toString().padLeft(2, '0');
+    final formattedDate = '$day/$month/${_selectedDate.year}';
+    final isBusy = _isSaving || _isLoadingEntry;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meal Update'),
-      ),
-      body: SafeArea(
-        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _mealCollection.snapshots(),
-          builder: (context, snapshot) {
-            double totalMealsMonthly = 0;
-            double myMonthlyTotal = 0;
-
-            if (snapshot.hasData) {
-              for (final document in snapshot.data!.docs) {
-                final data = document.data();
-                final dateKey = data['dateKey'] as String? ?? '';
-                final userId = data['userId'] as String?;
-
-                if (!dateKey.startsWith(currentMonth)) continue;
-
-                final total =
-                    (data['total'] as num?)?.toDouble() ?? 0;
-
-                totalMealsMonthly += total;
-
-                if (userId == _user.uid) {
-                  myMonthlyTotal += total;
-                }
-              }
-            }
-
-            return ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // ─── Top: two summary cards ───
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryTile(
-                        icon: Icons.groups_outlined,
-                        title: 'Total Meals',
-                        value: _displayQuantity(totalMealsMonthly),
-                        subtitle: 'This month',
-                        color: const Color(0xFF2E7D32), // <--- NOW GREEN
-                        onTap: _openLedger,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SummaryTile(
-                        icon: Icons.person_outline,
-                        title: 'My Meals',
-                        value: _displayQuantity(myMonthlyTotal),
-                        subtitle: 'This month',
-                        color: const Color(0xFF2E7D32), // green
-                        onTap: _openMyMeals,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // ─── Selected date card (unchanged) ───
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.calendar_month_outlined),
-                    title: const Text('Selected date'),
-                    subtitle: Text(_displayDate(_selectedDate)),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
-                    onTap: _selectDate,
+    return AlertDialog(
+      title: Text(_hasEntry ? 'Update Meal' : 'Add Meal'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.isAdmin) ...[
+              if (_isLoadingMembers)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  // Rebuilt when the member list changes, so the
+                  // selection can never point at a missing member.
+                  key: ValueKey(
+                    _members.map((member) => member.id).join(','),
                   ),
-                ),
-                const SizedBox(height: 20),
-
-                if (_isLoading)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _hasEntry
-                          ? Colors.green.withValues(alpha: 0.1)
-                          : Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _hasEntry
-                              ? Icons.check_circle_outline
-                              : Icons.info_outline,
-                          color: _hasEntry
-                              ? Colors.green.shade700
-                              : Colors.orange.shade800,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _hasEntry
-                                ? 'Entry saved. You can update it.'
-                                : 'Not entered for this date.',
-                          ),
-                        ),
-                      ],
-                    ),
+                  initialValue: _selectedMemberId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Meal for',
+                    prefixIcon: Icon(Icons.person_outline),
+                    border: OutlineInputBorder(),
                   ),
-                  const SizedBox(height: 20),
-                  _MealCounter(
-                    title: 'Lunch',
-                    value: _displayQuantity(_lunch),
-                    icon: Icons.lunch_dining_outlined,
-                    onDecrease: () => _changeLunch(-0.5),
-                    onIncrease: () => _changeLunch(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  _MealCounter(
-                    title: 'Dinner',
-                    value: _displayQuantity(_dinner),
-                    icon: Icons.dinner_dining_outlined,
-                    onDecrease: () => _changeDinner(-0.5),
-                    onIncrease: () => _changeDinner(0.5),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _isSaving ? null : _saveEntry,
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  items: _members.map((member) {
+                    return DropdownMenuItem<String>(
+                      value: member.id,
                       child: Text(
-                        _hasEntry ? 'Update Entry' : 'Save Entry',
+                        member.id == _currentUser.uid
+                            ? '${member.name} (You)'
+                            : member.name,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ),
-                ],
+                    );
+                  }).toList(),
+                  onChanged: _isSaving ? null : _selectMember,
+                ),
+              const SizedBox(height: 8),
+            ],
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('Date'),
+              subtitle: Text(formattedDate),
+              trailing: TextButton(
+                onPressed: _isSaving ? null : _selectDate,
+                child: const Text('Change'),
+              ),
+            ),
+            if (_isLoadingEntry)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              )
+            else ...[
+              if (_hasEntry) ...[
+                const Text(
+                  'Already entered for this date. Saving will '
+                  'update it.',
+                ),
+                const SizedBox(height: 8),
               ],
-            );
-          },
+              _MealCounter(
+                title: 'Lunch',
+                value: _displayQuantity(_lunch),
+                icon: Icons.lunch_dining_outlined,
+                onDecrease: _isSaving || _lunch <= 0
+                    ? null
+                    : () => setState(() => _lunch -= 0.5),
+                onIncrease: _isSaving
+                    ? null
+                    : () => setState(() => _lunch += 0.5),
+              ),
+              const SizedBox(height: 8),
+              _MealCounter(
+                title: 'Dinner',
+                value: _displayQuantity(_dinner),
+                icon: Icons.dinner_dining_outlined,
+                onDecrease: _isSaving || _dinner <= 0
+                    ? null
+                    : () => setState(() => _dinner -= 0.5),
+                onIncrease: _isSaving
+                    ? null
+                    : () => setState(() => _dinner += 0.5),
+              ),
+            ],
+          ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed:
+              _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: isBusy || (widget.isAdmin && _isLoadingMembers)
+              ? null
+              : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }
@@ -742,7 +989,7 @@ class _MyMealEntryTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Existing lunch / dinner counter — unchanged
+// Lunch / dinner counter, sized to fit inside the meal dialog
 // ─────────────────────────────────────────────────────────────
 class _MealCounter extends StatelessWidget {
   const _MealCounter({
@@ -756,51 +1003,49 @@ class _MealCounter extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
+  final VoidCallback? onDecrease;
+  final VoidCallback? onIncrease;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: const Color(0xFF2E7D32),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: onDecrease,
-              icon: const Icon(Icons.remove),
-            ),
-            SizedBox(
-              width: 54,
-              child: Text(
-                value,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            IconButton.filled(
-              onPressed: onIncrease,
-              icon: const Icon(Icons.add),
-            ),
-          ],
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 24,
+          color: const Color(0xFF2E7D32),
         ),
-      ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+        IconButton.filledTonal(
+          visualDensity: VisualDensity.compact,
+          onPressed: onDecrease,
+          icon: const Icon(Icons.remove),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            value,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+        IconButton.filled(
+          visualDensity: VisualDensity.compact,
+          onPressed: onIncrease,
+          icon: const Icon(Icons.add),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../models/group_member.dart';
+import '../services/group_member_service.dart';
 
 class ExpenseScreen extends StatelessWidget {
   const ExpenseScreen({
@@ -665,7 +670,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   late DateTime _selectedDate;
 
-  List<_ExpenseMember> _members = [];
+  List<GroupMember> _members = [];
+  StreamSubscription<List<GroupMember>>? _membersSubscription;
   String? _selectedMemberId;
 
   bool _isLoadingMembers = false;
@@ -703,85 +709,65 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
         data?['paidById'] as String? ?? _currentUser.uid;
 
     if (widget.isAdmin && !_isEditing) {
-      _loadMembers();
+      _watchMembers();
     }
   }
 
   @override
   void dispose() {
+    _membersSubscription?.cancel();
     _nameController.dispose();
     _amountController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMembers() async {
-    setState(() => _isLoadingMembers = true);
+  void _watchMembers() {
+    _isLoadingMembers = true;
 
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('groupId', isEqualTo: widget.groupId)
-          .get();
+    _membersSubscription =
+        GroupMemberService.watch(widget.groupId).listen(
+      (activeMembers) {
+        final members = [...activeMembers];
 
-      final members = snapshot.docs.map((document) {
-        final data = document.data();
-        return _ExpenseMember(
-          id: document.id,
-          name: _readMemberName(data),
-        );
-      }).toList();
+        if (!members.any((member) => member.id == _currentUser.uid)) {
+          members.add(
+            GroupMember(
+              id: _currentUser.uid,
+              name: _currentUser.displayName?.trim().isNotEmpty == true
+                  ? _currentUser.displayName!.trim()
+                  : _currentUser.email ?? 'Administrator',
+              isAppUser: true,
+              userId: _currentUser.uid,
+            ),
+          );
+          members.sort(GroupMember.compareByName);
+        }
 
-      if (!members.any((member) => member.id == _currentUser.uid)) {
-        members.add(
-          _ExpenseMember(
-            id: _currentUser.uid,
-            name: _currentUser.displayName?.trim().isNotEmpty == true
-                ? _currentUser.displayName!.trim()
-                : _currentUser.email ?? 'Administrator',
+        if (!mounted) return;
+
+        setState(() {
+          _members = members;
+          _isLoadingMembers = false;
+          if (!_members.any((m) => m.id == _selectedMemberId)) {
+            _selectedMemberId = _currentUser.uid;
+          }
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+
+        setState(() => _isLoadingMembers = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FirebaseException
+                  ? error.message ?? 'Unable to load members.'
+                  : 'Unable to load members.',
+            ),
           ),
         );
-      }
-
-      members.sort(
-        (first, second) => first.name.compareTo(second.name),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _members = members;
-        if (!_members.any((m) => m.id == _selectedMemberId)) {
-          _selectedMemberId = _currentUser.uid;
-        }
-      });
-    } on FirebaseException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Unable to load members.'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingMembers = false);
-      }
-    }
-  }
-
-  String _readMemberName(Map<String, dynamic> data) {
-    final possibleNames = [
-      data['name'],
-      data['displayName'],
-      data['fullName'],
-    ];
-
-    for (final value in possibleNames) {
-      if (value is String && value.trim().isNotEmpty) {
-        return value.trim();
-      }
-    }
-
-    return 'Member';
+      },
+    );
   }
 
   Future<void> _selectDate() async {
@@ -930,7 +916,13 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   )
                 else
                   DropdownButtonFormField<String>(
+                    // Rebuilt when the member list changes, so the
+                    // selection can never point at a missing member.
+                    key: ValueKey(
+                      _members.map((member) => member.id).join(','),
+                    ),
                     initialValue: _selectedMemberId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Paid by',
                       prefixIcon: Icon(Icons.person_outline),
@@ -939,7 +931,20 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                     items: _members.map((member) {
                       return DropdownMenuItem<String>(
                         value: member.id,
-                        child: Text(member.name),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                member.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (member.isAppUser) ...[
+                              const SizedBox(width: 8),
+                              const _AppUserChip(),
+                            ],
+                          ],
+                        ),
                       );
                     }).toList(),
                     onChanged: _isSaving
@@ -1459,12 +1464,27 @@ class _ExpressionParser {
   }
 }
 
-class _ExpenseMember {
-  const _ExpenseMember({
-    required this.id,
-    required this.name,
-  });
+class _AppUserChip extends StatelessWidget {
+  const _AppUserChip();
 
-  final String id;
-  final String name;
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        'App User',
+        style: TextStyle(
+          color: colorScheme.onPrimaryContainer,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
 }

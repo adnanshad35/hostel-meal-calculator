@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'expense_screen.dart';
+import 'group_members_screen.dart';
 import 'group_settings_screen.dart';
-import 'manage_members_screen.dart';
 import 'meal_screen.dart';
 import 'monthly_summary_screen.dart';
 
@@ -144,26 +144,28 @@ class HostelDashboardScreen
                     );
                   },
                 ),
-                if (isAdmin)
-                  _DashboardTile(
-                    icon: Icons
-                        .manage_accounts_outlined,
-                    title: 'Manage\nMembers',
-                    color:
-                        const Color(0xFF7956A8),
-                    backgroundColor:
-                        const Color(0xFFF0E9F8),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ManageMembersScreen(
-                            groupId: groupId,
-                          ),
+                _DashboardTile(
+                  icon: Icons
+                      .manage_accounts_outlined,
+                  title: isAdmin
+                      ? 'Manage\nMembers'
+                      : 'Members',
+                  color:
+                      const Color(0xFF7956A8),
+                  backgroundColor:
+                      const Color(0xFFF0E9F8),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            GroupMembersScreen(
+                          groupId: groupId,
+                          isAdmin: isAdmin,
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
+                ),
                 _DashboardTile(
                   icon:
                       Icons.settings_outlined,

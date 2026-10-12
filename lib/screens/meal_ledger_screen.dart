@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../models/group_member.dart';
+import '../services/group_member_service.dart';
 import 'admin_meal_edit_screen.dart';
 
-class MealLedgerScreen extends StatelessWidget {
+class MealLedgerScreen extends StatefulWidget {
   const MealLedgerScreen({
     super.key,
     required this.groupId,
@@ -12,6 +14,22 @@ class MealLedgerScreen extends StatelessWidget {
 
   final String groupId;
   final bool isAdmin;
+
+  @override
+  State<MealLedgerScreen> createState() => _MealLedgerScreenState();
+}
+
+class _MealLedgerScreenState extends State<MealLedgerScreen> {
+  late final Stream<List<GroupMember>> _membersStream;
+
+  String get groupId => widget.groupId;
+  bool get isAdmin => widget.isAdmin;
+
+  @override
+  void initState() {
+    super.initState();
+    _membersStream = GroupMemberService.watch(widget.groupId);
+  }
 
   String _dateKey(DateTime date) {
     final year = date.year.toString();
@@ -64,11 +82,6 @@ class MealLedgerScreen extends StatelessWidget {
     final endKey = _nextMonthKey(now);
     final todayKey = _dateKey(now);
 
-    final usersStream = FirebaseFirestore.instance
-        .collection('users')
-        .where('groupId', isEqualTo: groupId)
-        .snapshots();
-
     final mealsStream = FirebaseFirestore.instance
         .collection('groups')
         .doc(groupId)
@@ -81,10 +94,11 @@ class MealLedgerScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Monthly Meal Ledger'),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: usersStream,
+      body: StreamBuilder<List<GroupMember>>(
+        stream: _membersStream,
         builder: (context, usersSnapshot) {
-          if (usersSnapshot.connectionState == ConnectionState.waiting) {
+          if (usersSnapshot.connectionState == ConnectionState.waiting &&
+              !usersSnapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(),
             );
@@ -96,16 +110,7 @@ class MealLedgerScreen extends StatelessWidget {
             );
           }
 
-          final members = [...?usersSnapshot.data?.docs];
-
-          members.sort((first, second) {
-            final firstName =
-                first.data()['fullName'] as String? ?? 'Member';
-            final secondName =
-                second.data()['fullName'] as String? ?? 'Member';
-
-            return firstName.compareTo(secondName);
-          });
+          final members = usersSnapshot.data ?? [];
 
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: mealsStream,
@@ -255,7 +260,7 @@ class _DateMealCard extends StatelessWidget {
   final DateTime date;
   final String dateKey;
   final String todayKey;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> members;
+  final List<GroupMember> members;
   final Map<String, Map<String, dynamic>> entryMap;
   final String Function(double) displayQuantity;
 
@@ -308,8 +313,7 @@ class _DateMealCard extends StatelessWidget {
               groupId: groupId,
               isAdmin: isAdmin,
               memberId: member.id,
-              memberName:
-                  member.data()['fullName'] as String? ?? 'Member',
+              memberName: member.name,
               date: date,
               dateKey: dateKey,
               entry: entryMap['$dateKey|${member.id}'],
