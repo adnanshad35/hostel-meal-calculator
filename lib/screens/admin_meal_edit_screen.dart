@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/meal_counter.dart';
+
 class AdminMealEditScreen extends StatefulWidget {
   const AdminMealEditScreen({
     super.key,
@@ -46,18 +48,6 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
     return value % 1 == 0
         ? value.toInt().toString()
         : value.toStringAsFixed(1);
-  }
-
-  void _changeLunch(double amount) {
-    setState(() {
-      _lunch = (_lunch + amount).clamp(0, double.infinity);
-    });
-  }
-
-  void _changeDinner(double amount) {
-    setState(() {
-      _dinner = (_dinner + amount).clamp(0, double.infinity);
-    });
   }
 
   Future<bool> _confirmLargeQuantity() async {
@@ -195,20 +185,38 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            _AdminMealCounter(
-              title: 'Lunch',
-              value: _displayQuantity(_lunch),
-              icon: Icons.lunch_dining_outlined,
-              onDecrease: () => _changeLunch(-0.5),
-              onIncrease: () => _changeLunch(0.5),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    MealCounter(
+                      title: 'Lunch',
+                      icon: Icons.lunch_dining_outlined,
+                      value: _lunch,
+                      enabled: !_isSaving,
+                      onChanged: (value) {
+                        setState(() => _lunch = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    MealCounter(
+                      title: 'Dinner',
+                      icon: Icons.dinner_dining_outlined,
+                      value: _dinner,
+                      enabled: !_isSaving,
+                      onChanged: (value) {
+                        setState(() => _dinner = value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-            _AdminMealCounter(
-              title: 'Dinner',
-              value: _displayQuantity(_dinner),
-              icon: Icons.dinner_dining_outlined,
-              onDecrease: () => _changeDinner(-0.5),
-              onIncrease: () => _changeDinner(0.5),
+            const SizedBox(height: 8),
+            const Text(
+              'Use − and +, or tap a number to type it.',
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -233,67 +241,6 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
             const Text(
               'This administrative change records who edited the entry.',
               textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AdminMealCounter extends StatelessWidget {
-  const _AdminMealCounter({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final String title;
-  final String value;
-  final IconData icon;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: const Color(0xFF2E7D32),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: onDecrease,
-              icon: const Icon(Icons.remove),
-            ),
-            SizedBox(
-              width: 54,
-              child: Text(
-                value,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            IconButton.filled(
-              onPressed: onIncrease,
-              icon: const Icon(Icons.add),
             ),
           ],
         ),

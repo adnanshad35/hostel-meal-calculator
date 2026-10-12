@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
+import '../widgets/meal_counter.dart';
 import 'meal_ledger_screen.dart';
 
 class MealScreen extends StatefulWidget {
@@ -605,28 +606,25 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                 ),
                 const SizedBox(height: 8),
               ],
-              _MealCounter(
+              MealCounter(
                 title: 'Lunch',
-                value: _displayQuantity(_lunch),
                 icon: Icons.lunch_dining_outlined,
-                onDecrease: _isSaving || _lunch <= 0
-                    ? null
-                    : () => setState(() => _lunch -= 0.5),
-                onIncrease: _isSaving
-                    ? null
-                    : () => setState(() => _lunch += 0.5),
+                value: _lunch,
+                enabled: !_isSaving,
+                onChanged: (value) => setState(() => _lunch = value),
               ),
               const SizedBox(height: 8),
-              _MealCounter(
+              MealCounter(
                 title: 'Dinner',
-                value: _displayQuantity(_dinner),
                 icon: Icons.dinner_dining_outlined,
-                onDecrease: _isSaving || _dinner <= 0
-                    ? null
-                    : () => setState(() => _dinner -= 0.5),
-                onIncrease: _isSaving
-                    ? null
-                    : () => setState(() => _dinner += 0.5),
+                value: _dinner,
+                enabled: !_isSaving,
+                onChanged: (value) => setState(() => _dinner = value),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Use − and +, or tap a number to type it.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ],
@@ -984,68 +982,6 @@ class _MyMealEntryTile extends StatelessWidget {
               ),
         ),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Lunch / dinner counter, sized to fit inside the meal dialog
-// ─────────────────────────────────────────────────────────────
-class _MealCounter extends StatelessWidget {
-  const _MealCounter({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final String title;
-  final String value;
-  final IconData icon;
-  final VoidCallback? onDecrease;
-  final VoidCallback? onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 24,
-          color: const Color(0xFF2E7D32),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            title,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-        ),
-        IconButton.filledTonal(
-          visualDensity: VisualDensity.compact,
-          onPressed: onDecrease,
-          icon: const Icon(Icons.remove),
-        ),
-        SizedBox(
-          width: 40,
-          child: Text(
-            value,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-        ),
-        IconButton.filled(
-          visualDensity: VisualDensity.compact,
-          onPressed: onIncrease,
-          icon: const Icon(Icons.add),
-        ),
-      ],
     );
   }
 }
