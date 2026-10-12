@@ -12,6 +12,7 @@ import 'services/super_admin_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/update_prompt.dart';
+import 'widgets/verified_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,13 +51,16 @@ class AuthGate extends StatelessWidget {
         }
 
         if (snapshot.hasData && snapshot.data!.emailVerified) {
-          // The super admin manages the app instead of using a hostel.
-          if (SuperAdminService.isSuperAdmin) {
-            return const UpdatePrompt(child: SuperAdminScreen());
-          }
-
-          return const UpdatePrompt(
-            child: MaintenanceGate(child: HomeScreen()),
+          // Keyed by account, so the token is checked again whenever a
+          // different user signs in.
+          return VerifiedSession(
+            key: ValueKey(snapshot.data!.uid),
+            // The super admin manages the app instead of using a hostel.
+            child: SuperAdminService.isSuperAdmin
+                ? const UpdatePrompt(child: SuperAdminScreen())
+                : const UpdatePrompt(
+                    child: MaintenanceGate(child: HomeScreen()),
+                  ),
           );
         }
 

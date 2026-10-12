@@ -18,14 +18,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     setState(() => _isChecking = true);
 
     try {
+      // Fetch a fresh sign-in token first. Reloading the account is
+      // what moves the app off this screen, and the database must
+      // already see the email as verified by then.
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
       await FirebaseAuth.instance.currentUser?.reload();
       final user = FirebaseAuth.instance.currentUser;
 
       if (!mounted) return;
 
       if (user?.emailVerified == true) {
-        await user?.getIdToken(true);
-        if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Email verified successfully.')),
