@@ -6,8 +6,11 @@ import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/super_admin_screen.dart';
 import 'screens/verify_email_screen.dart';
+import 'services/super_admin_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/maintenance_gate.dart';
 import 'widgets/update_prompt.dart';
 
 Future<void> main() async {
@@ -53,8 +56,17 @@ class AuthGate extends StatelessWidget {
 
         if (snapshot.hasData &&
             snapshot.data!.emailVerified) {
+          // The super admin manages the app instead of using a hostel.
+          if (SuperAdminService.isSuperAdmin) {
+            return const UpdatePrompt(
+              child: SuperAdminScreen(),
+            );
+          }
+
           return const UpdatePrompt(
-            child: HomeScreen(),
+            child: MaintenanceGate(
+              child: HomeScreen(),
+            ),
           );
         }
 

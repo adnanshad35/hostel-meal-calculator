@@ -21,6 +21,39 @@ service cloud.firestore {
             .data.admins;
     }
 
+    // The app-wide administrator: read-only access to every account
+    // and hostel, and the only sender of app notices.
+    function isSuperAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'adnanshad1035@gmail.com';
+    }
+
+    // A hostel can be changed only while its paid or voucher period
+    // is running. Afterwards it is read-only.
+    function isHostelActive(groupId) {
+      let path = /databases/$(database)/documents/subscriptions/$(groupId);
+
+      return exists(path)
+        && request.time < get(path).data.periodStart
+          + duration.value(get(path).data.days, 'd')
+        && get(path).data.get('editingDisabled', false) != true
+        && get(path).data.get('accessDisabled', false) != true;
+    }
+
+    // False while the super admin has suspended the hostel. Its
+    // records then cannot be read by its members either.
+    function isHostelOpen(groupId) {
+      let path = /databases/$(database)/documents/subscriptions/$(groupId);
+
+      return !exists(path)
+        || get(path).data.get('accessDisabled', false) != true;
+    }
+
+    // Members may read a hostel's records unless it is suspended.
+    function canReadHostel(groupId) {
+      return isGroupMember(groupId) && isHostelOpen(groupId);
+    }
+
     // True for anyone in the group's member list, including members
     // who do not use the app.
     function isRegisteredMember(groupId, memberId) {
@@ -109,6 +142,7 @@ service cloud.firestore {
 
       allow read: if isSignedIn() && (
         request.auth.uid == userId
+        || isSuperAdmin()
         ||
         (
           resource.data.groupId != null
@@ -127,8 +161,10 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.admins
         && request.auth.uid in request.resource.data.memberIds;
 
-      allow read: if isSignedIn()
-        && request.auth.uid in resource.data.memberIds;
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.memberIds
+        || isSuperAdmin()
+      );
 
       allow update: if isSignedIn() && (
         (
@@ -175,9 +211,10 @@ service cloud.firestore {
       allow delete: if false;
 
       match /meals/{mealId} {
-        allow read: if isGroupMember(groupId);
+        allow read: if canReadHostel(groupId);
 
         allow create: if isGroupMember(groupId)
+          && isHostelActive(groupId)
           && (
             request.resource.data.userId in
               get(/databases/$(database)/documents/groups/$(groupId))
@@ -196,6 +233,7 @@ service cloud.firestore {
           );
 
         allow update: if isGroupMember(groupId)
+          && isHostelActive(groupId)
           && request.resource.data.userId
             == resource.data.userId
           && (
@@ -203,17 +241,20 @@ service cloud.firestore {
             || isGroupAdmin(groupId)
           );
 
-        allow delete: if isGroupAdmin(groupId)
+        allow delete: if isHostelActive(groupId) && (
+          isGroupAdmin(groupId)
           || (
             isGroupMember(groupId)
             && resource.data.userId == request.auth.uid
-          );
+          )
+        );
       }
 
       match /expenses/{expenseId} {
-        allow read: if isGroupMember(groupId);
+        allow read: if canReadHostel(groupId);
 
         allow create: if isGroupMember(groupId)
+          && isHostelActive(groupId)
           && (
             request.resource.data.paidById in
               get(/databases/$(database)/documents/groups/$(groupId))
@@ -239,6 +280,7 @@ service cloud.firestore {
           && request.resource.data.date is timestamp;
 
         allow update: if isGroupMember(groupId)
+          && isHostelActive(groupId)
           && request.resource.data.paidById
             == resource.data.paidById
           && (
@@ -260,23 +302,23 @@ service cloud.firestore {
               'updatedAt'
             ]);
 
-        allow delete: if isSignedIn()
-  && get(
-    /databases/$(database)/documents/groups/$(groupId)
-  ).data.admins.hasAny([request.auth.uid]);
+        allow delete: if isGroupAdmin(groupId)
+          && isHostelActive(groupId);
       }
 
       match /monthlySettings/{monthKey} {
-  allow read: if isGroupMember(groupId);
+  allow read: if canReadHostel(groupId);
 
   allow create, update: if isGroupAdmin(groupId)
+    && isHostelActive(groupId)
     && request.resource.data.minimumMeals is number
     && request.resource.data.minimumMeals >= 0
     && request.resource.data.shopDue is number
     && request.resource.data.shopDue >= 0
     && request.resource.data.monthKey == monthKey;
 
-  allow delete: if isGroupAdmin(groupId);
+  allow delete: if isGroupAdmin(groupId)
+    && isHostelActive(groupId);
 }
 
       match /members/{memberId} {
@@ -346,12 +388,104 @@ service cloud.firestore {
       }
     }
 
+    // How long each hostel may be used.
+    match /subscriptions/{groupId} {
+      // A hostel admin may activate or extend their hostel with a
+      // voucher that is switched on and that this hostel has not used
+      // before. The period must be exactly what the voucher gives:
+      // added to a running period, or started now.
+      function redeemsVoucher() {
+        let code = request.resource.data.voucherCode;
+        let voucher =
+          get(/databases/$(database)/documents/vouchers/$(code)).data;
+        let redemption =
+          /databases/$(database)/documents/vouchers/$(code)/redemptions/$(groupId);
+        let stillActive = resource != null
+          && request.time < resource.data.periodStart
+            + duration.value(resource.data.days, 'd');
+
+        return isGroupAdmin(groupId)
+          && voucher.active == true
+          && voucher.days > 0
+          && !exists(redemption)
+          && existsAfter(redemption)
+          // Only the super admin can change these switches.
+          && request.resource.data.get('editingDisabled', false)
+            == (resource == null
+              ? false
+              : resource.data.get('editingDisabled', false))
+          && request.resource.data.get('accessDisabled', false)
+            == (resource == null
+              ? false
+              : resource.data.get('accessDisabled', false))
+          && (
+            stillActive
+              ? (
+                request.resource.data.periodStart
+                  == resource.data.periodStart
+                && request.resource.data.days
+                  == resource.data.days + voucher.days
+              )
+              : (
+                request.resource.data.periodStart == request.time
+                && request.resource.data.days == voucher.days
+              )
+          );
+      }
+
+      allow read: if isGroupMember(groupId) || isSuperAdmin();
+      allow create, update: if isSuperAdmin() || redeemsVoucher();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Voucher codes. Anyone who knows a code can look it up, but
+    // codes can never be listed.
+    match /vouchers/{code} {
+      allow get: if isSignedIn();
+      allow list, create, update, delete: if isSuperAdmin();
+
+      // One record per hostel that used the voucher, written together
+      // with the subscription change it belongs to.
+      match /redemptions/{groupId} {
+        allow read: if isSuperAdmin();
+
+        allow create: if isGroupAdmin(groupId)
+          && request.resource.data.redeemedBy == request.auth.uid
+          && getAfter(
+              /databases/$(database)/documents/subscriptions/$(groupId)
+            ).data.voucherCode == code;
+
+        allow update, delete: if isSuperAdmin();
+      }
+    }
+
+    // bKash payments reported by hostel admins. The transaction ID is
+    // the document id, so one payment cannot be reported twice.
+    match /payments/{trxId} {
+      allow read: if isSuperAdmin()
+        || isGroupAdmin(resource.data.groupId);
+
+      allow create: if isGroupAdmin(request.resource.data.groupId)
+        && request.resource.data.trxId == trxId
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // App-wide settings, such as where to send payments.
+    match /config/{documentId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // App notices from the developer to every user.
     match /announcements/{announcementId} {
       allow read: if isSignedIn();
 
-      allow create, update, delete: if isSignedIn()
-        && request.auth.uid == 'zFw7V8Yn52fsvyODMkr6Mj768gx2';
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /invites/{inviteCode} {

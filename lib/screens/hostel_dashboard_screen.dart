@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
+import 'hostel_activation_screen.dart';
 import 'expense_screen.dart';
 import 'hostel_details_screen.dart';
 import 'meal_screen.dart';
@@ -75,7 +77,16 @@ class HostelDashboardScreen
                 _copyInviteCode(context);
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 14),
+            _SubscriptionBanner(
+              groupId: groupId,
+              groupName: groupName,
+              isAdmin: isAdmin,
+              // Hidden while the hostel is suspended.
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+            const SizedBox(height: 22),
             Text(
               'Management',
               style: Theme.of(context)
@@ -172,6 +183,9 @@ class HostelDashboardScreen
                   },
                 ),
               ],
+            ),
+                ],
+              ),
             ),
           ],
         ),
@@ -429,6 +443,90 @@ class _DashboardTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Shows whether the hostel is active, and lets an admin activate or
+/// extend it.
+class _SubscriptionBanner extends StatefulWidget {
+  const _SubscriptionBanner({
+    required this.groupId,
+    required this.groupName,
+    required this.isAdmin,
+    required this.child,
+  });
+
+  final String groupId;
+  final String groupName;
+  final bool isAdmin;
+
+  /// The hostel's content, shown below the status card.
+  final Widget child;
+
+  @override
+  State<_SubscriptionBanner> createState() => _SubscriptionBannerState();
+}
+
+class _SubscriptionBannerState extends State<_SubscriptionBanner> {
+  late final Stream<HostelSubscription> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = SubscriptionService.watch(widget.groupId);
+  }
+
+  void _openActivation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HostelActivationScreen(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<HostelSubscription>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final subscription =
+            snapshot.data ?? const HostelSubscription.none();
+        final isLoading = !snapshot.hasData && !snapshot.hasError;
+        final isActive = subscription.isActive(DateTime.now());
+        final isSuspended = subscription.accessDisabled;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SubscriptionStatusCard(
+              subscription: subscription,
+              isLoading: isLoading,
+              action: widget.isAdmin && !isLoading && !isSuspended
+                  ? FilledButton(
+                      onPressed: _openActivation,
+                      child: Text(isActive ? 'Extend' : 'Activate'),
+                    )
+                  : null,
+            ),
+            if (!isLoading &&
+                !isActive &&
+                !isSuspended &&
+                !widget.isAdmin)
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Ask your hostel admin to activate it.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            if (!isSuspended) widget.child,
+          ],
+        );
+      },
     );
   }
 }

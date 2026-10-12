@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'super_admin_service.dart';
+
 /// Something shown in a notification list: an app-wide notice, an
 /// announcement from a hostel admin, or an event inside a hostel.
 class AppNotification {
@@ -58,10 +60,6 @@ class NotificationService {
   /// Hostel announcements are limited to this many words.
   static const int maxAnnouncementWords = 50;
 
-  /// The only account allowed to send app notices to every user. The
-  /// security rules enforce the same uid.
-  static const String developerUid = 'zFw7V8Yn52fsvyODMkr6Mj768gx2';
-
   static FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   static CollectionReference<Map<String, dynamic>> get _appNotices =>
@@ -76,8 +74,8 @@ class NotificationService {
         .collection('notifications');
   }
 
-  static bool get isDeveloper =>
-      FirebaseAuth.instance.currentUser?.uid == developerUid;
+  /// Only the super admin may send app notices to every user.
+  static bool get isDeveloper => SuperAdminService.isSuperAdmin;
 
   static int wordCount(String text) {
     return text
