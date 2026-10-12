@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/group_member_service.dart';
+import '../widgets/member_name_dialog.dart';
+
 class GroupSettingsScreen extends StatefulWidget {
   const GroupSettingsScreen({
     super.key,
@@ -19,8 +22,8 @@ class GroupSettingsScreen extends StatefulWidget {
 
 class _GroupSettingsScreenState
     extends State<GroupSettingsScreen> {
-  bool _isLeaving = false;
   bool _isResetting = false;
+  bool _isAddingMember = false;
 
   FirebaseFirestore get _firestore =>
       FirebaseFirestore.instance;
@@ -50,23 +53,6 @@ class _GroupSettingsScreenState
     ];
 
     return '${months[date.month - 1]} ${date.year}';
-  }
-
-  String _readMemberName(Map<String, dynamic>? data) {
-    final possibleNames = [
-      data?['name'],
-      data?['displayName'],
-      data?['fullName'],
-      _currentUser.displayName,
-    ];
-
-    for (final value in possibleNames) {
-      if (value is String && value.trim().isNotEmpty) {
-        return value.trim();
-      }
-    }
-
-    return _currentUser.email ?? 'Member';
   }
 
   bool _mealBelongsToMonth(
@@ -253,11 +239,16 @@ class _GroupSettingsScreenState
       }
 
       for (final expense in expenseSnapshot.docs) {
-        if (_expenseBelongsToMonth(
-          expense,
-          firstDay,
-          nextMonth,
-        )) {
+        // Entries without a readable date belong to no month, so no
+        // reset would ever clear them and no calculation counts them.
+        final hasNoDate = expense.data()['date'] is! Timestamp;
+
+        if (hasNoDate ||
+            _expenseBelongsToMonth(
+              expense,
+              firstDay,
+              nextMonth,
+            )) {
           expenseReferences.add(expense.reference);
         }
       }
@@ -315,161 +306,40 @@ class _GroupSettingsScreenState
     }
   }
 
-  Future<void> _leaveGroup({
-    required List<String> admins,
-  }) async {
-    final isAdmin = admins.contains(_currentUser.uid);
-
-    if (isAdmin && admins.length <= 1) {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Cannot Leave Hostel'),
-            content: const Text(
-              'You are the only administrator. Promote another '
-              'member to administrator before leaving.',
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                },
-                child: const Text('Okay'),
-              ),
-            ],
-          );
-        },
-      );
-
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
+  Future<void> _addShadowMember() async {
+    final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Leave Hostel?'),
-          content: Text(
-            'Are you sure you want to leave '
-            '${widget.groupName}?\n\n'
-            'Your previous meals and expenses will remain '
-            'in the hostel records.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('Leave Hostel'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => const MemberNameDialog(title: 'Add Member'),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (name == null || !mounted) return;
 
-    setState(() => _isLeaving = true);
+    setState(() => _isAddingMember = true);
 
     try {
-      final groupReference = _firestore
-          .collection('groups')
-          .doc(widget.groupId);
-
-      final userReference = _firestore
-          .collection('users')
-          .doc(_currentUser.uid);
-
-      await _firestore.runTransaction((transaction) async {
-        final groupSnapshot =
-            await transaction.get(groupReference);
-
-        final userSnapshot =
-            await transaction.get(userReference);
-
-        if (!groupSnapshot.exists) {
-          throw Exception('The hostel could not be found.');
-        }
-
-        final groupData = groupSnapshot.data()!;
-        final userData = userSnapshot.data();
-
-        final memberIds = List<String>.from(
-          groupData['memberIds'] as List? ?? [],
-        );
-
-        final currentAdmins = List<String>.from(
-          groupData['admins'] as List? ?? [],
-        );
-
-        if (!memberIds.contains(_currentUser.uid)) {
-          throw Exception(
-            'You are no longer a member of this hostel.',
-          );
-        }
-
-        final currentlyAdmin =
-            currentAdmins.contains(_currentUser.uid);
-
-        if (currentlyAdmin &&
-            currentAdmins.length <= 1) {
-          throw Exception(
-            'Promote another member before leaving.',
-          );
-        }
-
-        memberIds.remove(_currentUser.uid);
-        currentAdmins.remove(_currentUser.uid);
-
-        final memberName = _readMemberName(userData);
-
-        transaction.update(groupReference, {
-          'memberIds': memberIds,
-          'admins': currentAdmins,
-          'formerMembers.${_currentUser.uid}': {
-            'name': memberName,
-            'email': _currentUser.email ?? '',
-            'leftAt': FieldValue.serverTimestamp(),
-          },
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        transaction.update(userReference, {
-          'groupId': null,
-          'role': 'member',
-          'previousGroupId': widget.groupId,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      });
-
-      if (!mounted) return;
-
-      Navigator.of(context).popUntil(
-        (route) => route.isFirst,
+      await GroupMemberService.addShadowMember(
+        groupId: widget.groupId,
+        name: name,
       );
-    } catch (error) {
+
       if (!mounted) return;
-
-      final message = error
-          .toString()
-          .replaceFirst('Exception: ', '');
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(content: Text('$name was added to the hostel.')),
+      );
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'permission-denied'
+                ? 'Only an administrator can add members.'
+                : error.message ?? 'Unable to add the member.',
+          ),
+        ),
       );
     } finally {
       if (mounted) {
-        setState(() => _isLeaving = false);
+        setState(() => _isAddingMember = false);
       }
     }
   }
@@ -513,9 +383,6 @@ class _GroupSettingsScreenState
           final isAdmin =
               admins.contains(_currentUser.uid);
 
-          final isOnlyAdmin =
-              isAdmin && admins.length <= 1;
-
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -549,6 +416,40 @@ class _GroupSettingsScreenState
                 Card(
                   child: ListTile(
                     leading: const Icon(
+                      Icons.person_add_alt_1_outlined,
+                    ),
+                    title: const Text(
+                      'Add Member Without the App',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Add someone by name so their meals and '
+                      'expenses can be recorded.',
+                    ),
+                    trailing: _isAddingMember
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _isAddingMember ? null : _addShadowMember,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if ((groupData['inviteCode'] as String? ?? '')
+                    .isNotEmpty) ...[
+                  _InviteSwitchCard(
+                    key: ValueKey(groupData['inviteCode']),
+                    inviteCode: groupData['inviteCode'] as String,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
                       Icons.restart_alt,
                       color: Colors.red,
                     ),
@@ -575,64 +476,115 @@ class _GroupSettingsScreenState
                         : const Icon(
                             Icons.chevron_right,
                           ),
-                    onTap: _isResetting || _isLeaving
-                        ? null
-                        : _resetCurrentMonth,
+                    onTap: _isResetting ? null : _resetCurrentMonth,
                   ),
                 ),
               ],
-              const SizedBox(height: 20),
-              Text(
-                'Membership',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.exit_to_app,
-                    color: Colors.red,
-                  ),
-                  title: const Text(
-                    'Leave Hostel',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    isOnlyAdmin
-                        ? 'Promote another administrator first.'
-                        : 'Leave this hostel group.',
-                  ),
-                  trailing: _isLeaving
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.chevron_right,
-                        ),
-                  onTap: _isLeaving || _isResetting
-                      ? null
-                      : () {
-                          _leaveGroup(admins: admins);
-                        },
+              if (!isAdmin) ...[
+                const SizedBox(height: 20),
+                const Text(
+                  'Only administrators can change group settings.',
+                  textAlign: TextAlign.center,
                 ),
-              ),
+              ],
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Lets an admin switch the hostel's invitation code off and on.
+class _InviteSwitchCard extends StatefulWidget {
+  const _InviteSwitchCard({
+    super.key,
+    required this.inviteCode,
+  });
+
+  final String inviteCode;
+
+  @override
+  State<_InviteSwitchCard> createState() => _InviteSwitchCardState();
+}
+
+class _InviteSwitchCardState extends State<_InviteSwitchCard> {
+  late final DocumentReference<Map<String, dynamic>> _invite;
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _stream;
+
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _invite = FirebaseFirestore.instance
+        .collection('invites')
+        .doc(widget.inviteCode);
+    _stream = _invite.snapshots();
+  }
+
+  Future<void> _setActive(bool active) async {
+    setState(() => _isSaving = true);
+
+    try {
+      await _invite.update({
+        'active': active,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            active
+                ? 'New members can join with the invitation code.'
+                : 'Joining is switched off.',
+          ),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message ?? 'Unable to update the invitation.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data();
+        final isActive = data?['active'] == true;
+
+        return Card(
+          child: SwitchListTile(
+            secondary: const Icon(Icons.person_add_alt_1_outlined),
+            title: const Text(
+              'Allow new members to join',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              data == null
+                  ? 'Checking the invitation code…'
+                  : isActive
+                      ? 'Anyone with the invitation code can join.'
+                      : 'The invitation code is switched off.',
+            ),
+            value: isActive,
+            onChanged: data == null || _isSaving ? null : _setActive,
+          ),
+        );
+      },
     );
   }
 }

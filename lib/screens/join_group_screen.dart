@@ -73,6 +73,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           'email': user.email,
           'groupId': groupId,
           'role': 'member',
+          // The security rules compare this with the group's code.
+          'joinCode': code,
           'joinedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
@@ -98,7 +100,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         SnackBar(
           content: Text(
             error.code == 'permission-denied'
-                ? 'You do not have permission to join this group.'
+                ? 'This invitation code is not accepted. Ask your '
+                    'hostel admin whether joining is switched on.'
                 : 'Unable to join the group. Please try again.',
           ),
         ),

@@ -7,22 +7,26 @@ import 'package:flutter/material.dart';
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/member_name_dialog.dart';
+import 'group_settings_screen.dart';
 
-class GroupMembersScreen extends StatefulWidget {
-  const GroupMembersScreen({
+class HostelDetailsScreen extends StatefulWidget {
+  const HostelDetailsScreen({
     super.key,
     required this.groupId,
+    required this.groupName,
     required this.isAdmin,
   });
 
   final String groupId;
+  final String groupName;
   final bool isAdmin;
 
   @override
-  State<GroupMembersScreen> createState() => _GroupMembersScreenState();
+  State<HostelDetailsScreen> createState() => _HostelDetailsScreenState();
 }
 
-class _GroupMembersScreenState extends State<GroupMembersScreen> {
+class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   late final Stream<List<GroupMember>> _membersStream;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _groupSubscription;
@@ -98,27 +102,10 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
     }
   }
 
-  Future<void> _addMember() async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => const _MemberNameDialog(title: 'Add Member'),
-    );
-
-    if (name == null || !mounted) return;
-
-    await _run(
-      () => GroupMemberService.addShadowMember(
-        groupId: widget.groupId,
-        name: name,
-      ),
-      successMessage: '$name was added.',
-    );
-  }
-
   Future<void> _renameMember(GroupMember member) async {
     final name = await showDialog<String>(
       context: context,
-      builder: (_) => _MemberNameDialog(
+      builder: (_) => MemberNameDialog(
         title: 'Edit Name',
         initialName: member.name,
       ),
@@ -462,19 +449,103 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
     }
   }
 
+  void _openGroupSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GroupSettingsScreen(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _leaveHostel() async {
+    final isOnlyAdmin =
+        _admins.contains(_currentUserId) && _admins.length <= 1;
+
+    if (isOnlyAdmin) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Cannot Leave Hostel'),
+            content: const Text(
+              'You are the only administrator. Promote another '
+              'member to administrator before leaving.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Okay'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Leave Hostel?'),
+          content: Text(
+            'Are you sure you want to leave ${widget.groupName}?\n\n'
+            'Your previous meals and expenses will remain in the '
+            'hostel records.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Leave Hostel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+
+    try {
+      await GroupMemberService.leaveGroup(widget.groupId);
+
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _isBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is FirebaseException
+                ? error.message ?? 'Unable to leave the hostel.'
+                : error.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isGroupAdmin = widget.isAdmin || _admins.contains(_currentUserId);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isAdmin ? 'Manage Members' : 'Members'),
+        title: const Text('Hostel Details'),
       ),
-      floatingActionButton: widget.isAdmin
-          ? FloatingActionButton.extended(
-              onPressed: _isBusy ? null : _addMember,
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Add Member'),
-            )
-          : null,
       body: StreamBuilder<List<GroupMember>>(
         stream: _membersStream,
         builder: (context, snapshot) {
@@ -506,12 +577,38 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
               : <GroupMember>[];
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               if (_isBusy) ...[
                 const LinearProgressIndicator(),
                 const SizedBox(height: 12),
               ],
+              _HostelCard(
+                groupName: widget.groupName,
+                isAdmin: isGroupAdmin,
+              ),
+              if (widget.isAdmin) ...[
+                const SizedBox(height: 10),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onTap: _isBusy ? null : _openGroupSettings,
+                    leading: const Icon(
+                      Icons.settings_outlined,
+                      color: AppTheme.primary,
+                    ),
+                    title: const Text(
+                      'Group Settings',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Text(
+                      'Add members, control joining, reset a month',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
               Text(
                 activeMembers.length == 1
                     ? '1 member'
@@ -543,9 +640,8 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
               if (widget.isAdmin) ...[
                 const SizedBox(height: 4),
                 const Text(
-                  'Tap a member to manage them. Use Add Member for '
-                  'people who do not use the app, and long-press them '
-                  'later to link them to their app account.',
+                  'Tap a member to manage them. Long-press a member '
+                  'without the app to link them to their app account.',
                   style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 13,
@@ -580,9 +676,71 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
                   const SizedBox(height: 10),
                 ],
               ],
+              const SizedBox(height: 24),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  onTap: _isBusy ? null : _leaveHostel,
+                  leading: const Icon(
+                    Icons.exit_to_app,
+                    color: AppTheme.danger,
+                  ),
+                  title: const Text(
+                    'Leave Hostel',
+                    style: TextStyle(
+                      color: AppTheme.danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text('Leave this hostel group.'),
+                ),
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// The hostel's name and the signed-in member's position in it.
+class _HostelCard extends StatelessWidget {
+  const _HostelCard({
+    required this.groupName,
+    required this.isAdmin,
+  });
+
+  final String groupName;
+  final bool isAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: AppTheme.surfaceSoft,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        leading: const Icon(
+          Icons.apartment_outlined,
+          color: AppTheme.primary,
+          size: 30,
+        ),
+        title: Text(
+          groupName,
+          style: const TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(
+            isAdmin ? 'You are an administrator' : 'You are a member',
+          ),
+        ),
       ),
     );
   }
@@ -718,81 +876,6 @@ class _AppUserChip extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-    );
-  }
-}
-
-/// Owns its text controller so it is disposed only after the dialog
-/// has fully closed.
-class _MemberNameDialog extends StatefulWidget {
-  const _MemberNameDialog({
-    required this.title,
-    this.initialName = '',
-  });
-
-  final String title;
-  final String initialName;
-
-  @override
-  State<_MemberNameDialog> createState() => _MemberNameDialogState();
-}
-
-class _MemberNameDialogState extends State<_MemberNameDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialName);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.of(context).pop(_controller.text.trim());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: Form(
-        key: _formKey,
-        child: TextFormField(
-          controller: _controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
-            labelText: 'Full name',
-            prefixIcon: Icon(Icons.person_outline),
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Please enter a name.';
-            }
-            return null;
-          },
-          onFieldSubmitted: (_) => _submit(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }

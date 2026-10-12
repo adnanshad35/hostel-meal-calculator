@@ -84,7 +84,7 @@ class ExpenseScreen extends StatelessWidget {
             );
           }
 
-          final expenses = snapshot.data?.docs ?? [];
+          final expenses = _currentMonthExpenses(snapshot.data);
 
           double totalExpense = 0;
           double myExpense = 0;
@@ -111,7 +111,7 @@ class ExpenseScreen extends StatelessWidget {
                       icon: Icons.receipt_long_outlined,
                       title: 'Total Expense',
                       value: '৳${totalExpense.toStringAsFixed(2)}',
-                      subtitle: 'All members',
+                      subtitle: 'This month',
                       color: const Color(0xFF2E7D32),
                       onTap: () => _openTotalExpenses(context),
                     ),
@@ -122,7 +122,7 @@ class ExpenseScreen extends StatelessWidget {
                       icon: Icons.person_outline,
                       title: 'My Expense',
                       value: '৳${myExpense.toStringAsFixed(2)}',
-                      subtitle: 'Paid by me',
+                      subtitle: 'This month',
                       color: const Color(0xFF2E7D32),
                       onTap: () => _openMyExpenses(context),
                     ),
@@ -143,7 +143,7 @@ class ExpenseScreen extends StatelessWidget {
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'No expenses added yet',
+                          'No expenses this month',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -168,7 +168,7 @@ class ExpenseScreen extends StatelessWidget {
                     ),
                     title: Text(
                       '${expenses.length} expense'
-                      '${expenses.length == 1 ? '' : 's'} recorded',
+                      '${expenses.length == 1 ? '' : 's'} this month',
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                       ),
@@ -213,6 +213,59 @@ class TotalExpensesScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _deleteExpense(
+    BuildContext context, {
+    required DocumentSnapshot<Map<String, dynamic>> expense,
+    required String name,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Expense?'),
+          content: Text(
+            'Delete "$name" from the hostel records? '
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await expense.reference.delete();
+      messenger.showSnackBar(
+        SnackBar(content: Text('"$name" was deleted.')),
+      );
+    } on FirebaseException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'permission-denied'
+                ? 'Only an administrator can delete expenses.'
+                : error.message ?? 'Unable to delete the expense.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser!;
@@ -244,14 +297,14 @@ class TotalExpensesScreen extends StatelessWidget {
             );
           }
 
-          final expenses = snapshot.data?.docs ?? [];
+          final expenses = _currentMonthExpenses(snapshot.data);
 
           if (expenses.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'No expenses added yet.',
+                  'No expenses this month.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -276,7 +329,7 @@ class TotalExpensesScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      const Text('Total shared expenses'),
+                      const Text('Shared expenses this month'),
                       const SizedBox(height: 6),
                       Text(
                         '৳${total.toStringAsFixed(2)}',
@@ -332,7 +385,38 @@ class TotalExpensesScreen extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
-                        if (canEdit) ...[
+                        if (isAdmin)
+                          PopupMenuButton<String>(
+                            tooltip: 'Expense options',
+                            onSelected: (action) {
+                              if (action == 'edit') {
+                                _openExpenseForm(
+                                  context,
+                                  expense: expense,
+                                );
+                              } else {
+                                _deleteExpense(
+                                  context,
+                                  expense: expense,
+                                  name: name,
+                                );
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (canEdit) ...[
                           const SizedBox(width: 4),
                           IconButton(
                             tooltip: 'Edit expense',
@@ -419,7 +503,7 @@ class MyExpensesScreen extends StatelessWidget {
             );
           }
 
-          final docs = (snapshot.data?.docs ?? [])
+          final docs = _currentMonthExpenses(snapshot.data)
               .where((d) => d.data()['paidById'] == currentUserId)
               .toList();
 
@@ -628,6 +712,24 @@ class _SummaryTile extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
+/// Expenses dated in the current month, matching what the monthly
+/// calculation counts and what a month reset clears.
+List<QueryDocumentSnapshot<Map<String, dynamic>>> _currentMonthExpenses(
+  QuerySnapshot<Map<String, dynamic>>? snapshot,
+) {
+  final now = DateTime.now();
+  final firstDay = DateTime(now.year, now.month);
+  final nextMonth = DateTime(now.year, now.month + 1);
+
+  return (snapshot?.docs ?? []).where((expense) {
+    final date = expense.data()['date'];
+    if (date is! Timestamp) return false;
+
+    final value = date.toDate();
+    return !value.isBefore(firstDay) && value.isBefore(nextMonth);
+  }).toList();
+}
+
 String _formatDate(DateTime? date) {
   if (date == null) return 'Unknown date';
   final day = date.day.toString().padLeft(2, '0');

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
+import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 
 class MonthlySummaryScreen extends StatefulWidget {
@@ -83,7 +82,7 @@ class _MonthlySummaryScreenState
   static String _bold(String input) => '*$input*';
 
   Future<void> _copySummaryCard({
-    required _CalculationResult result,
+    required MonthlyCalculation result,
   }) async {
     final buffer = StringBuffer();
     buffer.writeln(_bold('HostelMate Monthly Summary'));
@@ -117,7 +116,7 @@ class _MonthlySummaryScreenState
   }
 
   Future<void> _copyOverallCalculation({
-    required _CalculationResult result,
+    required MonthlyCalculation result,
   }) async {
     final buffer = StringBuffer();
     buffer.writeln(_bold('HostelMate – Overall Calculation'));
@@ -151,7 +150,7 @@ class _MonthlySummaryScreenState
 
   /// Copies the full table (all members) to clipboard.
   Future<void> _copyFullTable({
-    required _CalculationResult result,
+    required MonthlyCalculation result,
   }) async {
     final buffer = StringBuffer();
 
@@ -433,7 +432,7 @@ class _MonthlySummaryScreenState
 
                       final members = (userSnapshot.data ?? [])
                           .map(
-                            (member) => _MemberInfo(
+                            (member) => CalcMember(
                               id: member.id,
                               name: member.name,
                             ),
@@ -466,138 +465,26 @@ class _MonthlySummaryScreenState
     );
   }
 
-  _CalculationResult _calculate({
-    required List<_MemberInfo> members,
+  MonthlyCalculation _calculate({
+    required List<CalcMember> members,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> meals,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> expenses,
     required double minimumMeals,
     required double shopDue,
   }) {
-    final memberById = <String, _MemberInfo>{
-      for (final member in members) member.id: member,
-    };
-    final actualMeals = <String, double>{};
-    final memberSpending = <String, double>{};
-
-    for (final member in members) {
-      actualMeals[member.id] = 0;
-      memberSpending[member.id] = 0;
-    }
-
-    final selectedMonthKey = _monthKey(_selectedMonth);
-
-    for (final meal in meals) {
-      final data = meal.data();
-      final userId = data['userId'] as String?;
-      if (userId == null) continue;
-
-      final savedMonthKey = data['monthKey'] as String?;
-      final dateKey = data['dateKey'] as String?;
-
-      final belongsToMonth = savedMonthKey == selectedMonthKey ||
-          dateKey?.startsWith(selectedMonthKey) == true ||
-          meal.id.contains('_$selectedMonthKey-');
-
-      if (!belongsToMonth) continue;
-
-      if (!memberById.containsKey(userId)) {
-        final savedName = data['userName'] as String?;
-        memberById[userId] = _MemberInfo(
-          id: userId,
-          name: savedName?.trim().isNotEmpty == true
-              ? savedName!.trim()
-              : 'Former Member',
-        );
-        actualMeals[userId] = 0;
-        memberSpending[userId] = 0;
-      }
-
-      final lunch = (data['lunch'] as num?)?.toDouble() ?? 0;
-      final dinner = (data['dinner'] as num?)?.toDouble() ?? 0;
-      actualMeals[userId] = actualMeals[userId]! + lunch + dinner;
-    }
-
-    final firstDay = DateTime(_selectedMonth.year, _selectedMonth.month);
-    final nextMonth =
-        DateTime(_selectedMonth.year, _selectedMonth.month + 1);
-
-    for (final expense in expenses) {
-      final data = expense.data();
-      final userId = data['paidById'] as String?;
-      final date = (data['date'] as Timestamp?)?.toDate();
-      if (userId == null || date == null) continue;
-
-      final belongsToMonth =
-          !date.isBefore(firstDay) && date.isBefore(nextMonth);
-      if (!belongsToMonth) continue;
-
-      if (!memberById.containsKey(userId)) {
-        final savedName = data['paidByName'] as String?;
-        memberById[userId] = _MemberInfo(
-          id: userId,
-          name: savedName?.trim().isNotEmpty == true
-              ? savedName!.trim()
-              : 'Former Member',
-        );
-        actualMeals[userId] = 0;
-        memberSpending[userId] = 0;
-      }
-
-      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-      memberSpending[userId] = memberSpending[userId]! + amount;
-    }
-
-    final calculations = <_MemberCalculation>[];
-    double totalMealNumber = 0;
-    double memberPaidExpenses = 0;
-
-    for (final member in memberById.values) {
-      final actual = actualMeals[member.id] ?? 0;
-      final calculatedMealNumber =
-          max(actual, minimumMeals).toDouble();
-      final spending = memberSpending[member.id] ?? 0;
-
-      totalMealNumber += calculatedMealNumber;
-      memberPaidExpenses += spending;
-
-      calculations.add(
-        _MemberCalculation(
-          name: member.name,
-          actualMeals: actual,
-          mealNumber: calculatedMealNumber,
-          spending: spending,
-        ),
-      );
-    }
-
-    final totalExpense = memberPaidExpenses + shopDue;
-    final mealRate =
-        totalMealNumber > 0 ? totalExpense / totalMealNumber : 0.0;
-
-    final completedCalculations = calculations.map((calculation) {
-      final mealExpense = calculation.mealNumber * mealRate;
-      final exactBalance = calculation.spending - mealExpense;
-
-      return calculation.copyWith(
-        mealExpense: mealExpense,
-        exactBalance: exactBalance,
-        finalBalance: exactBalance.round(),
-      );
-    }).toList();
-
-    return _CalculationResult(
-      totalMealNumber: totalMealNumber,
-      memberPaidExpenses: memberPaidExpenses,
+    return MonthlyCalculator.calculate(
+      month: _selectedMonth,
+      members: members,
+      meals: meals.map(_mealRecord),
+      expenses: expenses.map(_expenseRecord),
+      minimumMeals: minimumMeals,
       shopDue: shopDue,
-      totalExpense: totalExpense,
-      mealRate: mealRate,
-      members: completedCalculations,
     );
   }
 
   Widget _buildContent(
     BuildContext context, {
-    required _CalculationResult result,
+    required MonthlyCalculation result,
     required double minimumMeals,
     required double shopDue,
     required bool canGoNext,
@@ -1205,56 +1092,43 @@ Future<double?> _previousMealRate({
   final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
 
   final members = await GroupMemberService.fetchActive(groupId);
-  final memberIds = members.map((member) => member.id).toSet();
 
   final mealsSnapshot = await groupRef.collection('meals').get();
-  final actualMeals = <String, double>{};
-
-  for (final doc in mealsSnapshot.docs) {
-    final data = doc.data();
-    final userId = data['userId'] as String?;
-    if (userId == null) continue;
-
-    final savedMonthKey = data['monthKey'] as String?;
-    final dateKey = data['dateKey'] as String?;
-    final belongsToMonth = savedMonthKey == previousMonthKey ||
-        dateKey?.startsWith(previousMonthKey) == true ||
-        doc.id.contains('_$previousMonthKey-');
-    if (!belongsToMonth) continue;
-
-    final lunch = (data['lunch'] as num?)?.toDouble() ?? 0;
-    final dinner = (data['dinner'] as num?)?.toDouble() ?? 0;
-    actualMeals[userId] = (actualMeals[userId] ?? 0) + lunch + dinner;
-    memberIds.add(userId);
-  }
-
   final expensesSnapshot = await groupRef.collection('expenses').get();
-  double memberPaidExpenses = 0;
 
-  for (final doc in expensesSnapshot.docs) {
-    final data = doc.data();
-    final userId = data['paidById'] as String?;
-    final date = (data['date'] as Timestamp?)?.toDate();
-    if (userId == null || date == null) continue;
+  final result = MonthlyCalculator.calculate(
+    month: previousMonthStart,
+    members: [
+      for (final member in members)
+        CalcMember(id: member.id, name: member.name),
+    ],
+    meals: mealsSnapshot.docs.map(_mealRecord),
+    expenses: expensesSnapshot.docs.map(_expenseRecord),
+    minimumMeals: minimumMeals,
+    shopDue: shopDue,
+  );
 
-    final belongsToMonth = !date.isBefore(previousMonthStart) &&
-        date.isBefore(previousMonthEnd);
-    if (!belongsToMonth) continue;
+  if (result.totalMealNumber <= 0) return null;
+  return result.mealRate;
+}
 
-    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-    memberPaidExpenses += amount;
-    memberIds.add(userId);
-  }
+MealRecord _mealRecord(
+  QueryDocumentSnapshot<Map<String, dynamic>> document,
+) {
+  return MealRecord.fromData(document.id, document.data());
+}
 
-  double totalMealNumber = 0;
-  for (final userId in memberIds) {
-    final actual = actualMeals[userId] ?? 0;
-    totalMealNumber += max(actual, minimumMeals).toDouble();
-  }
+ExpenseRecord _expenseRecord(
+  QueryDocumentSnapshot<Map<String, dynamic>> document,
+) {
+  final data = document.data();
 
-  final totalExpense = memberPaidExpenses + shopDue;
-  if (totalMealNumber <= 0) return null;
-  return totalExpense / totalMealNumber;
+  return ExpenseRecord(
+    paidById: data['paidById'] as String?,
+    paidByName: data['paidByName'] as String?,
+    date: (data['date'] as Timestamp?)?.toDate(),
+    amount: (data['amount'] as num?)?.toDouble() ?? 0,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1266,7 +1140,7 @@ class _OverallCalculationCard extends StatelessWidget {
     required this.onCopy,
   });
 
-  final List<_MemberCalculation> members;
+  final List<MemberCalculation> members;
   final VoidCallback onCopy;
 
   @override
@@ -1377,7 +1251,7 @@ class _MemberCalculationCard extends StatelessWidget {
     required this.onCopy,
   });
 
-  final _MemberCalculation member;
+  final MemberCalculation member;
   final double mealRate;
   final VoidCallback? onCopy;
 
@@ -1501,64 +1375,4 @@ class _CardValueRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MemberInfo {
-  const _MemberInfo({required this.id, required this.name});
-  final String id;
-  final String name;
-}
-
-class _MemberCalculation {
-  const _MemberCalculation({
-    required this.name,
-    required this.actualMeals,
-    required this.mealNumber,
-    required this.spending,
-    this.mealExpense = 0,
-    this.exactBalance = 0,
-    this.finalBalance = 0,
-  });
-
-  final String name;
-  final double actualMeals;
-  final double mealNumber;
-  final double spending;
-  final double mealExpense;
-  final double exactBalance;
-  final int finalBalance;
-
-  _MemberCalculation copyWith({
-    double? mealExpense,
-    double? exactBalance,
-    int? finalBalance,
-  }) {
-    return _MemberCalculation(
-      name: name,
-      actualMeals: actualMeals,
-      mealNumber: mealNumber,
-      spending: spending,
-      mealExpense: mealExpense ?? this.mealExpense,
-      exactBalance: exactBalance ?? this.exactBalance,
-      finalBalance: finalBalance ?? this.finalBalance,
-    );
-  }
-}
-
-class _CalculationResult {
-  const _CalculationResult({
-    required this.totalMealNumber,
-    required this.memberPaidExpenses,
-    required this.shopDue,
-    required this.totalExpense,
-    required this.mealRate,
-    required this.members,
-  });
-
-  final double totalMealNumber;
-  final double memberPaidExpenses;
-  final double shopDue;
-  final double totalExpense;
-  final double mealRate;
-  final List<_MemberCalculation> members;
 }

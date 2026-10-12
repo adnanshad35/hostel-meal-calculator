@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'expense_screen.dart';
-import 'group_members_screen.dart';
-import 'group_settings_screen.dart';
+import 'hostel_details_screen.dart';
 import 'meal_screen.dart';
 import 'monthly_summary_screen.dart';
 
@@ -145,11 +144,8 @@ class HostelDashboardScreen
                   },
                 ),
                 _DashboardTile(
-                  icon: Icons
-                      .manage_accounts_outlined,
-                  title: isAdmin
-                      ? 'Manage\nMembers'
-                      : 'Members',
+                  icon: Icons.info_outline_rounded,
+                  title: 'Hostel\nDetails',
                   color:
                       const Color(0xFF7956A8),
                   backgroundColor:
@@ -158,29 +154,10 @@ class HostelDashboardScreen
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) =>
-                            GroupMembersScreen(
-                          groupId: groupId,
-                          isAdmin: isAdmin,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                _DashboardTile(
-                  icon:
-                      Icons.settings_outlined,
-                  title: 'Hostel\nSettings',
-                  color:
-                      AppTheme.textSecondary,
-                  backgroundColor:
-                      const Color(0xFFEEF1EF),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            GroupSettingsScreen(
+                            HostelDetailsScreen(
                           groupId: groupId,
                           groupName: groupName,
+                          isAdmin: isAdmin,
                         ),
                       ),
                     );

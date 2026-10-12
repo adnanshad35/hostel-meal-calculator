@@ -328,6 +328,68 @@ class GroupMemberService {
     });
   }
 
+  /// Removes the signed-in user from the hostel. Their meals and
+  /// expenses stay in the hostel records.
+  static Future<void> leaveGroup(String groupId) async {
+    final currentUser = FirebaseAuth.instance.currentUser!;
+    final groupReference = _group(groupId);
+    final userReference =
+        _firestore.collection('users').doc(currentUser.uid);
+
+    await _firestore.runTransaction((transaction) async {
+      final groupSnapshot = await transaction.get(groupReference);
+      final userSnapshot = await transaction.get(userReference);
+
+      if (!groupSnapshot.exists) {
+        throw Exception('The hostel could not be found.');
+      }
+
+      final groupData = groupSnapshot.data()!;
+      final memberIds = List<String>.from(
+        groupData['memberIds'] as List? ?? [],
+      );
+      final admins = List<String>.from(
+        groupData['admins'] as List? ?? [],
+      );
+
+      if (!memberIds.contains(currentUser.uid)) {
+        throw Exception('You are no longer a member of this hostel.');
+      }
+
+      if (admins.contains(currentUser.uid) && admins.length <= 1) {
+        throw Exception('Promote another member before leaving.');
+      }
+
+      memberIds.remove(currentUser.uid);
+      admins.remove(currentUser.uid);
+
+      final userData = userSnapshot.data();
+      final savedName = userData == null
+          ? 'Member'
+          : GroupMember.readUserName(userData);
+
+      transaction.update(groupReference, {
+        'memberIds': memberIds,
+        'admins': admins,
+        'formerMembers.${currentUser.uid}': {
+          'name': savedName != 'Member'
+              ? savedName
+              : currentUser.displayName ?? currentUser.email ?? 'Member',
+          'email': currentUser.email ?? '',
+          'leftAt': FieldValue.serverTimestamp(),
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(userReference, {
+        'groupId': null,
+        'role': 'member',
+        'previousGroupId': groupId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Removes an app user from the hostel. Their meals and expenses
   /// stay in the hostel records.
   static Future<void> removeAppUser({

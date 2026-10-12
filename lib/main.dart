@@ -8,6 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/verify_email_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/update_prompt.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +53,9 @@ class AuthGate extends StatelessWidget {
 
         if (snapshot.hasData &&
             snapshot.data!.emailVerified) {
-          return const HomeScreen();
+          return const UpdatePrompt(
+            child: HomeScreen(),
+          );
         }
 
         if (snapshot.hasData) {

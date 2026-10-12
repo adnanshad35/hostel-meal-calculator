@@ -29,12 +29,41 @@ service cloud.firestore {
       );
     }
 
+    // A user's own groupId and role must agree with the group itself,
+    // so nobody can place themselves in a group or make themselves
+    // an admin by editing their profile.
+    function ownGroupFieldsAreValid() {
+      let groupId = request.resource.data.get('groupId', null);
+      let role = request.resource.data.get('role', 'member');
+
+      return (groupId == null && role == 'member')
+        || (
+          groupId is string
+          && request.auth.uid in
+            getAfter(/databases/$(database)/documents/groups/$(groupId))
+              .data.memberIds
+          && (
+            role == 'member'
+            || (
+              role == 'admin'
+              && request.auth.uid in
+                getAfter(/databases/$(database)/documents/groups/$(groupId))
+                  .data.admins
+            )
+          )
+        );
+    }
+
     match /users/{userId} {
       allow create: if isSignedIn()
-        && request.auth.uid == userId;
+        && request.auth.uid == userId
+        && ownGroupFieldsAreValid();
 
       allow update: if isSignedIn() && (
-        request.auth.uid == userId
+        (
+          request.auth.uid == userId
+          && ownGroupFieldsAreValid()
+        )
         ||
         (
           resource.data.groupId != null
@@ -105,6 +134,9 @@ service cloud.firestore {
         )
         ||
         (
+          // Joining: the same batch must save the group's invitation
+          // code on the joining user's profile, which proves they
+          // know it, and the invitation must still be active.
           !(request.auth.uid in resource.data.memberIds)
           && request.auth.uid in request.resource.data.memberIds
           && request.resource.data
@@ -113,6 +145,12 @@ service cloud.firestore {
             .hasOnly(['memberIds'])
           && request.resource.data.memberIds.size()
             == resource.data.memberIds.size() + 1
+          && getAfter(
+              /databases/$(database)/documents/users/$(request.auth.uid)
+            ).data.get('joinCode', null) == resource.data.inviteCode
+          && get(
+              /databases/$(database)/documents/invites/$(resource.data.inviteCode)
+            ).data.active == true
         )
         ||
         (
@@ -284,13 +322,31 @@ service cloud.firestore {
     }
 
     match /invites/{inviteCode} {
-      allow read: if isSignedIn();
+      // An invitation can be looked up by its code but never listed.
+      allow get: if isSignedIn();
+      allow list: if false;
 
+      // Created together with its group, by the group's creator.
       allow create: if isSignedIn()
         && request.resource.data.createdBy
-          == request.auth.uid;
+          == request.auth.uid
+        && request.resource.data.active is bool
+        && getAfter(
+            /databases/$(database)/documents/groups/$(request.resource.data.groupId)
+          ).data.inviteCode == inviteCode
+        && getAfter(
+            /databases/$(database)/documents/groups/$(request.resource.data.groupId)
+          ).data.createdBy == request.auth.uid;
 
-      allow update, delete: if false;
+      // Admins can switch joining off and on again.
+      allow update: if isGroupAdmin(resource.data.groupId)
+        && request.resource.data.active is bool
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['active', 'updatedAt']);
+
+      allow delete: if false;
     }
   }
 }
