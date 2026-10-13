@@ -103,6 +103,23 @@ service cloud.firestore {
         )
         ||
         (
+          // Deleting a hostel: the super admin takes its users out of
+          // it, and can change nothing else on a profile.
+          isSuperAdmin()
+          && request.resource.data.groupId == null
+          && request.resource.data.role == 'member'
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'groupId',
+              'role',
+              'previousGroupId',
+              'updatedAt'
+            ])
+        )
+        ||
+        (
           resource.data.groupId != null
           && isGroupAdmin(resource.data.groupId)
           && (
@@ -210,11 +227,20 @@ service cloud.firestore {
       );
 
       // An admin who is the only app user left may delete the hostel,
-      // so they are never stuck in one they cannot leave.
-      allow delete: if isSignedIn()
+      // so they are never stuck in one they cannot leave. The super
+      // admin may delete any hostel.
+      allow delete: if isSuperAdmin() || (
+        isSignedIn()
         && request.auth.uid in resource.data.admins
         && resource.data.memberIds.size() == 1
-        && request.auth.uid in resource.data.memberIds;
+        && request.auth.uid in resource.data.memberIds
+      );
+
+      // Everything stored inside a hostel, whatever it is: the super
+      // admin may read and delete it, to remove a hostel completely.
+      match /{records=**} {
+        allow read, delete: if isSuperAdmin();
+      }
 
       match /meals/{mealId} {
         allow read: if canReadHostel(groupId);
@@ -537,8 +563,9 @@ service cloud.firestore {
             /databases/$(database)/documents/groups/$(request.resource.data.groupId)
           ).data.createdBy == request.auth.uid;
 
-      // Admins can switch joining off and on again.
-      allow update: if isGroupAdmin(resource.data.groupId)
+      // Admins can switch joining off and on again. The super admin
+      // switches it off when deleting a hostel.
+      allow update: if (isGroupAdmin(resource.data.groupId) || isSuperAdmin())
         && request.resource.data.active is bool
         && request.resource.data
           .diff(resource.data)

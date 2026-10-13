@@ -838,6 +838,25 @@ class _HostelsTabState extends State<_HostelsTab>
     );
   }
 
+  Future<void> _deleteHostel(AdminHostel hostel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteHostelDialog(
+        hostel: hostel,
+        userCount: widget.data.membersOf(hostel).length,
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await runAdminAction(
+      context,
+      action: () => SuperAdminService.deleteHostel(hostel),
+      successMessage: '${hostel.name} was deleted.',
+      onDone: widget.onRefresh,
+    );
+  }
+
   Future<void> _setControl(
     AdminHostel hostel, {
     bool? allowEditing,
@@ -989,6 +1008,19 @@ class _HostelsTabState extends State<_HostelsTab>
                     isAdmin: hostel.adminIds.contains(member.id),
                   ),
                 if (members.isEmpty) const Text('No app users in this hostel.'),
+                const Divider(height: 24),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.danger,
+                    side: const BorderSide(color: AppTheme.danger),
+                  ),
+                  onPressed: () {
+                    close();
+                    _deleteHostel(hostel);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete Hostel'),
+                ),
               ],
             ),
           ),
@@ -1093,6 +1125,89 @@ class _HostelsTabState extends State<_HostelsTab>
           );
         },
       ),
+    );
+  }
+}
+
+/// Confirms deleting a hostel. The hostel's name has to be typed, so
+/// it cannot be deleted by a stray tap.
+class _DeleteHostelDialog extends StatefulWidget {
+  const _DeleteHostelDialog({required this.hostel, required this.userCount});
+
+  final AdminHostel hostel;
+  final int userCount;
+
+  @override
+  State<_DeleteHostelDialog> createState() => _DeleteHostelDialogState();
+}
+
+class _DeleteHostelDialogState extends State<_DeleteHostelDialog> {
+  final _nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  bool get _nameMatches {
+    return _nameController.text.trim().toLowerCase() ==
+        widget.hostel.name.trim().toLowerCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final users = widget.userCount;
+
+    return AlertDialog(
+      title: const Text('Delete Hostel?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This deletes ${widget.hostel.name} and all of its meals, '
+              'expenses, monthly settings and members. It cannot be '
+              'undone.',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              users == 0
+                  ? 'No app users are in this hostel.'
+                  : users == 1
+                  ? 'Its 1 user keeps their account and will no longer '
+                        'be in a hostel.'
+                  : 'Its $users users keep their accounts and will no '
+                        'longer be in a hostel.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Type the hostel name to confirm',
+                hintText: widget.hostel.name,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+          onPressed: _nameMatches
+              ? () => Navigator.of(context).pop(true)
+              : null,
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }
