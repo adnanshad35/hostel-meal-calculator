@@ -55,6 +55,15 @@ service cloud.firestore {
       return isGroupMember(groupId) && isHostelOpen(groupId);
     }
 
+    // A hostel's admins can keep entering meals or expenses to
+    // themselves, in its settings. [what] is 'membersCanAddMeals' or
+    // 'membersCanAddExpenses'; both are allowed unless switched off.
+    function membersMay(groupId, what) {
+      return isGroupAdmin(groupId)
+        || get(/databases/$(database)/documents/groups/$(groupId))
+          .data.get('settings', {}).get(what, true) != false;
+    }
+
     // True for anyone in the group's member list, including members
     // who do not use the app.
     function isRegisteredMember(groupId, memberId) {
@@ -247,6 +256,7 @@ service cloud.firestore {
 
         allow create: if isGroupMember(groupId)
           && isHostelActive(groupId)
+          && membersMay(groupId, 'membersCanAddMeals')
           && (
             request.resource.data.userId in
               get(/databases/$(database)/documents/groups/$(groupId))
@@ -266,6 +276,7 @@ service cloud.firestore {
 
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
+          && membersMay(groupId, 'membersCanAddMeals')
           && request.resource.data.userId
             == resource.data.userId
           && (
@@ -277,6 +288,7 @@ service cloud.firestore {
           isGroupAdmin(groupId)
           || (
             isGroupMember(groupId)
+            && membersMay(groupId, 'membersCanAddMeals')
             && resource.data.userId == request.auth.uid
           )
         );
@@ -289,6 +301,7 @@ service cloud.firestore {
 
         allow create, update: if isGroupMember(groupId)
           && isHostelActive(groupId)
+          && membersMay(groupId, 'membersCanAddMeals')
           && request.resource.data.memberId == memberId
           && request.resource.data.memberName is string
           && request.resource.data.rules is list
@@ -310,6 +323,7 @@ service cloud.firestore {
 
         allow create: if isGroupMember(groupId)
           && isHostelActive(groupId)
+          && membersMay(groupId, 'membersCanAddExpenses')
           && (
             request.resource.data.paidById in
               get(/databases/$(database)/documents/groups/$(groupId))
@@ -336,6 +350,7 @@ service cloud.firestore {
 
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
+          && membersMay(groupId, 'membersCanAddExpenses')
           && request.resource.data.paidById
             == resource.data.paidById
           && (

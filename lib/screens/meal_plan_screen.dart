@@ -69,6 +69,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   Future<void> _save(List<MealPlanRule> rules, String message) async {
     if (!await ensureHostelEditable(context, widget.groupId)) return;
     if (!mounted) return;
+    // A meal plan is a way of entering meals, so the same setting
+    // decides whether a member may change one.
+    if (!await ensureMemberMayAdd(context, widget.groupId, meals: true)) {
+      return;
+    }
+    if (!mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);

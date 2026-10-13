@@ -15,7 +15,7 @@ enum _Section {
   meals('Meals', Icons.restaurant_outlined),
   expenses('Expenses', Icons.receipt_long_outlined),
   calculation('Monthly Calculation', Icons.calculate_outlined),
-  details('Hostel Details', Icons.info_outline_rounded),
+  details('About Hostel', Icons.info_outline_rounded),
   notifications('Notifications', Icons.notifications_outlined),
   profile('Profile', Icons.account_circle_outlined);
 

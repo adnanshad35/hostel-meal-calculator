@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'hostel_settings.dart';
 import 'subscription_service.dart';
 
 /// Shown wherever a hostel that is not active refuses a change.
@@ -43,5 +46,49 @@ Future<bool> ensureHostelEditable(BuildContext context, String groupId) async {
   }
 
   messenger.showSnackBar(const SnackBar(content: Text(readOnlyMessage)));
+  return false;
+}
+
+/// Returns true when the signed-in member may add or change meals
+/// (or expenses, when [meals] is false) in [groupId]. A hostel's
+/// admins can keep that to themselves in Admin Settings; a member is
+/// then told so and false is returned. Admins always may.
+Future<bool> ensureMemberMayAdd(
+  BuildContext context,
+  String groupId, {
+  required bool meals,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  try {
+    final group = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .get()
+        .timeout(const Duration(seconds: 4));
+    final data = group.data();
+
+    final admins = data?['admins'] as List? ?? const [];
+    if (admins.contains(FirebaseAuth.instance.currentUser?.uid)) return true;
+
+    final settings = HostelSettings.fromGroupData(data);
+    if (meals ? settings.membersCanAddMeals : settings.membersCanAddExpenses) {
+      return true;
+    }
+  } catch (_) {
+    // The hostel could not be read. Let the attempt go ahead; the
+    // security rules still have the final say.
+    return true;
+  }
+
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        meals
+            ? 'In this hostel, only an admin enters meals.'
+            : 'In this hostel, only an admin enters expenses.',
+      ),
+    ),
+  );
   return false;
 }

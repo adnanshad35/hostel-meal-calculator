@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/group_member_service.dart';
+import '../services/hostel_settings.dart';
 import '../widgets/member_name_dialog.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class GroupSettingsScreen extends StatefulWidget {
 
 class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   bool _isResetting = false;
+  bool _isSavingSettings = false;
   bool _isAddingMember = false;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -110,22 +112,23 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Reset Current Month?'),
+              title: Text(
+                'Reset $selectedMonthName',
+                style: const TextStyle(color: Colors.red),
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'This will permanently delete all meals, '
-                      'expenses, and the minimum-meal setting for '
-                      '$selectedMonthName.',
+                      'This permanently deletes every meal, expense and '
+                      'the minimum-meal setting of $selectedMonthName. '
+                      'Members and the hostel stay.',
                     ),
-                    const SizedBox(height: 12),
-                    const Text('Members and the hostel will not be deleted.'),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     const Text(
-                      'Type RESET to continue:',
+                      'Type RESET to continue',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
@@ -158,7 +161,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                           Navigator.of(dialogContext).pop(true);
                         }
                       : null,
-                  child: const Text('Reset Month'),
+                  child: const Text('Reset'),
                 ),
               ],
             );
@@ -303,10 +306,33 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     }
   }
 
+  /// Saves one changed switch. The screen shows the new value as soon
+  /// as the hostel's own record reports it.
+  Future<void> _saveSettings(HostelSettings settings) async {
+    setState(() => _isSavingSettings = true);
+
+    try {
+      await HostelSettingsService.save(widget.groupId, settings);
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'permission-denied'
+                ? 'Only an admin can change these settings.'
+                : error.message ?? 'Unable to save the settings.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingSettings = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Group Settings')),
+      appBar: AppBar(title: const Text('Settings')),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
         builder: (context, snapshot) {
@@ -317,7 +343,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           if (snapshot.hasError ||
               !snapshot.hasData ||
               !snapshot.data!.exists) {
-            return const Center(child: Text('Unable to load group settings.'));
+            return const Center(child: Text('Unable to load the settings.'));
           }
 
           final groupData = snapshot.data!.data()!;
@@ -325,51 +351,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           final admins = List<String>.from(groupData['admins'] as List? ?? []);
 
           final isAdmin = admins.contains(_currentUser.uid);
+          final settings = HostelSettings.fromGroupData(groupData);
 
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Card(
-                color: const Color(0xFFE8F5E9),
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.apartment_outlined,
-                    color: Color(0xFF2E7D32),
-                  ),
-                  title: Text(widget.groupName),
-                  subtitle: Text(isAdmin ? 'Administrator' : 'Member'),
-                ),
-              ),
               if (isAdmin) ...[
-                const SizedBox(height: 20),
-                Text(
-                  'Administrator Settings',
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.person_add_alt_1_outlined),
-                    title: const Text(
-                      'Add Member Without the App',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text(
-                      'Add someone by name so their meals and '
-                      'expenses can be recorded.',
-                    ),
-                    trailing: _isAddingMember
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: _isAddingMember ? null : _addShadowMember,
-                  ),
-                ),
-                const SizedBox(height: 8),
                 if ((groupData['inviteCode'] as String? ?? '').isNotEmpty) ...[
                   _InviteSwitchCard(
                     key: ValueKey(groupData['inviteCode']),
@@ -377,19 +364,65 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                 ],
+                _SettingSwitch(
+                  icon: Icons.restaurant_outlined,
+                  title: 'Member can add meals',
+                  value: settings.membersCanAddMeals,
+                  onChanged: _isSavingSettings
+                      ? null
+                      : (isOn) => _saveSettings(
+                          settings.copyWith(membersCanAddMeals: isOn),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                _SettingSwitch(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Member can add expenses',
+                  value: settings.membersCanAddExpenses,
+                  onChanged: _isSavingSettings
+                      ? null
+                      : (isOn) => _saveSettings(
+                          settings.copyWith(membersCanAddExpenses: isOn),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                _SettingSwitch(
+                  icon: Icons.home_work_outlined,
+                  title: 'Calculate other costs',
+                  value: settings.fixedCostsEnabled,
+                  onChanged: _isSavingSettings
+                      ? null
+                      : (isOn) => _saveSettings(
+                          settings.copyWith(fixedCostsEnabled: isOn),
+                        ),
+                ),
+                const SizedBox(height: 8),
                 Card(
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
-                    leading: const Icon(Icons.restart_alt, color: Colors.red),
+                    leading: const Icon(Icons.person_outline),
                     title: const Text(
-                      'Reset Current Month',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      'Member without app',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
-                      'Delete this month’s meals, expenses, '
-                      'and minimum-meal setting.',
+                    trailing: _isAddingMember
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    onTap: _isAddingMember ? null : _addShadowMember,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.restart_alt),
+                    title: const Text(
+                      'Reset',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     trailing: _isResetting
                         ? const SizedBox(
@@ -405,13 +438,42 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
               if (!isAdmin) ...[
                 const SizedBox(height: 20),
                 const Text(
-                  'Only administrators can change group settings.',
+                  'Only administrators can change the settings.',
                   textAlign: TextAlign.center,
                 ),
               ],
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// One on/off setting, in the same card as the other settings.
+class _SettingSwitch extends StatelessWidget {
+  const _SettingSwitch({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool value;
+
+  /// Null while a change is being saved.
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: SwitchListTile(
+        secondary: Icon(icon),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        value: value,
+        onChanged: onChanged,
       ),
     );
   }
@@ -485,17 +547,10 @@ class _InviteSwitchCardState extends State<_InviteSwitchCard> {
 
         return Card(
           child: SwitchListTile(
-            secondary: const Icon(Icons.person_add_alt_1_outlined),
+            secondary: const Icon(Icons.group_add_outlined),
             title: const Text(
-              'Allow new members to join',
+              'Allow new member',
               style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              data == null
-                  ? 'Checking the invitation code…'
-                  : isActive
-                  ? 'Anyone with the invitation code can join.'
-                  : 'The invitation code is switched off.',
             ),
             value: isActive,
             onChanged: data == null || _isSaving ? null : _setActive,

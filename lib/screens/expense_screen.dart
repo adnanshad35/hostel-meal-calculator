@@ -17,6 +17,8 @@ Future<void> showExpenseForm(
 }) async {
   if (!await ensureHostelEditable(context, groupId)) return;
   if (!context.mounted) return;
+  if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
+  if (!context.mounted) return;
 
   await showDialog<void>(
     context: context,
@@ -39,6 +41,8 @@ class ExpenseScreen extends StatelessWidget {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
     if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
     if (!context.mounted) return;
 
     await showDialog<void>(
@@ -212,6 +216,8 @@ class TotalExpensesScreen extends StatelessWidget {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
     if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
     if (!context.mounted) return;
 
     await showDialog<void>(
@@ -437,6 +443,8 @@ class MyExpensesScreen extends StatelessWidget {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
     if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
     if (!context.mounted) return;
 
     await showDialog<void>(

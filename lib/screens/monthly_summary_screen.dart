@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
+import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
@@ -34,6 +37,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late final Stream<List<MemberMealPlan>> _plansStream;
 
   _CalcTab _tab = _CalcTab.meals;
+
+  /// False for a hostel that settles meals only. The Fixed and Overall
+  /// tabs are then not offered.
+  bool _fixedCostsEnabled = true;
+  StreamSubscription<HostelSettings>? _settingsSubscription;
   bool _showMemberCards = true;
   bool _showMemberDetails = false;
   bool _showFixedDetails = false;
@@ -47,6 +55,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
     _membersStream = GroupMemberService.watch(widget.groupId);
+    _settingsSubscription = HostelSettingsService.watch(widget.groupId)
+        .listen((settings) {
+          if (!mounted) return;
+          setState(() => _fixedCostsEnabled = settings.fixedCostsEnabled);
+        }, onError: (_) {});
     _plansStream = MealPlanService.watchAll(widget.groupId);
     // Every month's settings, because fixed costs carry forward from
     // the last month they were saved in.
@@ -55,6 +68,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         .doc(widget.groupId)
         .collection('monthlySettings')
         .snapshots();
+  }
+
+  @override
+  void dispose() {
+    _settingsSubscription?.cancel();
+    super.dispose();
   }
 
   String _monthKey(DateTime date) {
@@ -698,6 +717,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       bills: sharedBills,
     );
 
+    // A hostel that does not use fixed costs sees the meals only.
+    final tab = _fixedCostsEnabled ? _tab : _CalcTab.meals;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
@@ -729,37 +751,38 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         const SizedBox(height: 12),
 
         // ─── Meals / Fixed / Overall ───
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<_CalcTab>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.meals,
-                icon: Icon(Icons.restaurant_outlined, size: 18),
-                label: Text('Meals'),
-              ),
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.fixed,
-                icon: Icon(Icons.home_work_outlined, size: 18),
-                label: Text('Fixed'),
-              ),
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.overall,
-                icon: Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text('Overall'),
-              ),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (selection) {
-              setState(() => _tab = selection.first);
-            },
+        if (_fixedCostsEnabled)
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<_CalcTab>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.meals,
+                  icon: Icon(Icons.restaurant_outlined, size: 18),
+                  label: Text('Meals'),
+                ),
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.fixed,
+                  icon: Icon(Icons.home_work_outlined, size: 18),
+                  label: Text('Fixed'),
+                ),
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.overall,
+                  icon: Icon(Icons.receipt_long_outlined, size: 18),
+                  label: Text('Overall'),
+                ),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (selection) {
+                setState(() => _tab = selection.first);
+              },
+            ),
           ),
-        ),
         const SizedBox(height: 16),
 
         // ═══ Meals ═══
-        if (_tab == _CalcTab.meals) ...[
+        if (tab == _CalcTab.meals) ...[
           // ─── Admin: Min Meals + Shop Due side by side ───
           if (widget.isAdmin)
             Row(
@@ -1001,7 +1024,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         ],
 
         // ═══ Fixed ═══
-        if (_tab == _CalcTab.fixed) ...[
+        if (tab == _CalcTab.fixed) ...[
           if (!hasFixedCosts)
             Card(
               child: Padding(
@@ -1137,7 +1160,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         ],
 
         // ═══ Overall: meals + fixed costs, final amounts only ═══
-        if (_tab == _CalcTab.overall) ...[
+        if (tab == _CalcTab.overall) ...[
           if (settlements.isEmpty)
             const Card(
               child: Padding(

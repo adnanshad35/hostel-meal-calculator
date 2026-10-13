@@ -22,6 +22,8 @@ Future<void> showMealForm(
 }) async {
   if (!await ensureHostelEditable(context, groupId)) return;
   if (!context.mounted) return;
+  if (!await ensureMemberMayAdd(context, groupId, meals: true)) return;
+  if (!context.mounted) return;
 
   await showDialog<void>(
     context: context,
@@ -240,14 +242,14 @@ class _MealScreenState extends State<MealScreen> {
                   'Meal Plan',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
-                subtitle: Text(
-                  standing == null
-                      ? 'Count your usual meals automatically, or '
-                            'mark days you are away.'
-                      : 'Every day: '
-                            '${_displayQuantity(standing.lunch)} lunch, '
-                            '${_displayQuantity(standing.dinner)} dinner',
-                ),
+                // Shown once a plan is set; an empty one needs no line.
+                subtitle: standing == null
+                    ? null
+                    : Text(
+                        'Every day: '
+                        '${_displayQuantity(standing.lunch)} lunch, '
+                        '${_displayQuantity(standing.dinner)} dinner',
+                      ),
                 trailing: const Icon(Icons.chevron_right),
               ),
             ),

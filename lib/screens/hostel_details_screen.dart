@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
 import '../services/group_member_service.dart';
@@ -18,11 +19,16 @@ class HostelDetailsScreen extends StatefulWidget {
     required this.groupId,
     required this.groupName,
     required this.isAdmin,
+    this.membersOnly = false,
   });
 
   final String groupId;
   final String groupName;
   final bool isAdmin;
+
+  /// True for the list of members that the About screen opens. The
+  /// same screen is used, so managing members works the same in both.
+  final bool membersOnly;
 
   @override
   State<HostelDetailsScreen> createState() => _HostelDetailsScreenState();
@@ -36,6 +42,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   late final Stream<HostelSubscription> _subscriptionStream;
 
   Set<String> _admins = {};
+  String _inviteCode = '';
 
   /// App users in the hostel. Members without the app are not counted.
   Set<String> _appUserIds = {};
@@ -61,6 +68,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           setState(() {
             _admins = Set<String>.from(admins);
             _appUserIds = Set<String>.from(memberIds);
+            _inviteCode = snapshot.data()?['inviteCode'] as String? ?? '';
           });
         }, onError: (_) {});
   }
@@ -452,6 +460,27 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
+  Future<void> _copyInviteCode() async {
+    await Clipboard.setData(ClipboardData(text: _inviteCode));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Invitation code copied.')));
+  }
+
+  void _openMembers() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HostelDetailsScreen(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
+          isAdmin: widget.isAdmin,
+          membersOnly: true,
+        ),
+      ),
+    );
+  }
+
   void _openGroupSettings() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -606,7 +635,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     final isGroupAdmin = widget.isAdmin || _admins.contains(_currentUserId);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Hostel Details')),
+      appBar: AppBar(
+        title: Text(widget.membersOnly ? 'Members' : 'About Hostel'),
+      ),
       body: StreamBuilder<List<GroupMember>>(
         stream: _membersStream,
         builder: (context, snapshot) {
@@ -644,142 +675,178 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 const LinearProgressIndicator(),
                 const SizedBox(height: 12),
               ],
-              _HostelCard(groupName: widget.groupName, isAdmin: isGroupAdmin),
-              const SizedBox(height: 10),
-              // How long the hostel is active for.
-              StreamBuilder<HostelSubscription>(
-                stream: _subscriptionStream,
-                builder: (context, snapshot) {
-                  final subscription =
-                      snapshot.data ?? const HostelSubscription.none();
-                  final isLoading = !snapshot.hasData && !snapshot.hasError;
+              if (!widget.membersOnly) ...[
+                _HostelCard(
+                  groupName: widget.groupName,
+                  isAdmin: isGroupAdmin,
+                  inviteCode: _inviteCode,
+                  onCopyCode: _copyInviteCode,
+                ),
+                const SizedBox(height: 10),
+                // How long the hostel is active for.
+                StreamBuilder<HostelSubscription>(
+                  stream: _subscriptionStream,
+                  builder: (context, snapshot) {
+                    final subscription =
+                        snapshot.data ?? const HostelSubscription.none();
+                    final isLoading = !snapshot.hasData && !snapshot.hasError;
 
-                  return SubscriptionStatusCard(
-                    subscription: subscription,
-                    isLoading: isLoading,
-                    action:
-                        isGroupAdmin &&
-                            !isLoading &&
-                            !subscription.accessDisabled
-                        ? FilledButton(
-                            onPressed: _isBusy ? null : _openActivation,
-                            child: Text(
-                              subscription.isActive(DateTime.now())
-                                  ? 'Extend'
-                                  : 'Activate',
-                            ),
-                          )
-                        : null,
-                  );
-                },
-              ),
-              if (widget.isAdmin) ...[
+                    return SubscriptionStatusCard(
+                      subscription: subscription,
+                      isLoading: isLoading,
+                      action:
+                          isGroupAdmin &&
+                              !isLoading &&
+                              !subscription.accessDisabled
+                          ? FilledButton(
+                              onPressed: _isBusy ? null : _openActivation,
+                              child: Text(
+                                subscription.isActive(DateTime.now())
+                                    ? 'Extend'
+                                    : 'Activate',
+                              ),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+                // Only admins see the settings at all.
+                if (widget.isAdmin) ...[
+                  const SizedBox(height: 10),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      onTap: _isBusy ? null : _openGroupSettings,
+                      leading: const Icon(
+                        Icons.settings_outlined,
+                        color: AppTheme.primary,
+                      ),
+                      title: const Text(
+                        'Settings',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Card(
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
-                    onTap: _isBusy ? null : _openGroupSettings,
+                    onTap: _openMembers,
                     leading: const Icon(
-                      Icons.settings_outlined,
+                      Icons.groups_outlined,
                       color: AppTheme.primary,
                     ),
                     title: const Text(
-                      'Group Settings',
+                      'Members',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    subtitle: const Text('Members, joining, month reset'),
+                    subtitle: Text(
+                      activeMembers.length == 1
+                          ? '1 member'
+                          : '${activeMembers.length} members',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
               ],
-              const SizedBox(height: 24),
-              Text(
-                activeMembers.length == 1
-                    ? '1 member'
-                    : '${activeMembers.length} members',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 10),
-              for (final member in activeMembers) ...[
-                _MemberCard(
-                  key: ValueKey(member.id),
-                  member: member,
-                  isGroupAdmin: _admins.contains(member.id),
-                  isCurrentUser: member.id == _currentUserId,
-                  canEdit: widget.isAdmin && !_isBusy,
-                  onTap: !widget.isAdmin || _isBusy
-                      ? null
-                      : member.isAppUser
-                      ? () => _showAppUserOptions(member)
-                      : () => _showOptions(member, appUsers),
-                  onLongPress: widget.isAdmin && !member.isAppUser && !_isBusy
-                      ? () => _linkMember(member, appUsers)
-                      : null,
-                ),
-                const SizedBox(height: 10),
-              ],
-              if (widget.isAdmin) ...[
-                const SizedBox(height: 4),
-                const Text(
-                  'Tap a member to manage them. Long-press a member '
-                  'without the app to link them to their app account.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                ),
-              ],
-              if (deactivatedMembers.isNotEmpty) ...[
-                const SizedBox(height: 24),
+              if (widget.membersOnly) ...[
                 Text(
-                  'Deactivated',
+                  activeMembers.length == 1
+                      ? '1 member'
+                      : '${activeMembers.length} members',
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(color: AppTheme.textSecondary),
                 ),
-                const SizedBox(height: 10),
-                for (final member in deactivatedMembers) ...[
-                  Card(
+                const SizedBox(height: 8),
+                for (final member in activeMembers) ...[
+                  _MemberCard(
                     key: ValueKey(member.id),
-                    child: ListTile(
-                      leading: _MemberAvatar(member: member),
-                      title: Text(member.name),
-                      subtitle: const Text('Deactivated'),
-                      trailing: TextButton(
-                        onPressed: _isBusy
-                            ? null
-                            : () => _reactivateMember(member),
-                        child: const Text('Reactivate'),
-                      ),
+                    member: member,
+                    isGroupAdmin: _admins.contains(member.id),
+                    isCurrentUser: member.id == _currentUserId,
+                    canEdit: widget.isAdmin && !_isBusy,
+                    onTap: !widget.isAdmin || _isBusy
+                        ? null
+                        : member.isAppUser
+                        ? () => _showAppUserOptions(member)
+                        : () => _showOptions(member, appUsers),
+                    onLongPress: widget.isAdmin && !member.isAppUser && !_isBusy
+                        ? () => _linkMember(member, appUsers)
+                        : null,
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (widget.isAdmin) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Tap a member to manage them. Long-press a member '
+                    'without the app to link them to their app account.',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
                     ),
+                  ),
+                ],
+                if (deactivatedMembers.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Deactivated',
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 10),
+                  for (final member in deactivatedMembers) ...[
+                    Card(
+                      key: ValueKey(member.id),
+                      child: ListTile(
+                        leading: _MemberAvatar(member: member),
+                        title: Text(member.name),
+                        subtitle: const Text('Deactivated'),
+                        trailing: TextButton(
+                          onPressed: _isBusy
+                              ? null
+                              : () => _reactivateMember(member),
+                          child: const Text('Reactivate'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                 ],
               ],
-              const SizedBox(height: 24),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  onTap: _isBusy
-                      ? null
-                      : _isAloneAsAdmin
-                      ? _deleteHostel
-                      : _leaveHostel,
-                  leading: Icon(
-                    _isAloneAsAdmin ? Icons.delete_outline : Icons.exit_to_app,
-                    color: AppTheme.danger,
-                  ),
-                  title: Text(
-                    _isAloneAsAdmin ? 'Delete Hostel' : 'Leave Hostel',
-                    style: const TextStyle(
+              if (!widget.membersOnly) ...[
+                const SizedBox(height: 24),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onTap: _isBusy
+                        ? null
+                        : _isAloneAsAdmin
+                        ? _deleteHostel
+                        : _leaveHostel,
+                    leading: Icon(
+                      _isAloneAsAdmin
+                          ? Icons.delete_outline
+                          : Icons.exit_to_app,
                       color: AppTheme.danger,
-                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  subtitle: Text(
-                    _isAloneAsAdmin
-                        ? 'You are the only member with an account.'
-                        : 'Leave this hostel group.',
+                    title: Text(
+                      _isAloneAsAdmin ? 'Delete Hostel' : 'Leave Hostel',
+                      style: const TextStyle(
+                        color: AppTheme.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    // Said only when it explains why leaving became
+                    // deleting.
+                    subtitle: _isAloneAsAdmin
+                        ? const Text('You are the only member with an account.')
+                        : null,
                   ),
                 ),
-              ),
+              ],
             ],
           );
         },
@@ -788,38 +855,89 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   }
 }
 
-/// The hostel's name and the signed-in member's position in it.
+/// The hostel's name, the signed-in member's position in it, and the
+/// invitation code new members join with.
 class _HostelCard extends StatelessWidget {
-  const _HostelCard({required this.groupName, required this.isAdmin});
+  const _HostelCard({
+    required this.groupName,
+    required this.isAdmin,
+    required this.inviteCode,
+    required this.onCopyCode,
+  });
 
   final String groupName;
   final bool isAdmin;
+  final String inviteCode;
+  final VoidCallback onCopyCode;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       color: AppTheme.surfaceSoft,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: const Icon(
-          Icons.apartment_outlined,
-          color: AppTheme.primary,
-          size: 30,
-        ),
-        title: Text(
-          groupName,
-          style: const TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: const Icon(
+              Icons.apartment_outlined,
+              color: AppTheme.primary,
+              size: 30,
+            ),
+            title: Text(
+              groupName,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                isAdmin ? 'You are an administrator' : 'You are a member',
+              ),
+            ),
           ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 3),
-          child: Text(
-            isAdmin ? 'You are an administrator' : 'You are a member',
-          ),
-        ),
+          if (inviteCode.isNotEmpty) ...[
+            const Divider(height: 1),
+            InkWell(
+              onTap: onCopyCode,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.key_outlined,
+                      size: 20,
+                      color: AppTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Text('Invitation code')),
+                    Text(
+                      inviteCode,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.copy_rounded,
+                      size: 18,
+                      color: AppTheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -843,71 +961,75 @@ class _MemberCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  String get _subtitle {
-    final type = !member.isAppUser
-        ? 'Shadow Member'
-        : isGroupAdmin
-        ? 'Administrator'
-        : 'App User';
-    final date = member.addedAt;
-    if (date == null) return type;
-
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '$type • ${date.day} ${months[date.month - 1]} ${date.year}';
+  String get _role {
+    if (!member.isAppUser) return 'No app';
+    return isGroupAdmin ? 'Admin' : 'Member';
   }
 
   @override
   Widget build(BuildContext context) {
+    // One slim line per member: who they are, then what they are.
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: ListTile(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE3E9E5)),
+      ),
+      child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: _MemberAvatar(member: member),
-        title: Row(
-          children: [
-            Flexible(
-              child: Text(
-                isCurrentUser ? '${member.name} (You)' : member.name,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+          child: Row(
+            children: [
+              _MemberAvatar(member: member),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        isCurrentUser ? '${member.name} (You)' : member.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (member.isAppUser) ...[
+                      const SizedBox(width: 6),
+                      const _AppUserChip(),
+                    ],
+                  ],
                 ),
               ),
-            ),
-            if (member.isAppUser) ...[
               const SizedBox(width: 8),
-              const _AppUserChip(),
+              Text(
+                _role,
+                style: TextStyle(
+                  color: isGroupAdmin
+                      ? AppTheme.primary
+                      : AppTheme.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (canEdit) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  member.isAppUser
+                      ? Icons.more_vert_rounded
+                      : Icons.edit_outlined,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 3),
-          child: Text(_subtitle),
-        ),
-        trailing: canEdit
-            ? Icon(
-                member.isAppUser
-                    ? Icons.more_vert_rounded
-                    : Icons.edit_outlined,
-                color: AppTheme.textSecondary,
-              )
-            : null,
       ),
     );
   }
@@ -921,18 +1043,18 @@ class _MemberAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 42,
-      height: 42,
+      width: 32,
+      height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppTheme.surfaceSoft,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         member.initials,
         style: const TextStyle(
           color: AppTheme.primary,
-          fontSize: 15,
+          fontSize: 12.5,
           fontWeight: FontWeight.w800,
         ),
       ),
