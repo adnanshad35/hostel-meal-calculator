@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
@@ -14,6 +13,7 @@ import 'theme/app_theme.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/update_prompt.dart';
 import 'widgets/verified_session.dart';
+import 'widgets/web_layout.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,52 +32,8 @@ class HostelMealApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'HostelMate',
       theme: AppTheme.light,
-      builder: (context, child) => _WebFrame(child: child!),
+      builder: (context, child) => WebFrame(child: child!),
       home: const AuthGate(),
-    );
-  }
-}
-
-/// In a browser on a wide screen, shows the app as a phone-width
-/// column in the centre of the page. The screens were designed for
-/// phones and would otherwise stretch edge to edge.
-class _WebFrame extends StatelessWidget {
-  const _WebFrame({required this.child});
-
-  static const double _maxWidth = 520;
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-
-    if (!kIsWeb || media.size.width <= _maxWidth) return child;
-
-    return ColoredBox(
-      color: const Color(0xFFE3EBE6),
-      child: Center(
-        child: Container(
-          width: _maxWidth,
-          decoration: const BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 40,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRect(
-            // Screens measure themselves against this width, not the
-            // browser window's.
-            child: MediaQuery(
-              data: media.copyWith(size: Size(_maxWidth, media.size.height)),
-              child: child,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

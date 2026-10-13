@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/web_layout.dart';
 import 'create_group_screen.dart';
+import 'desktop_shell.dart';
 import 'hostel_dashboard_screen.dart';
 import 'join_group_screen.dart';
 import 'profile_screen.dart';
@@ -125,13 +127,28 @@ class HomeScreen extends StatelessWidget {
 
             final group = groupSnapshot.data!.data()!;
 
+            final groupName = group['name'] as String? ?? 'Hostel Group';
+            final inviteCode = group['inviteCode'] as String? ?? '';
+
+            // On a wide browser window, the hostel gets a sidebar.
+            if (WebLayout.isDesktopOf(context)) {
+              return DesktopShell(
+                key: ValueKey('desktop-$groupId'),
+                groupId: groupId,
+                groupName: groupName,
+                inviteCode: inviteCode,
+                memberName: name,
+                role: role,
+              );
+            }
+
             // A member belongs to one hostel, so the app opens straight
             // into it.
             return HostelDashboardScreen(
               key: ValueKey(groupId),
               groupId: groupId,
-              groupName: group['name'] as String? ?? 'Hostel Group',
-              inviteCode: group['inviteCode'] as String? ?? '',
+              groupName: groupName,
+              inviteCode: inviteCode,
               memberName: name,
               role: role,
               isHome: true,
