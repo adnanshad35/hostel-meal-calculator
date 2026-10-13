@@ -760,47 +760,39 @@ String _expenseDetails(Map<String, dynamic> data) {
   return details.isEmpty ? '' : '\n${details.join('\n')}';
 }
 
-/// Where the money for an expense came from, and what it was for.
-/// One expense can use more than one.
-enum _Source {
-  fund(
-    'Meal fund',
-    'Money from the hostel fund, spent on meals',
-    Icons.savings_outlined,
-  ),
-  pocket(
-    'My pocket',
-    'The member\'s own money, spent on meals',
-    Icons.account_balance_wallet_outlined,
-  ),
-  share(
-    'Share cost',
-    'A shared bill such as water, paid with own money',
-    Icons.receipt_long_outlined,
-  );
+/// The parts of the expense form a member can hide when their hostel
+/// does not use them. The choice is saved on their own profile, so it
+/// follows them to every device.
+enum _FormField {
+  shareCost('Share cost', 'Shared bills such as water'),
+  pocket('My pocket', 'How much was your own money'),
+  fund('From meal fund', 'How much came from the hostel fund'),
+  total('Total', 'The sum of everything entered'),
+  date('Date', 'Hidden, an expense is saved for today');
 
-  const _Source(this.label, this.hint, this.icon);
+  const _FormField(this.label, this.hint);
 
   final String label;
   final String hint;
-  final IconData icon;
 }
-
-/// The usual things a hostel spends on. "Other" lets the member type
-/// a name instead.
-const _sectors = [
-  'Bazar',
-  'Rice',
-  'Fish & Meat',
-  'Vegetables',
-  'Grocery',
-  'Gas',
-];
-
-const _otherSector = 'Other';
 
 String _plainNumber(double value) {
   return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
+}
+
+/// One shared bill being typed into the expense form.
+class _ShareCostRow {
+  _ShareCostRow({String description = '', String cost = ''})
+    : description = TextEditingController(text: description),
+      cost = TextEditingController(text: cost);
+
+  final TextEditingController description;
+  final TextEditingController cost;
+
+  void dispose() {
+    description.dispose();
+    cost.dispose();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -822,25 +814,22 @@ class _ExpenseFormDialog extends StatefulWidget {
 }
 
 class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
-  final _otherNameController = TextEditingController();
-  final _amountControllers = {
-    for (final source in _Source.values) source: TextEditingController(),
-  };
-  final _noteControllers = {
-    for (final source in _Source.values) source: TextEditingController(),
-  };
+  // What was bought.
+  final _descriptionController = TextEditingController();
+  final _amountController = TextEditingController();
 
-  /// The sources that can be chosen. A saved expense keeps its kind:
-  /// a meal expense cannot be turned into a shared bill, or back.
-  late final List<_Source> _available;
+  /// Shared bills, such as water. Each is saved as its own record.
+  final _shareCosts = <_ShareCostRow>[];
 
-  /// Checked sources, each with its own amount field.
-  final _checked = <_Source>{};
+  // How it was paid. Together these must equal the total.
+  final _pocketController = TextEditingController();
+  final _fundController = TextEditingController();
 
-  /// Sources whose description box is open.
-  final _notesOpen = <_Source>{};
+  /// Whether the member typed these themselves. One that was not
+  /// typed is filled in as the rest of the total.
+  bool _pocketTyped = false;
+  bool _fundTyped = false;
 
-  String _sector = _sectors.first;
   late DateTime _selectedDate;
 
   List<GroupMember> _members = [];
@@ -850,7 +839,22 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   bool _isLoadingMembers = false;
   bool _isSaving = false;
 
+  /// Parts of the form this member has switched off.
+  Set<_FormField> _hidden = {};
+
+  /// Parts that hold something in the expense being edited. They are
+  /// shown even when switched off, so nothing is changed unseen.
+  final _needed = <_FormField>{};
+
+  bool _shows(_FormField field) {
+    return !_hidden.contains(field) || _needed.contains(field);
+  }
+
   bool get _isEditing => widget.expense != null;
+
+  /// True when a saved shared bill is being edited. It then shows
+  /// only its own line instead of the meal expense.
+  bool _isEditingBill = false;
 
   User get _currentUser => FirebaseAuth.instance.currentUser!;
 
@@ -868,15 +872,75 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
     _selectedMemberId = data?['paidById'] as String? ?? _currentUser.uid;
 
-    if (data == null) {
-      _available = _Source.values;
-      _checked.add(_Source.pocket);
-    } else {
-      _loadSaved(data);
-    }
+    if (data != null) _loadSaved(data);
 
     if (widget.isAdmin && !_isEditing) {
       _watchMembers();
+    }
+
+    _loadFormSettings();
+  }
+
+  DocumentReference<Map<String, dynamic>> get _profile {
+    return FirebaseFirestore.instance.collection('users').doc(_currentUser.uid);
+  }
+
+  Future<void> _loadFormSettings() async {
+    try {
+      final saved = (await _profile.get()).data()?['expenseFormHidden'];
+      if (saved is! List || !mounted) return;
+
+      setState(() {
+        _hidden = {
+          for (final field in _FormField.values)
+            if (saved.contains(field.name)) field,
+        };
+        _applyHidden();
+      });
+    } on FirebaseException {
+      // The whole form is shown.
+    }
+  }
+
+  /// Empties the payment fields that are hidden, so they cannot hold
+  /// an amount nobody can see.
+  void _applyHidden() {
+    if (!_shows(_FormField.fund)) {
+      _fundController.clear();
+      _fundTyped = false;
+    }
+    if (!_shows(_FormField.pocket)) {
+      _pocketTyped = false;
+    }
+    if (!_shows(_FormField.shareCost)) {
+      for (final row in _shareCosts) {
+        row.dispose();
+      }
+      _shareCosts.clear();
+    }
+    _balancePayment();
+  }
+
+  Future<void> _openFormSettings() async {
+    final chosen = await showDialog<Set<_FormField>>(
+      context: context,
+      builder: (_) => _FormSettingsDialog(hidden: {..._hidden}),
+    );
+
+    if (chosen == null || !mounted) return;
+
+    setState(() {
+      _hidden = chosen;
+      _applyHidden();
+    });
+
+    try {
+      await _profile.update({
+        'expenseFormHidden': [for (final field in chosen) field.name],
+      });
+    } on FirebaseException {
+      if (!mounted) return;
+      _showMessage('The form settings could not be saved.');
     }
   }
 
@@ -884,44 +948,38 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final saved = FundService.expenseRecord(data);
     final name = (data['name'] as String? ?? '').trim();
 
-    if (_sectors.contains(name)) {
-      _sector = name;
-    } else {
-      _sector = _otherSector;
-      _otherNameController.text = name;
-    }
-
-    void fill(_Source source, double amount, Object? note) {
-      if (amount <= 0) return;
-
-      _checked.add(source);
-      _amountControllers[source]!.text = _plainNumber(amount);
-
-      if (note is String && note.trim().isNotEmpty) {
-        _noteControllers[source]!.text = note;
-        _notesOpen.add(source);
-      }
-    }
-
     if (saved.isBill) {
-      _available = const [_Source.share];
-      fill(_Source.share, saved.amount, data['pocketNote']);
+      _isEditingBill = true;
+      _shareCosts.add(
+        _ShareCostRow(description: name, cost: _plainNumber(saved.amount)),
+      );
     } else {
-      _available = const [_Source.fund, _Source.pocket];
-      fill(_Source.fund, saved.fundPart, data['fundNote']);
-      fill(_Source.pocket, saved.pocketPart, data['pocketNote']);
+      final more = (data['pocketNote'] as String? ?? '').trim();
+      _descriptionController.text = more.isEmpty ? name : '$name\n$more';
+      _amountController.text = _plainNumber(saved.amount);
     }
+
+    // The fund's part stays as saved; the pocket's part follows the
+    // amount if it is changed.
+    _fundTyped = saved.fundPart > 0;
+    if (saved.fundPart > 0) {
+      _fundController.text = _plainNumber(saved.fundPart);
+      _needed.add(_FormField.fund);
+    }
+    if (saved.isBill) _needed.add(_FormField.shareCost);
+    _needed.add(_FormField.date);
+    _pocketController.text = _plainNumber(saved.pocketPart);
   }
 
   @override
   void dispose() {
     _membersSubscription?.cancel();
-    _otherNameController.dispose();
-    for (final controller in _amountControllers.values) {
-      controller.dispose();
-    }
-    for (final controller in _noteControllers.values) {
-      controller.dispose();
+    _descriptionController.dispose();
+    _amountController.dispose();
+    _pocketController.dispose();
+    _fundController.dispose();
+    for (final row in _shareCosts) {
+      row.dispose();
     }
     super.dispose();
   }
@@ -979,85 +1037,64 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     }
   }
 
-  /// Lets the member tick where the money came from.
-  Future<void> _chooseSources() async {
-    final chosen = await showDialog<Set<_Source>>(
-      context: context,
-      builder: (_) =>
-          _SourceChecklist(available: _available, checked: {..._checked}),
-    );
-
-    if (chosen == null || !mounted) return;
-
-    setState(() {
-      _checked
-        ..clear()
-        ..addAll(chosen);
-    });
+  static double _amountIn(TextEditingController controller) {
+    final value = double.tryParse(controller.text.trim());
+    return value == null || value < 0 ? 0 : value;
   }
 
-  /// Opens the calculator. "Use It" puts the result into [opener]'s
-  /// amount, or asks which one when several sources are ticked.
-  Future<void> _openCalculator(_Source opener) async {
+  static bool _isInvalid(TextEditingController controller) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return false;
+
+    final value = double.tryParse(text);
+    return value == null || value < 0;
+  }
+
+  double get _mealAmount => _isEditingBill ? 0 : _amountIn(_amountController);
+
+  double get _total {
+    return _shareCosts.fold<double>(
+      _mealAmount,
+      (total, row) => total + _amountIn(row.cost),
+    );
+  }
+
+  /// Keeps "My pocket" and "From meal fund" adding up to the total:
+  /// whichever one the member has not typed becomes the rest.
+  void _balancePayment() {
+    final total = _total;
+
+    void fill(TextEditingController target, double other) {
+      final rest = total - other;
+      target.text = rest > 0 ? _plainNumber(rest) : '';
+    }
+
+    if (!_pocketTyped) {
+      fill(_pocketController, _amountIn(_fundController));
+    } else if (!_fundTyped) {
+      fill(_fundController, _amountIn(_pocketController));
+    }
+  }
+
+  void _onCostsChanged() => setState(_balancePayment);
+
+  /// Opens the calculator. "Use It" puts the result into [target].
+  Future<void> _openCalculator(
+    TextEditingController target, {
+    VoidCallback? onUsed,
+  }) async {
     final result = await showDialog<double>(
       context: context,
-      builder: (_) => _CalculatorDialog(
-        initialValue: _amountControllers[opener]!.text.trim(),
-      ),
+      builder: (_) => _CalculatorDialog(initialValue: target.text.trim()),
     );
 
     if (result == null || !mounted) return;
 
-    var target = opener;
-
-    if (_checked.length > 1) {
-      final picked = await showDialog<_Source>(
-        context: context,
-        builder: (dialogContext) {
-          return SimpleDialog(
-            title: Text('Use ৳${_plainNumber(result)} for'),
-            children: [
-              for (final source in _Source.values)
-                if (_checked.contains(source))
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.of(dialogContext).pop(source),
-                    child: Row(
-                      children: [
-                        Icon(source.icon, size: 20),
-                        const SizedBox(width: 12),
-                        Text(source.label),
-                      ],
-                    ),
-                  ),
-            ],
-          );
-        },
-      );
-
-      if (picked == null || !mounted) return;
-      target = picked;
-    }
-
     setState(() {
-      _amountControllers[target]!.text = _plainNumber(result);
+      target.text = _plainNumber(result);
+      onUsed?.call();
+      _balancePayment();
     });
-  }
-
-  double _amountOf(_Source source) {
-    if (!_checked.contains(source)) return 0;
-    return double.tryParse(_amountControllers[source]!.text.trim()) ?? 0;
-  }
-
-  String _noteOf(_Source source) {
-    if (!_checked.contains(source)) return '';
-    return _noteControllers[source]!.text.trim();
-  }
-
-  double get _total {
-    return _Source.values.fold<double>(
-      0,
-      (total, source) => total + _amountOf(source),
-    );
   }
 
   void _showMessage(String message) {
@@ -1066,37 +1103,83 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   }
 
   Future<void> _saveExpense() async {
-    final name = _sector == _otherSector
-        ? _otherNameController.text.trim()
-        : _sector;
-
-    if (name.isEmpty) {
-      _showMessage('Please type the expense name.');
+    if ([
+      _amountController,
+      _pocketController,
+      _fundController,
+    ].any(_isInvalid)) {
+      _showMessage('Please enter valid amounts.');
       return;
     }
 
-    if (_checked.isEmpty) {
-      _showMessage('Tick where the money came from.');
+    final mealAmount = _mealAmount;
+
+    // The first line names the expense; the rest is kept as detail.
+    final lines = _descriptionController.text.trim().split('\n');
+    final name = lines.first.trim();
+    final details = lines.skip(1).join('\n').trim();
+
+    if (mealAmount > 0 && name.isEmpty) {
+      _showMessage('Please describe the expense.');
+      return;
+    }
+    if (mealAmount <= 0 && name.isNotEmpty && !_isEditingBill) {
+      _showMessage('Please enter the amount of the expense.');
       return;
     }
 
-    for (final source in _Source.values) {
-      if (_checked.contains(source) && _amountOf(source) <= 0) {
-        _showMessage('Please enter the amount for "${source.label}".');
+    // Share cost lines left completely empty are ignored.
+    final bills = <({String name, double amount})>[];
+
+    for (final row in _shareCosts) {
+      final description = row.description.text.trim();
+      final costText = row.cost.text.trim();
+
+      if (description.isEmpty && costText.isEmpty) continue;
+
+      final cost = double.tryParse(costText);
+
+      if (cost == null || cost <= 0) {
+        _showMessage('Please enter the cost of each share cost.');
         return;
       }
+      if (description.isEmpty) {
+        _showMessage('Please describe each share cost, for example "Water".');
+        return;
+      }
+
+      bills.add((name: description, amount: cost));
     }
 
-    final fund = _amountOf(_Source.fund);
-    final pocket = _amountOf(_Source.pocket);
-    final share = _amountOf(_Source.share);
-    final shareNote = _noteOf(_Source.share);
+    if (mealAmount <= 0 && bills.isEmpty) {
+      _showMessage('Please enter an amount.');
+      return;
+    }
 
-    // A shared bill is listed with the fixed costs under what it was
-    // for, so its description names it when there is one.
-    final billName = shareNote.isEmpty
-        ? name
-        : shareNote.split('\n').first.trim();
+    final total = bills.fold<double>(
+      mealAmount,
+      (running, bill) => running + bill.amount,
+    );
+    // A hidden field cannot hold an amount: without the fund field
+    // everything was the member's own money, and without the pocket
+    // field their part is whatever the fund did not cover.
+    final fund = _shows(_FormField.fund) ? _amountIn(_fundController) : 0.0;
+    final pocket = _shows(_FormField.fund) && _shows(_FormField.pocket)
+        ? _amountIn(_pocketController)
+        : total - fund;
+
+    if (pocket < 0) {
+      _showMessage('From meal fund cannot be more than the total.');
+      return;
+    }
+
+    if ((pocket + fund - total).abs() > 0.005) {
+      _showMessage(
+        'My pocket and From meal fund must add up to the total of '
+        '৳${_plainNumber(total)}.',
+      );
+      return;
+    }
 
     final selectedMember = _members
         .where((member) => member.id == _selectedMemberId)
@@ -1110,23 +1193,40 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
         ? selectedMember?.name ?? 'Member'
         : _ownName;
 
+    String short(String text) {
+      return text.length > 60 ? text.substring(0, 60) : text;
+    }
+
+    // The fund's money is counted against the meal expense first,
+    // and only what is left of it against the shared bills.
+    var fundLeft = fund;
+
+    double takeFromFund(double amount) {
+      final used = fundLeft < amount ? fundLeft : amount;
+      fundLeft -= used;
+      return used;
+    }
+
     final mealFields = <String, dynamic>{
-      'name': name,
-      'amount': fund + pocket,
-      'fromFund': fund,
+      'name': short(name),
+      'amount': mealAmount,
+      'fromFund': takeFromFund(mealAmount),
       'category': 'meal',
-      'fundNote': _noteOf(_Source.fund),
-      'pocketNote': _noteOf(_Source.pocket),
+      'fundNote': '',
+      'pocketNote': details.length > 500 ? details.substring(0, 500) : details,
     };
 
-    final billFields = <String, dynamic>{
-      'name': billName.length > 60 ? billName.substring(0, 60) : billName,
-      'amount': share,
-      'fromFund': 0,
-      'category': 'bill',
-      'fundNote': '',
-      'pocketNote': shareNote,
-    };
+    final billFields = [
+      for (final bill in bills)
+        <String, dynamic>{
+          'name': short(bill.name),
+          'amount': bill.amount,
+          'fromFund': takeFromFund(bill.amount),
+          'category': 'bill',
+          'fundNote': '',
+          'pocketNote': '',
+        },
+    ];
 
     setState(() => _isSaving = true);
 
@@ -1138,7 +1238,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
       if (_isEditing) {
         await expenses.doc(widget.expense!.id).update({
-          ...(share > 0 ? billFields : mealFields),
+          ...(_isEditingBill ? billFields.first : mealFields),
           'date': Timestamp.fromDate(_selectedDate),
           'updatedBy': _currentUser.uid,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -1154,15 +1254,15 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'updatedAt': FieldValue.serverTimestamp(),
         };
 
-        // Meals and a shared bill are counted differently, so they
-        // are saved as two records, together.
+        // Meals and shared bills are counted differently, so each is
+        // its own record, saved together.
         final batch = FirebaseFirestore.instance.batch();
 
-        if (fund + pocket > 0) {
+        if (mealAmount > 0) {
           batch.set(expenses.doc(), {...mealFields, ...common});
         }
-        if (share > 0) {
-          batch.set(expenses.doc(), {...billFields, ...common});
+        for (final fields in billFields) {
+          batch.set(expenses.doc(), {...fields, ...common});
         }
 
         await batch.commit();
@@ -1173,8 +1273,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
             groupId: widget.groupId,
             title: 'New expense',
             message:
-                '$name · ৳${_plainNumber(fund + pocket + share)}, '
-                'paid by $paidByName',
+                '${name.isEmpty ? bills.first.name : name} · '
+                '৳${_plainNumber(total)}, paid by $paidByName',
           ),
         );
       }
@@ -1193,75 +1293,121 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     }
   }
 
-  /// The amount field of one ticked source, with its calculator and
-  /// description buttons.
-  Widget _sourceField(_Source source) {
-    final isNoteOpen = _notesOpen.contains(source);
+  InputDecoration _amountDecoration({Widget? suffixIcon}) {
+    return InputDecoration(
+      hintText: '0',
+      prefixText: '৳ ',
+      isDense: true,
+      border: const OutlineInputBorder(),
+      suffixIcon: suffixIcon,
+    );
+  }
 
+  Widget _calculatorButton(
+    TextEditingController target, {
+    VoidCallback? onUsed,
+  }) {
+    return IconButton(
+      tooltip: 'Calculator',
+      visualDensity: VisualDensity.compact,
+      onPressed: _isSaving
+          ? null
+          : () => _openCalculator(target, onUsed: onUsed),
+      icon: const Icon(Icons.calculate_outlined, size: 20),
+    );
+  }
+
+  /// A description on the left and its amount on the right.
+  Widget _costLine({
+    required TextEditingController description,
+    required TextEditingController amount,
+    required String label,
+    required String hint,
+    int maxLines = 1,
+    Widget? trailing,
+    bool hasCalculator = false,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: description,
+            enabled: !_isSaving,
+            // The main description is two lines tall, with room for
+            // what was bought; a share cost is a single line.
+            minLines: maxLines > 1 ? 2 : 1,
+            maxLines: maxLines,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: label,
+              hintText: hint,
+              alignLabelWithHint: true,
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: hasCalculator ? 128 : 92,
+          child: TextField(
+            controller: amount,
+            enabled: !_isSaving,
+            textAlign: TextAlign.end,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => _onCostsChanged(),
+            decoration: _amountDecoration(
+              suffixIcon: hasCalculator ? _calculatorButton(amount) : null,
+            ),
+          ),
+        ),
+        ?trailing,
+      ],
+    );
+  }
+
+  /// How much of the total came from one place: its name on the left
+  /// and the amount on the right.
+  Widget _paymentLine({
+    required String label,
+    required IconData icon,
+    required TextEditingController controller,
+    required VoidCallback onTyped,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Column(
+      child: Row(
         children: [
-          TextField(
-            controller: _amountControllers[source],
-            enabled: !_isSaving,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: source.label,
-              hintText: 'Amount',
-              prefixText: '৳ ',
-              prefixIcon: Icon(source.icon),
-              border: const OutlineInputBorder(),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Calculator',
-                    onPressed: _isSaving ? null : () => _openCalculator(source),
-                    icon: const Icon(Icons.calculate_outlined),
-                  ),
-                  IconButton(
-                    tooltip: isNoteOpen
-                        ? 'Remove description'
-                        : 'Add description',
-                    onPressed: _isSaving
-                        ? null
-                        : () {
-                            setState(() {
-                              if (isNoteOpen) {
-                                _notesOpen.remove(source);
-                                _noteControllers[source]!.clear();
-                              } else {
-                                _notesOpen.add(source);
-                              }
-                            });
-                          },
-                    icon: Icon(isNoteOpen ? Icons.remove : Icons.add),
-                  ),
-                ],
+          Icon(icon, size: 20, color: const Color(0xFF2E7D32)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 128,
+            child: TextField(
+              controller: controller,
+              enabled: !_isSaving,
+              textAlign: TextAlign.end,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) {
+                setState(() {
+                  onTyped();
+                  _balancePayment();
+                });
+              },
+              decoration: _amountDecoration(
+                suffixIcon: _calculatorButton(controller, onUsed: onTyped),
               ),
             ),
           ),
-          if (isNoteOpen) ...[
-            const SizedBox(height: 8),
-            TextField(
-              controller: _noteControllers[source],
-              enabled: !_isSaving,
-              minLines: 2,
-              maxLines: 5,
-              maxLength: 500,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: 'Description',
-                hintText: source == _Source.share
-                    ? 'Water bill'
-                    : 'Onion 2kg 80tk\nOil 4lt 1000tk',
-                alignLabelWithHint: true,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1273,156 +1419,182 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final month = _selectedDate.month.toString().padLeft(2, '0');
     final formattedDate = '$day/$month/${_selectedDate.year}';
 
-    final savedPayer = widget.expense?.data()?['paidByName'] as String?;
+    // Only an admin adding an expense chooses whose it is.
     final canPickMember = widget.isAdmin && !_isEditing;
 
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ─── Person ───
-            if (canPickMember && _isLoadingMembers)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (canPickMember)
-              DropdownButtonFormField<String>(
-                // Rebuilt when the member list changes, so the
-                // selection can never point at a missing member.
-                key: ValueKey(_members.map((member) => member.id).join(',')),
-                initialValue: _selectedMemberId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Person',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final member in _members)
-                    DropdownMenuItem<String>(
-                      value: member.id,
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              member.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+      titlePadding: const EdgeInsets.fromLTRB(24, 16, 12, 0),
+      title: Row(
+        children: [
+          Expanded(child: Text(_isEditing ? 'Edit Expense' : 'Add Expense')),
+          IconButton(
+            tooltip: 'Show or hide fields',
+            onPressed: _isSaving ? null : _openFormSettings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
+      ),
+      // A set width, so the form does not shrink when fields are
+      // hidden. On a phone it is as wide as the screen allows.
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (canPickMember) ...[
+                if (_isLoadingMembers)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    // Rebuilt when the member list changes, so the
+                    // selection can never point at a missing member.
+                    key: ValueKey(
+                      _members.map((member) => member.id).join(','),
+                    ),
+                    initialValue: _selectedMemberId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Paid by',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final member in _members)
+                        DropdownMenuItem<String>(
+                          value: member.id,
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  member.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (member.isAppUser) ...[
+                                const SizedBox(width: 8),
+                                const _AppUserChip(),
+                              ],
+                            ],
                           ),
-                          if (member.isAppUser) ...[
-                            const SizedBox(width: 8),
-                            const _AppUserChip(),
-                          ],
-                        ],
+                        ),
+                    ],
+                    onChanged: _isSaving
+                        ? null
+                        : (value) => setState(() => _selectedMemberId = value),
+                  ),
+                const SizedBox(height: 16),
+              ],
+
+              // ─── What was bought ───
+              if (!_isEditingBill)
+                _costLine(
+                  description: _descriptionController,
+                  amount: _amountController,
+                  label: 'Description',
+                  hint: 'Bazar',
+                  maxLines: 5,
+                  hasCalculator: true,
+                ),
+              for (final row in _shareCosts)
+                Padding(
+                  padding: EdgeInsets.only(top: _isEditingBill ? 0 : 12),
+                  child: _costLine(
+                    description: row.description,
+                    amount: row.cost,
+                    label: 'Share cost',
+                    hint: 'Water bill',
+                    trailing: _isEditingBill
+                        ? null
+                        : IconButton(
+                            tooltip: 'Remove this share cost',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _isSaving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _shareCosts.remove(row);
+                                      _balancePayment();
+                                    });
+                                    row.dispose();
+                                  },
+                            icon: const Icon(Icons.close, size: 20),
+                          ),
+                  ),
+                ),
+              if (!_isEditing && _shows(_FormField.shareCost))
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _isSaving
+                        ? null
+                        : () =>
+                              setState(() => _shareCosts.add(_ShareCostRow())),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add share cost'),
+                  ),
+                ),
+
+              // ─── The total, then how it was paid ───
+              if (_shows(_FormField.total)) ...[
+                const Divider(height: 20),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Total',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                ],
-                onChanged: _isSaving
-                    ? null
-                    : (value) => setState(() => _selectedMemberId = value),
-              )
-            else
-              InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Person',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
+                    Text(
+                      '৳${_plainNumber(_total)}',
+                      style: const TextStyle(
+                        color: Color(0xFF2E7D32),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  _isEditing ? savedPayer ?? 'Member' : _ownName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            const SizedBox(height: 16),
-
-            // ─── Expense name ───
-            DropdownButtonFormField<String>(
-              initialValue: _sector,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Expense',
-                prefixIcon: Icon(Icons.description_outlined),
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final sector in [..._sectors, _otherSector])
-                  DropdownMenuItem<String>(value: sector, child: Text(sector)),
               ],
-              onChanged: _isSaving
-                  ? null
-                  : (value) => setState(() => _sector = value ?? _sector),
-            ),
-            if (_sector == _otherSector) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _otherNameController,
-                enabled: !_isSaving,
-                maxLength: 60,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Expense name',
-                  hintText: 'Example: Cleaning items',
-                  counterText: '',
-                  border: OutlineInputBorder(),
+              if (_shows(_FormField.pocket))
+                _paymentLine(
+                  label: 'My pocket',
+                  icon: Icons.account_balance_wallet_outlined,
+                  controller: _pocketController,
+                  onTyped: () => _pocketTyped = true,
                 ),
-              ),
+              if (_shows(_FormField.fund))
+                _paymentLine(
+                  label: 'From meal fund',
+                  icon: Icons.savings_outlined,
+                  controller: _fundController,
+                  onTyped: () => _fundTyped = true,
+                ),
+              if (_shows(_FormField.date)) ...[
+                const SizedBox(height: 4),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: const Text('Date'),
+                  subtitle: Text(formattedDate),
+                  trailing: TextButton(
+                    onPressed: _isSaving ? null : _selectDate,
+                    child: const Text('Change'),
+                  ),
+                ),
+              ],
             ],
-            const SizedBox(height: 16),
-
-            // ─── Where the money came from ───
-            InkWell(
-              onTap: _isSaving || _available.length == 1
-                  ? null
-                  : _chooseSources,
-              borderRadius: BorderRadius.circular(4),
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: 'Paid from',
-                  prefixIcon: const Icon(Icons.checklist_outlined),
-                  border: const OutlineInputBorder(),
-                  suffixIcon: _available.length == 1
-                      ? null
-                      : const Icon(Icons.arrow_drop_down),
-                ),
-                child: Text(
-                  _checked.isEmpty
-                      ? 'Tap to choose'
-                      : [
-                          for (final source in _Source.values)
-                            if (_checked.contains(source)) source.label,
-                        ].join(', '),
-                ),
-              ),
-            ),
-            for (final source in _Source.values)
-              if (_checked.contains(source)) _sourceField(source),
-            if (_checked.length > 1) ...[
-              const SizedBox(height: 10),
-              Text(
-                'Total  ৳${_plainNumber(_total)}',
-                textAlign: TextAlign.end,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ],
-            const SizedBox(height: 4),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: const Text('Date'),
-              subtitle: Text(formattedDate),
-              trailing: TextButton(
-                onPressed: _isSaving ? null : _selectDate,
-                child: const Text('Change'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -1447,51 +1619,56 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   }
 }
 
-/// The "Paid from" checklist: tick one or more sources.
-class _SourceChecklist extends StatefulWidget {
-  const _SourceChecklist({required this.available, required this.checked});
+/// Switches for the optional parts of the expense form.
+class _FormSettingsDialog extends StatefulWidget {
+  const _FormSettingsDialog({required this.hidden});
 
-  final List<_Source> available;
-  final Set<_Source> checked;
+  final Set<_FormField> hidden;
 
   @override
-  State<_SourceChecklist> createState() => _SourceChecklistState();
+  State<_FormSettingsDialog> createState() => _FormSettingsDialogState();
 }
 
-class _SourceChecklistState extends State<_SourceChecklist> {
-  late final Set<_Source> _checked = widget.checked;
+class _FormSettingsDialogState extends State<_FormSettingsDialog> {
+  late final Set<_FormField> _hidden = widget.hidden;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Paid from'),
+      title: const Text('Show in This Form'),
       contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final source in widget.available)
-            CheckboxListTile(
-              value: _checked.contains(source),
-              title: Text(
-                source.label,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final field in _FormField.values)
+              SwitchListTile(
+                value: !_hidden.contains(field),
+                title: Text(
+                  field.label,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(field.hint),
+                onChanged: (isShown) {
+                  setState(() {
+                    if (isShown) {
+                      _hidden.remove(field);
+                    } else {
+                      _hidden.add(field);
+                    }
+                  });
+                },
               ),
-              subtitle: Text(source.hint),
-              onChanged: (isChecked) {
-                setState(() {
-                  if (isChecked == true) {
-                    _checked.add(source);
-                  } else {
-                    _checked.remove(source);
-                  }
-                });
-              },
-            ),
-        ],
+          ],
+        ),
       ),
       actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_checked),
+          onPressed: () => Navigator.of(context).pop(_hidden),
           child: const Text('Done'),
         ),
       ],
