@@ -120,13 +120,56 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('1 waiting · 3 in total'), findsOneWidget);
     expect(find.text('9HK3ABC1XY'), findsOneWidget);
-    expect(find.text('Waiting for review'), findsOneWidget);
-    expect(find.text('Approved · 30 days added'), findsOneWidget);
+    expect(find.text('Waiting'), findsOneWidget);
+    expect(find.text('Approved · 30 days'), findsOneWidget);
     expect(find.text('Rejected'), findsOneWidget);
     // Only the pending payment can be approved or rejected.
     expect(find.text('Approve'), findsOneWidget);
     expect(find.text('Reject'), findsOneWidget);
     expect(find.textContaining('bKash 01700000000'), findsOneWidget);
+  });
+
+  testWidgets('holding a payment asks before deleting it', (tester) async {
+    await _pump(
+      tester,
+      AdminPaymentsTab(billing: billing, onRefresh: () async {}),
+    );
+
+    await tester.longPress(find.text('9HK3ABC1XY'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Payment?'), findsOneWidget);
+    expect(find.textContaining('9HK3ABC1XY'), findsWidgets);
+
+    // Cancelling leaves everything as it was.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Payment?'), findsNothing);
+    expect(find.text('1 waiting · 3 in total'), findsOneWidget);
+  });
+
+  testWidgets('holding a voucher asks before deleting it', (tester) async {
+    await _pump(
+      tester,
+      AdminVouchersTab(billing: billing, onRefresh: () async {}),
+    );
+
+    await tester.longPress(find.text('WC100'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Voucher?'), findsOneWidget);
+    // The hostels already on it are told they keep their days.
+    expect(
+      find.textContaining('2 hostels on it now keep their days'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Voucher?'), findsNothing);
+    expect(find.text('WC100'), findsOneWidget);
   });
 
   testWidgets('vouchers tab shows each voucher and whether it is on', (

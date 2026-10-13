@@ -521,6 +521,18 @@ class SubscriptionService {
     return _vouchers.doc(voucher.code).update({'active': active});
   }
 
+  /// Removes a voucher for good. Hostels that already used it keep the
+  /// days it gave them.
+  static Future<void> deleteVoucher(Voucher voucher) {
+    return _vouchers.doc(voucher.code).delete();
+  }
+
+  /// Removes a reported payment from the records. Days already given
+  /// for it stay with the hostel.
+  static Future<void> deletePayment(PaymentRequest payment) {
+    return _payments.doc(payment.trxId).delete();
+  }
+
   static Future<void> savePaymentInfo({
     required String bkashNumber,
     required String instructions,

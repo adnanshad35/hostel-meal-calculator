@@ -685,8 +685,18 @@ class _UserRow extends StatelessWidget {
         hostel?.name ??
         (user.groupId == null ? 'Not in a hostel' : 'Unknown hostel');
 
+    // The super admin's own account stands out from everyone else's.
+    final isSuperAdmin = user.email.toLowerCase() == SuperAdminService.email;
+
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: isSuperAdmin ? const Color(0xFFFFF6DF) : null,
+      shape: isSuperAdmin
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: AppTheme.secondary, width: 1.4),
+            )
+          : null,
       child: InkWell(
         onTap: () => _showDetails(context),
         child: Padding(
@@ -709,6 +719,15 @@ class _UserRow extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (isSuperAdmin)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: _Chip(
+                          text: 'Super Admin',
+                          icon: Icons.shield_outlined,
+                          color: Color(0xFF9A6A00),
+                        ),
+                      ),
                     if (user.isHostelAdmin)
                       const Padding(
                         padding: EdgeInsets.only(top: 4),
@@ -1357,25 +1376,36 @@ class _MemberLine extends StatelessWidget {
 // Small shared pieces
 // ─────────────────────────────────────────────────────────────
 class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
+  const _Chip({required this.text, this.icon, this.color = AppTheme.primary});
 
   final String text;
+  final IconData? icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppTheme.primary,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
