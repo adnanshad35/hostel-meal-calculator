@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local source archive
 hostelmate-source.zip
+
+# Firebase deploy cache
+.firebase/
