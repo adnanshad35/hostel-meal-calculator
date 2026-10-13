@@ -16,6 +16,30 @@ class WebLayout extends InheritedWidget {
   /// window. Set by the shell itself.
   static final ValueNotifier<bool> shellActive = ValueNotifier(false);
 
+  static int _claims = 0;
+
+  /// Called by a desktop layout when it appears. Counted, so one
+  /// layout replacing another does not briefly give the window back.
+  static void claimWindow() {
+    _claims++;
+    _applyClaims();
+  }
+
+  /// Called by a desktop layout when it goes away.
+  static void releaseWindow() {
+    _claims--;
+    _applyClaims();
+  }
+
+  static void _applyClaims() {
+    // The frame cannot be rebuilt while the widgets are still being
+    // built or removed, so the change waits for the frame to end.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      shellActive.value = _claims > 0;
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   final bool isDesktop;
 
   static bool isDesktopOf(BuildContext context) {

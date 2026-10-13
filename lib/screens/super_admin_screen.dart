@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../services/subscription_service.dart';
 import '../services/super_admin_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/desktop_scaffold.dart';
+import '../widgets/web_layout.dart';
 import 'hostel_activation_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
@@ -22,12 +24,48 @@ class SuperAdminScreen extends StatefulWidget {
 }
 
 class _SuperAdminScreenState extends State<SuperAdminScreen> {
-  late Future<_AdminData> _snapshot;
+  static const _tabs = [
+    DesktopDestination(label: 'Overview', icon: Icons.dashboard_outlined),
+    DesktopDestination(label: 'Users', icon: Icons.people_outline),
+    DesktopDestination(label: 'Hostels', icon: Icons.apartment_outlined),
+    DesktopDestination(label: 'Payments', icon: Icons.payments_outlined),
+    DesktopDestination(
+      label: 'Vouchers',
+      icon: Icons.confirmation_number_outlined,
+    ),
+  ];
+
+  /// The sidebar on a wide window: the tabs, then the two screens the
+  /// phone opens from the app bar and the overview.
+  static const _destinations = [
+    ..._tabs,
+    DesktopDestination(label: 'App Notices', icon: Icons.campaign_outlined),
+    DesktopDestination(label: 'Profile', icon: Icons.account_circle_outlined),
+  ];
+
+  static const _noticesIndex = 5;
+
+  /// A notifier, so the screens inside the desktop layout's own
+  /// navigator also see a refresh.
+  late final ValueNotifier<Future<_AdminData>> _snapshot;
+
+  bool _isDesktop = false;
+  int _section = 0;
+
+  /// Increased to rebuild a section from its first screen when its
+  /// sidebar item is chosen again.
+  int _visit = 0;
 
   @override
   void initState() {
     super.initState();
-    _snapshot = _load();
+    _snapshot = ValueNotifier(_load());
+  }
+
+  @override
+  void dispose() {
+    _snapshot.dispose();
+    super.dispose();
   }
 
   static Future<_AdminData> _load() async {
@@ -39,10 +77,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
 
   Future<void> _refresh() async {
     final next = _load();
-    // A block body, because setState must not be handed the future.
-    setState(() {
-      _snapshot = next;
-    });
+    _snapshot.value = next;
 
     try {
       await next;
@@ -57,6 +92,11 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
   }
 
   void _openNotices() {
+    if (_isDesktop) {
+      _select(_noticesIndex);
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const NotificationsScreen(groupId: null),
@@ -64,40 +104,39 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 5,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Super Admin'),
-          actions: [
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: _refresh,
-              icon: const Icon(Icons.refresh),
-            ),
-            IconButton(
-              tooltip: 'Profile and settings',
-              onPressed: _openProfile,
-              icon: const Icon(Icons.account_circle_outlined, size: 28),
-            ),
-            const SizedBox(width: 8),
-          ],
-          bottom: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: 'Overview'),
-              Tab(text: 'Users'),
-              Tab(text: 'Hostels'),
-              Tab(text: 'Payments'),
-              Tab(text: 'Vouchers'),
-            ],
-          ),
-        ),
-        body: FutureBuilder<_AdminData>(
-          future: _snapshot,
+  void _select(int index) {
+    setState(() {
+      _section = index;
+      _visit++;
+    });
+  }
+
+  Widget _tab(int index, _AdminData loaded) {
+    final data = loaded.data;
+    final billing = loaded.billing;
+
+    return switch (index) {
+      0 => _OverviewTab(
+        data: data,
+        billing: billing,
+        onRefresh: _refresh,
+        onOpenNotices: _openNotices,
+      ),
+      1 => _UsersTab(data: data, onRefresh: _refresh),
+      2 => _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
+      3 => AdminPaymentsTab(billing: billing, onRefresh: _refresh),
+      _ => AdminVouchersTab(billing: billing, onRefresh: _refresh),
+    };
+  }
+
+  /// Shows [builder]'s widget once the admin data has loaded, and a
+  /// spinner or an error until then.
+  Widget _whenLoaded(Widget Function(_AdminData loaded) builder) {
+    return ValueListenableBuilder<Future<_AdminData>>(
+      valueListenable: _snapshot,
+      builder: (context, future, _) {
+        return FutureBuilder<_AdminData>(
+          future: future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
@@ -130,25 +169,94 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
               );
             }
 
-            final data = loaded.data;
-            final billing = loaded.billing;
+            return builder(loaded);
+          },
+        );
+      },
+    );
+  }
 
-            return TabBarView(
-              children: [
-                _OverviewTab(
-                  data: data,
-                  billing: billing,
-                  onRefresh: _refresh,
-                  onOpenNotices: _openNotices,
-                ),
-                _UsersTab(data: data, onRefresh: _refresh),
-                _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
-                AdminPaymentsTab(billing: billing, onRefresh: _refresh),
-                AdminVouchersTab(billing: billing, onRefresh: _refresh),
-              ],
+  Widget _desktopPage(int index) {
+    if (index == _noticesIndex) {
+      return const NotificationsScreen(groupId: null);
+    }
+
+    if (index > _noticesIndex) return const ProfileScreen();
+
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(_tabs[index].label),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: _whenLoaded((loaded) => _tab(index, loaded)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _isDesktop = WebLayout.isDesktopOf(context);
+
+    if (_isDesktop) {
+      final section = _section;
+
+      return DesktopScaffold(
+        title: 'Super Admin',
+        subtitle: SuperAdminService.email,
+        destinations: _destinations,
+        selectedIndex: section,
+        onSelect: _select,
+        content: Navigator(
+          key: ValueKey('$section-$_visit'),
+          onGenerateRoute: (settings) {
+            return MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => _desktopPage(section),
             );
           },
         ),
+      );
+    }
+
+    return DefaultTabController(
+      length: _tabs.length,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Super Admin'),
+          actions: [
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+            ),
+            IconButton(
+              tooltip: 'Profile and settings',
+              onPressed: _openProfile,
+              icon: const Icon(Icons.account_circle_outlined, size: 28),
+            ),
+            const SizedBox(width: 8),
+          ],
+          bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [for (final tab in _tabs) Tab(text: tab.label)],
+          ),
+        ),
+        body: _whenLoaded((loaded) {
+          return TabBarView(
+            children: [
+              for (var index = 0; index < _tabs.length; index++)
+                _tab(index, loaded),
+            ],
+          );
+        }),
       ),
     );
   }
