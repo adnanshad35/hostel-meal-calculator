@@ -18,6 +18,7 @@ class MealRecord {
     this.dateKey,
     this.lunch = 0,
     this.dinner = 0,
+    this.isAutomatic = false,
   });
 
   /// Builds a record from a `groups/{groupId}/meals` document.
@@ -40,6 +41,10 @@ class MealRecord {
   final String? dateKey;
   final double lunch;
   final double dinner;
+
+  /// True when the day was counted from the member's meal plan
+  /// instead of a saved entry.
+  final bool isAutomatic;
 }
 
 /// One saved expense, reduced to what the calculation needs.

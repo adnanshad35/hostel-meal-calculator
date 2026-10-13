@@ -7,8 +7,12 @@ import 'package:flutter/material.dart';
 import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
+import '../services/meal_plan.dart';
+import '../services/meal_plan_service.dart';
+import '../services/monthly_calculator.dart';
 import '../widgets/meal_counter.dart';
 import 'meal_ledger_screen.dart';
+import 'meal_plan_screen.dart';
 
 /// Opens the Add Meal form, unless the hostel is read-only.
 Future<void> showMealForm(
@@ -37,12 +41,16 @@ class MealScreen extends StatefulWidget {
 
 class _MealScreenState extends State<MealScreen> {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+  late final Stream<List<GroupMember>> _membersStream;
+  late final Stream<List<MemberMealPlan>> _plansStream;
 
   User get _user => FirebaseAuth.instance.currentUser!;
 
   @override
   void initState() {
     super.initState();
+    _membersStream = GroupMemberService.watch(widget.groupId);
+    _plansStream = MealPlanService.watchAll(widget.groupId);
     _mealsStream = FirebaseFirestore.instance
         .collection('groups')
         .doc(widget.groupId)
@@ -67,6 +75,15 @@ class _MealScreenState extends State<MealScreen> {
     );
   }
 
+  void _openMealPlan() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            MealPlanScreen(groupId: widget.groupId, isAdmin: widget.isAdmin),
+      ),
+    );
+  }
+
   void _openMyMeals() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -79,8 +96,6 @@ class _MealScreenState extends State<MealScreen> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final currentMonth = _monthKey(now);
-    final todayKey = _dateKey(now);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Meal Update')),
@@ -90,76 +105,155 @@ class _MealScreenState extends State<MealScreen> {
         label: const Text('Add Meal'),
       ),
       body: SafeArea(
-        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _mealsStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (snapshot.hasError) {
-              return const Center(child: Text('Unable to load meals.'));
-            }
-
-            double totalMealsMonthly = 0;
-            double myMonthlyTotal = 0;
-            Map<String, dynamic>? myEntryToday;
-
-            for (final document in snapshot.data?.docs ?? []) {
-              final data = document.data();
-              final dateKey = data['dateKey'] as String? ?? '';
-              final userId = data['userId'] as String?;
-
-              if (!dateKey.startsWith(currentMonth)) continue;
-
-              final total = (data['total'] as num?)?.toDouble() ?? 0;
-
-              totalMealsMonthly += total;
-
-              if (userId == _user.uid) {
-                myMonthlyTotal += total;
-                if (dateKey == todayKey) {
-                  myEntryToday = data;
-                }
-              }
-            }
-
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryTile(
-                        icon: Icons.groups_outlined,
-                        title: 'Total Meals',
-                        value: _displayQuantity(totalMealsMonthly),
-                        subtitle: 'This month',
-                        color: const Color(0xFF2E7D32),
-                        onTap: _openLedger,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SummaryTile(
-                        icon: Icons.person_outline,
-                        title: 'My Meals',
-                        value: _displayQuantity(myMonthlyTotal),
-                        subtitle: 'This month',
-                        color: const Color(0xFF2E7D32),
-                        onTap: _openMyMeals,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _TodayMealCard(entry: myEntryToday, onTap: _openMealForm),
-              ],
+        child: StreamBuilder<List<GroupMember>>(
+          stream: _membersStream,
+          builder: (context, membersSnapshot) {
+            return StreamBuilder<List<MemberMealPlan>>(
+              stream: _plansStream,
+              builder: (context, plansSnapshot) {
+                return _buildMeals(
+                  context,
+                  now: now,
+                  members: membersSnapshot.data ?? const [],
+                  plans: plansSnapshot.data ?? const [],
+                );
+              },
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildMeals(
+    BuildContext context, {
+    required DateTime now,
+    required List<GroupMember> members,
+    required List<MemberMealPlan> plans,
+  }) {
+    final currentMonth = _monthKey(now);
+    final todayKey = _dateKey(now);
+    final myRules =
+        plans.where((plan) => plan.memberId == _user.uid).firstOrNull?.rules ??
+        const <MealPlanRule>[];
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _mealsStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return const Center(child: Text('Unable to load meals.'));
+        }
+
+        double totalMealsMonthly = 0;
+        double myMonthlyTotal = 0;
+        Map<String, dynamic>? myEntryToday;
+
+        // Days without an entry, counted from the meal plans.
+        final planned = MealPlans.automaticMeals(
+          plans: plans,
+          meals: [
+            for (final document in snapshot.data?.docs ?? [])
+              MealRecord.fromData(document.id, document.data()),
+          ],
+          activeMemberIds: {_user.uid, for (final member in members) member.id},
+          month: now,
+          today: now,
+        );
+
+        for (final meal in planned) {
+          totalMealsMonthly += meal.lunch + meal.dinner;
+          if (meal.userId == _user.uid) {
+            myMonthlyTotal += meal.lunch + meal.dinner;
+          }
+        }
+
+        final standing = MealPlans.standingOn(myRules, todayKey);
+
+        for (final document in snapshot.data?.docs ?? []) {
+          final data = document.data();
+          final dateKey = data['dateKey'] as String? ?? '';
+          final userId = data['userId'] as String?;
+
+          if (!dateKey.startsWith(currentMonth)) continue;
+
+          final total = (data['total'] as num?)?.toDouble() ?? 0;
+
+          totalMealsMonthly += total;
+
+          if (userId == _user.uid) {
+            myMonthlyTotal += total;
+            if (dateKey == todayKey) {
+              myEntryToday = data;
+            }
+          }
+        }
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _SummaryTile(
+                    icon: Icons.groups_outlined,
+                    title: 'Total Meals',
+                    value: _displayQuantity(totalMealsMonthly),
+                    subtitle: 'This month',
+                    color: const Color(0xFF2E7D32),
+                    onTap: _openLedger,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _SummaryTile(
+                    icon: Icons.person_outline,
+                    title: 'My Meals',
+                    value: _displayQuantity(myMonthlyTotal),
+                    subtitle: 'This month',
+                    color: const Color(0xFF2E7D32),
+                    onTap: _openMyMeals,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _TodayMealCard(
+              entry: myEntryToday,
+              planned: MealPlans.forDay(myRules, todayKey),
+              onTap: _openMealForm,
+            ),
+            const SizedBox(height: 4),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                onTap: _openMealPlan,
+                leading: const Icon(
+                  Icons.event_repeat_outlined,
+                  color: Color(0xFF2E7D32),
+                ),
+                title: const Text(
+                  'Meal Plan',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  standing == null
+                      ? 'Count your usual meals automatically, or '
+                            'mark days you are away.'
+                      : 'Every day: '
+                            '${_displayQuantity(standing.lunch)} lunch, '
+                            '${_displayQuantity(standing.dinner)} dinner',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -187,14 +281,45 @@ String _displayQuantity(double value) {
 // Today's entry of the signed-in member
 // ─────────────────────────────────────────────────────────────
 class _TodayMealCard extends StatelessWidget {
-  const _TodayMealCard({required this.entry, required this.onTap});
+  const _TodayMealCard({
+    required this.entry,
+    required this.planned,
+    required this.onTap,
+  });
 
   final Map<String, dynamic>? entry;
+
+  /// What the member's meal plan counts today when there is no entry.
+  final PlannedMeals? planned;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final entry = this.entry;
+    final planned = this.planned;
+
+    if (entry == null && planned != null) {
+      return Card(
+        color: const Color(0xFFE8F5E9),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: onTap,
+          leading: const Icon(
+            Icons.event_repeat_outlined,
+            color: Color(0xFF2E7D32),
+          ),
+          title: const Text(
+            'Today is counted from your meal plan',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            'Lunch: ${_displayQuantity(planned.lunch)}   '
+            'Dinner: ${_displayQuantity(planned.dinner)}',
+          ),
+          trailing: const Icon(Icons.edit_outlined),
+        ),
+      );
+    }
 
     if (entry == null) {
       return Card(
@@ -265,6 +390,10 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   bool _isLoadingEntry = true;
   bool _isSaving = false;
   bool _hasEntry = false;
+
+  /// True when the counters show what the member's meal plan already
+  /// counts for the day.
+  bool _isFromPlan = false;
 
   /// What a new entry starts with, since most days are one lunch and
   /// one dinner. Nothing is recorded until the member taps Save.
@@ -361,6 +490,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     setState(() {
       _isLoadingEntry = true;
       _hasEntry = false;
+      _isFromPlan = false;
       _lunch = _defaultMeals;
       _dinner = _defaultMeals;
     });
@@ -369,10 +499,27 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       final snapshot = await _mealCollection.doc(_entryId).get();
       final data = snapshot.data();
 
+      // Without an entry, the form starts from the member's meal plan
+      // for that day, if they have one.
+      PlannedMeals? planned;
+      if (!snapshot.exists) {
+        final plan = await MealPlanService.fetch(
+          widget.groupId,
+          _selectedMemberId,
+        );
+        planned = MealPlans.forDay(plan.rules, _dateKey(_selectedDate));
+      }
+
       if (!mounted || request != _loadRequest) return;
 
       setState(() {
         _hasEntry = snapshot.exists;
+
+        if (planned != null) {
+          _isFromPlan = true;
+          _lunch = planned.lunch;
+          _dinner = planned.dinner;
+        }
 
         // An existing entry shows what was saved. A new one starts at
         // the usual one lunch and one dinner, ready to save or adjust.
@@ -594,6 +741,13 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                 ),
                 const SizedBox(height: 8),
               ],
+              if (_isFromPlan) ...[
+                const Text(
+                  'This is what the meal plan counts for this date. '
+                  'Save to set something different.',
+                ),
+                const SizedBox(height: 8),
+              ],
               MealCounter(
                 title: 'Lunch',
                 icon: Icons.lunch_dining_outlined,
@@ -764,7 +918,6 @@ class MyMealsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final currentMonth = _monthKey(now);
 
     final stream = FirebaseFirestore.instance
         .collection('groups')
@@ -774,110 +927,155 @@ class MyMealsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Meals')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: stream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Unable to load your meals.\n${snapshot.error}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-
-          final docs = (snapshot.data?.docs ?? []).where((d) {
-            final data = d.data();
-            final userId = data['userId'] as String?;
-            final dateKey = data['dateKey'] as String? ?? '';
-            return userId == currentUserId && dateKey.startsWith(currentMonth);
-          }).toList();
-
-          docs.sort((a, b) {
-            final aKey = a.data()['dateKey'] as String? ?? '';
-            final bKey = b.data()['dateKey'] as String? ?? '';
-            return bKey.compareTo(aKey); // newest first
-          });
-
-          double totalMeals = 0;
-          for (final d in docs) {
-            totalMeals += (d.data()['total'] as num?)?.toDouble() ?? 0;
-          }
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.person_outline,
-                        size: 38,
-                        color: Color(0xFF2E7D32),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_monthName(now.month)} ${now.year}',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text('${docs.length} entries'),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text('My meals'),
-                          Text(
-                            _displayQuantity(totalMeals),
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: const Color(0xFF2E7D32),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (docs.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      'You have not entered any meals this month.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              else
-                for (final doc in docs)
-                  _MyMealEntryTile(
-                    data: doc.data(),
-                    weekdayName: _weekdayName,
-                    displayQuantity: _displayQuantity,
-                  ),
-            ],
-          );
+      body: StreamBuilder<MemberMealPlan>(
+        stream: MealPlanService.watch(groupId, currentUserId),
+        builder: (context, planSnapshot) {
+          return _buildList(context, now, stream, planSnapshot.data);
         },
       ),
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    DateTime now,
+    Stream<QuerySnapshot<Map<String, dynamic>>> stream,
+    MemberMealPlan? plan,
+  ) {
+    final currentMonth = _monthKey(now);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Unable to load your meals.\n${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        final docs = <Map<String, dynamic>>[
+          for (final document in snapshot.data?.docs ?? [])
+            if (document.data()['userId'] == currentUserId &&
+                (document.data()['dateKey'] as String? ?? '').startsWith(
+                  currentMonth,
+                ))
+              document.data(),
+        ];
+
+        // Days without an entry, counted from the meal plan.
+        if (plan != null) {
+          final planned = MealPlans.automaticMeals(
+            plans: [plan],
+            meals: [
+              for (final data in docs)
+                MealRecord.fromData(
+                  '${currentUserId}_${data['dateKey']}',
+                  data,
+                ),
+            ],
+            activeMemberIds: {currentUserId},
+            month: now,
+            today: now,
+          );
+
+          for (final meal in planned) {
+            docs.add({
+              'dateKey': meal.dateKey,
+              'lunch': meal.lunch,
+              'dinner': meal.dinner,
+              'total': meal.lunch + meal.dinner,
+              'planned': true,
+            });
+          }
+        }
+
+        docs.sort((a, b) {
+          final aKey = a['dateKey'] as String? ?? '';
+          final bKey = b['dateKey'] as String? ?? '';
+          return bKey.compareTo(aKey); // newest first
+        });
+
+        double totalMeals = 0;
+        for (final d in docs) {
+          totalMeals += (d['total'] as num?)?.toDouble() ?? 0;
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.person_outline,
+                      size: 38,
+                      color: Color(0xFF2E7D32),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_monthName(now.month)} ${now.year}',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text('${docs.length} entries'),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('My meals'),
+                        Text(
+                          _displayQuantity(totalMeals),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                color: const Color(0xFF2E7D32),
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (docs.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'You have not entered any meals this month.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            else
+              for (final doc in docs)
+                _MyMealEntryTile(
+                  data: doc,
+                  weekdayName: _weekdayName,
+                  displayQuantity: _displayQuantity,
+                ),
+          ],
+        );
+      },
     );
   }
 }
@@ -936,7 +1134,8 @@ class _MyMealEntryTile extends StatelessWidget {
         ),
         subtitle: Text(
           'Lunch: ${displayQuantity(lunch)}   '
-          'Dinner: ${displayQuantity(dinner)}',
+          'Dinner: ${displayQuantity(dinner)}'
+          '${data['planned'] == true ? '  •  From meal plan' : ''}',
         ),
         trailing: Text(
           displayQuantity(total),

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/subscription_service.dart';
+import '../services/meal_plan.dart';
+import '../services/meal_plan_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
 import 'hostel_activation_screen.dart';
@@ -490,6 +492,8 @@ class _TodayMealText extends StatefulWidget {
 
 class _TodayMealTextState extends State<_TodayMealText> {
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _todayEntry;
+  late final Stream<MemberMealPlan> _plan;
+  late final String _todayKey;
 
   @override
   void initState() {
@@ -499,6 +503,9 @@ class _TodayMealTextState extends State<_TodayMealText> {
     final month = now.month.toString().padLeft(2, '0');
     final day = now.day.toString().padLeft(2, '0');
     final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    _todayKey = MealPlans.dateKey(now);
+    _plan = MealPlanService.watch(widget.groupId, uid);
 
     // A single document: this member's own entry for today.
     _todayEntry = FirebaseFirestore.instance
@@ -518,6 +525,18 @@ class _TodayMealTextState extends State<_TodayMealText> {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<MemberMealPlan>(
+      stream: _plan,
+      builder: (context, planSnapshot) {
+        final rules = planSnapshot.data?.rules ?? const <MealPlanRule>[];
+        return _buildText(MealPlans.forDay(rules, _todayKey));
+      },
+    );
+  }
+
+  /// [planned] is what the member's meal plan counts today when they
+  /// have added no entry.
+  Widget _buildText(PlannedMeals? planned) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _todayEntry,
       builder: (context, snapshot) {
@@ -526,6 +545,8 @@ class _TodayMealTextState extends State<_TodayMealText> {
         final String text;
         if (!snapshot.hasData) {
           text = '';
+        } else if (entry == null && planned != null) {
+          text = 'Today: ${_quantity(planned.total)} (plan)';
         } else if (entry == null) {
           text = 'Today: not entered';
         } else {
@@ -542,7 +563,9 @@ class _TodayMealTextState extends State<_TodayMealText> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: entry == null ? AppTheme.warning : AppTheme.success,
+            color: entry == null && planned == null
+                ? AppTheme.warning
+                : AppTheme.success,
           ),
         );
       },

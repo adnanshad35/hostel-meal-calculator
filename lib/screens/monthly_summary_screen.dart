@@ -7,6 +7,8 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
+import '../services/meal_plan.dart';
+import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import 'fixed_costs_screen.dart';
@@ -29,6 +31,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late DateTime _selectedMonth;
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _settingsStream;
+  late final Stream<List<MemberMealPlan>> _plansStream;
 
   _CalcTab _tab = _CalcTab.meals;
   bool _showMemberCards = true;
@@ -44,6 +47,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
     _membersStream = GroupMemberService.watch(widget.groupId);
+    _plansStream = MealPlanService.watchAll(widget.groupId);
     // Every month's settings, because fixed costs carry forward from
     // the last month they were saved in.
     _settingsStream = _firestore
@@ -414,22 +418,42 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                           )
                           .toList();
 
-                      final result = _calculate(
-                        members: members,
-                        meals: mealSnapshot.data?.docs ?? [],
-                        expenses: expenseSnapshot.data?.docs ?? [],
-                        minimumMeals: minimumMeals,
-                        shopDue: shopDue,
-                      );
+                      // Meal plans fill in the days without an entry.
+                      return StreamBuilder<List<MemberMealPlan>>(
+                        stream: _plansStream,
+                        builder: (context, planSnapshot) {
+                          if (planSnapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              !planSnapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          if (planSnapshot.hasError) {
+                            return const Center(
+                              child: Text('Unable to load meal plans.'),
+                            );
+                          }
 
-                      return _buildContent(
-                        context,
-                        result: result,
-                        members: members,
-                        fixedCosts: fixedCosts,
-                        minimumMeals: minimumMeals,
-                        shopDue: shopDue,
-                        canGoNext: canGoNext,
+                          final result = _calculate(
+                            members: members,
+                            meals: mealSnapshot.data?.docs ?? [],
+                            plans: planSnapshot.data ?? const [],
+                            expenses: expenseSnapshot.data?.docs ?? [],
+                            minimumMeals: minimumMeals,
+                            shopDue: shopDue,
+                          );
+
+                          return _buildContent(
+                            context,
+                            result: result,
+                            members: members,
+                            fixedCosts: fixedCosts,
+                            minimumMeals: minimumMeals,
+                            shopDue: shopDue,
+                            canGoNext: canGoNext,
+                          );
+                        },
                       );
                     },
                   );
@@ -445,6 +469,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   MonthlyCalculation _calculate({
     required List<CalcMember> members,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> meals,
+    required List<MemberMealPlan> plans,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> expenses,
     required double minimumMeals,
     required double shopDue,
@@ -452,7 +477,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     return MonthlyCalculator.calculate(
       month: _selectedMonth,
       members: members,
-      meals: meals.map(_mealRecord),
+      meals: _withPlannedMeals(
+        meals.map(_mealRecord).toList(),
+        plans: plans,
+        members: members,
+        month: _selectedMonth,
+      ),
       expenses: expenses.map(_expenseRecord),
       minimumMeals: minimumMeals,
       shopDue: shopDue,
@@ -1690,14 +1720,20 @@ Future<double?> _previousMealRate({
 
   final mealsSnapshot = await groupRef.collection('meals').get();
   final expensesSnapshot = await groupRef.collection('expenses').get();
+  final plans = await MealPlanService.fetchAll(groupId);
+  final calcMembers = [
+    for (final member in members) CalcMember(id: member.id, name: member.name),
+  ];
 
   final result = MonthlyCalculator.calculate(
     month: previousMonthStart,
-    members: [
-      for (final member in members)
-        CalcMember(id: member.id, name: member.name),
-    ],
-    meals: mealsSnapshot.docs.map(_mealRecord),
+    members: calcMembers,
+    meals: _withPlannedMeals(
+      mealsSnapshot.docs.map(_mealRecord).toList(),
+      plans: plans,
+      members: calcMembers,
+      month: previousMonthStart,
+    ),
     expenses: expensesSnapshot.docs.map(_expenseRecord),
     minimumMeals: minimumMeals,
     shopDue: shopDue,
@@ -1705,6 +1741,26 @@ Future<double?> _previousMealRate({
 
   if (result.totalMealNumber <= 0) return null;
   return result.mealRate;
+}
+
+/// The saved meal entries, plus what the meal plans count for the
+/// days of [month] that have no entry.
+List<MealRecord> _withPlannedMeals(
+  List<MealRecord> meals, {
+  required List<MemberMealPlan> plans,
+  required List<CalcMember> members,
+  required DateTime month,
+}) {
+  return [
+    ...meals,
+    ...MealPlans.automaticMeals(
+      plans: plans,
+      meals: meals,
+      activeMemberIds: {for (final member in members) member.id},
+      month: month,
+      today: DateTime.now(),
+    ),
+  ];
 }
 
 MealRecord _mealRecord(QueryDocumentSnapshot<Map<String, dynamic>> document) {

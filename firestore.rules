@@ -256,6 +256,29 @@ service cloud.firestore {
         );
       }
 
+      // What to count for a member on days without a meal entry.
+      // Members set their own plan; admins can set anyone's.
+      match /mealPlans/{memberId} {
+        allow read: if canReadHostel(groupId);
+
+        allow create, update: if isGroupMember(groupId)
+          && isHostelActive(groupId)
+          && request.resource.data.memberId == memberId
+          && request.resource.data.memberName is string
+          && request.resource.data.rules is list
+          && request.resource.data.rules.size() <= 200
+          && (
+            memberId == request.auth.uid
+            || (
+              isGroupAdmin(groupId)
+              && isRegisteredMember(groupId, memberId)
+            )
+          );
+
+        allow delete: if isGroupAdmin(groupId)
+          && isHostelActive(groupId);
+      }
+
       match /expenses/{expenseId} {
         allow read: if canReadHostel(groupId);
 

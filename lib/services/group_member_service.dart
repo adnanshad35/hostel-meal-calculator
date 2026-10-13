@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/group_member.dart';
+import 'meal_plan_service.dart';
 
 /// Reads and maintains `groups/{groupId}/members`.
 class GroupMemberService {
@@ -257,6 +258,9 @@ class GroupMemberService {
     await _members(groupId)
         .doc(memberId)
         .update({'active': active, 'updatedAt': FieldValue.serverTimestamp()});
+
+    // A deactivated member's meal plan stops counting from tomorrow.
+    if (!active) await MealPlanService.close(groupId, memberId);
   }
 
   /// Promotes an app user to administrator or changes them back to
@@ -320,6 +324,9 @@ class GroupMemberService {
     final currentUser = FirebaseAuth.instance.currentUser!;
     final groupReference = _group(groupId);
     final userReference = _firestore.collection('users').doc(currentUser.uid);
+
+    // Done first, while this user may still write in the hostel.
+    await MealPlanService.close(groupId, currentUser.uid);
 
     await _firestore.runTransaction((transaction) async {
       final groupSnapshot = await transaction.get(groupReference);
@@ -488,6 +495,7 @@ class GroupMemberService {
 
     // Deactivates the removed user's member entry.
     await sync(groupId);
+    await MealPlanService.close(groupId, memberId);
   }
 
   /// Moves a shadow member's meals and expenses to [appUser] and
@@ -564,5 +572,12 @@ class GroupMemberService {
       }
       await batch.commit();
     }
+
+    await MealPlanService.move(
+      groupId: groupId,
+      fromMemberId: shadow.id,
+      toMemberId: appUser.id,
+      toMemberName: appUser.name,
+    );
   }
 }
