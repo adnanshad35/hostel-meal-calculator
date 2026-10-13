@@ -288,7 +288,11 @@ service cloud.firestore {
             && request.resource.data.get('fromFund', 0)
               <= request.resource.data.amount
             && request.resource.data.get('category', 'meal')
-              in ['meal', 'bill'];
+              in ['meal', 'bill']
+            && request.resource.data.get('fundNote', '') is string
+            && request.resource.data.get('fundNote', '').size() <= 600
+            && request.resource.data.get('pocketNote', '') is string
+            && request.resource.data.get('pocketNote', '').size() <= 600;
         }
 
         allow read: if canReadHostel(groupId);
@@ -342,6 +346,8 @@ service cloud.firestore {
               'date',
               'fromFund',
               'category',
+              'fundNote',
+              'pocketNote',
               'updatedBy',
               'updatedAt'
             ]);

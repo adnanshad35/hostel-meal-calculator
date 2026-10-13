@@ -392,7 +392,7 @@ class TotalExpensesScreen extends StatelessWidget {
                     ),
                     subtitle: Text(
                       '${_formatDate(date)}${_expenseNote(data)}\n'
-                      'Paid by $paidByName',
+                      'Paid by $paidByName${_expenseDetails(data)}',
                     ),
                     isThreeLine: true,
                     trailing: Row(
@@ -602,7 +602,10 @@ class MyExpensesScreen extends StatelessWidget {
                       name,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('${_formatDate(date)}${_expenseNote(data)}'),
+                    subtitle: Text(
+                      '${_formatDate(date)}${_expenseNote(data)}'
+                      '${_expenseDetails(data)}',
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -746,10 +749,59 @@ String _expenseNote(Map<String, dynamic> data) {
   return notes.isEmpty ? '' : '  •  ${notes.join(', ')}';
 }
 
-enum _AmountMode { fixed, calculation }
+/// What the member wrote about how the money was spent, on new lines.
+String _expenseDetails(Map<String, dynamic> data) {
+  final details = [
+    for (final key in const ['fundNote', 'pocketNote'])
+      if (data[key] is String && (data[key] as String).trim().isNotEmpty)
+        (data[key] as String).trim(),
+  ];
 
-/// Whose money paid for an expense.
-enum _PaidFrom { pocket, fund, both }
+  return details.isEmpty ? '' : '\n${details.join('\n')}';
+}
+
+/// Where the money for an expense came from, and what it was for.
+/// One expense can use more than one.
+enum _Source {
+  fund(
+    'Meal fund',
+    'Money from the hostel fund, spent on meals',
+    Icons.savings_outlined,
+  ),
+  pocket(
+    'My pocket',
+    'The member\'s own money, spent on meals',
+    Icons.account_balance_wallet_outlined,
+  ),
+  share(
+    'Share cost',
+    'A shared bill such as water, paid with own money',
+    Icons.receipt_long_outlined,
+  );
+
+  const _Source(this.label, this.hint, this.icon);
+
+  final String label;
+  final String hint;
+  final IconData icon;
+}
+
+/// The usual things a hostel spends on. "Other" lets the member type
+/// a name instead.
+const _sectors = [
+  'Bazar',
+  'Rice',
+  'Fish & Meat',
+  'Vegetables',
+  'Grocery',
+  'Gas',
+];
+
+const _otherSector = 'Other';
+
+String _plainNumber(double value) {
+  return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Expense form dialog
@@ -770,17 +822,26 @@ class _ExpenseFormDialog extends StatefulWidget {
 }
 
 class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
-  final _formKey = GlobalKey<FormState>();
+  final _otherNameController = TextEditingController();
+  final _amountControllers = {
+    for (final source in _Source.values) source: TextEditingController(),
+  };
+  final _noteControllers = {
+    for (final source in _Source.values) source: TextEditingController(),
+  };
 
-  late final TextEditingController _nameController;
-  late final TextEditingController _amountController;
-  late final TextEditingController _fundAmountController;
+  /// The sources that can be chosen. A saved expense keeps its kind:
+  /// a meal expense cannot be turned into a shared bill, or back.
+  late final List<_Source> _available;
 
+  /// Checked sources, each with its own amount field.
+  final _checked = <_Source>{};
+
+  /// Sources whose description box is open.
+  final _notesOpen = <_Source>{};
+
+  String _sector = _sectors.first;
   late DateTime _selectedDate;
-
-  /// A shared bill, such as water, instead of a meal expense.
-  bool _isBill = false;
-  _PaidFrom _paidFrom = _PaidFrom.pocket;
 
   List<GroupMember> _members = [];
   StreamSubscription<List<GroupMember>>? _membersSubscription;
@@ -789,59 +850,79 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   bool _isLoadingMembers = false;
   bool _isSaving = false;
 
-  _AmountMode _amountMode = _AmountMode.fixed;
-
   bool get _isEditing => widget.expense != null;
 
   User get _currentUser => FirebaseAuth.instance.currentUser!;
+
+  String get _ownName {
+    final name = _currentUser.displayName?.trim() ?? '';
+    return name.isNotEmpty ? name : _currentUser.email ?? 'Member';
+  }
 
   @override
   void initState() {
     super.initState();
 
     final data = widget.expense?.data();
-    final amount = data?['amount'];
-
-    _nameController = TextEditingController(
-      text: data?['name'] as String? ?? '',
-    );
-
-    _amountController = TextEditingController(
-      text: amount is num
-          ? (amount % 1 == 0 ? amount.toInt().toString() : amount.toString())
-          : '',
-    );
 
     _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-
-    final saved = data == null ? null : FundService.expenseRecord(data);
-    _isBill = saved?.isBill ?? false;
-    _paidFrom = saved == null || saved.fundPart <= 0
-        ? _PaidFrom.pocket
-        : saved.pocketPart <= 0
-        ? _PaidFrom.fund
-        : _PaidFrom.both;
-    _fundAmountController = TextEditingController(
-      text: _paidFrom == _PaidFrom.both
-          ? (saved!.fundPart % 1 == 0
-                ? saved.fundPart.toInt().toString()
-                : saved.fundPart.toString())
-          : '',
-    );
-
     _selectedMemberId = data?['paidById'] as String? ?? _currentUser.uid;
+
+    if (data == null) {
+      _available = _Source.values;
+      _checked.add(_Source.pocket);
+    } else {
+      _loadSaved(data);
+    }
 
     if (widget.isAdmin && !_isEditing) {
       _watchMembers();
     }
   }
 
+  void _loadSaved(Map<String, dynamic> data) {
+    final saved = FundService.expenseRecord(data);
+    final name = (data['name'] as String? ?? '').trim();
+
+    if (_sectors.contains(name)) {
+      _sector = name;
+    } else {
+      _sector = _otherSector;
+      _otherNameController.text = name;
+    }
+
+    void fill(_Source source, double amount, Object? note) {
+      if (amount <= 0) return;
+
+      _checked.add(source);
+      _amountControllers[source]!.text = _plainNumber(amount);
+
+      if (note is String && note.trim().isNotEmpty) {
+        _noteControllers[source]!.text = note;
+        _notesOpen.add(source);
+      }
+    }
+
+    if (saved.isBill) {
+      _available = const [_Source.share];
+      fill(_Source.share, saved.amount, data['pocketNote']);
+    } else {
+      _available = const [_Source.fund, _Source.pocket];
+      fill(_Source.fund, saved.fundPart, data['fundNote']);
+      fill(_Source.pocket, saved.pocketPart, data['pocketNote']);
+    }
+  }
+
   @override
   void dispose() {
     _membersSubscription?.cancel();
-    _nameController.dispose();
-    _amountController.dispose();
-    _fundAmountController.dispose();
+    _otherNameController.dispose();
+    for (final controller in _amountControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _noteControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -856,9 +937,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           members.add(
             GroupMember(
               id: _currentUser.uid,
-              name: _currentUser.displayName?.trim().isNotEmpty == true
-                  ? _currentUser.displayName!.trim()
-                  : _currentUser.email ?? 'Administrator',
+              name: _ownName,
               isAppUser: true,
               userId: _currentUser.uid,
             ),
@@ -881,13 +960,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
         setState(() => _isLoadingMembers = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              error is FirebaseException
-                  ? error.message ?? 'Unable to load members.'
-                  : 'Unable to load members.',
-            ),
-          ),
+          const SnackBar(content: Text('Unable to load members.')),
         );
       },
     );
@@ -906,84 +979,154 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     }
   }
 
-  /// Opens the calculator dialog. On "Use Result", writes the
-  /// computed plain number into the amount field.
-  Future<void> _openCalculator() async {
-    final result = await showDialog<double>(
+  /// Lets the member tick where the money came from.
+  Future<void> _chooseSources() async {
+    final chosen = await showDialog<Set<_Source>>(
       context: context,
       builder: (_) =>
-          _CalculatorDialog(initialValue: _amountController.text.trim()),
+          _SourceChecklist(available: _available, checked: {..._checked}),
     );
 
-    if (!mounted) return;
+    if (chosen == null || !mounted) return;
 
-    if (result != null) {
-      _amountController.text = result % 1 == 0
-          ? result.toInt().toString()
-          : result.toStringAsFixed(2);
-      setState(() {});
+    setState(() {
+      _checked
+        ..clear()
+        ..addAll(chosen);
+    });
+  }
+
+  /// Opens the calculator. "Use It" puts the result into [opener]'s
+  /// amount, or asks which one when several sources are ticked.
+  Future<void> _openCalculator(_Source opener) async {
+    final result = await showDialog<double>(
+      context: context,
+      builder: (_) => _CalculatorDialog(
+        initialValue: _amountControllers[opener]!.text.trim(),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    var target = opener;
+
+    if (_checked.length > 1) {
+      final picked = await showDialog<_Source>(
+        context: context,
+        builder: (dialogContext) {
+          return SimpleDialog(
+            title: Text('Use ৳${_plainNumber(result)} for'),
+            children: [
+              for (final source in _Source.values)
+                if (_checked.contains(source))
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.of(dialogContext).pop(source),
+                    child: Row(
+                      children: [
+                        Icon(source.icon, size: 20),
+                        const SizedBox(width: 12),
+                        Text(source.label),
+                      ],
+                    ),
+                  ),
+            ],
+          );
+        },
+      );
+
+      if (picked == null || !mounted) return;
+      target = picked;
     }
+
+    setState(() {
+      _amountControllers[target]!.text = _plainNumber(result);
+    });
+  }
+
+  double _amountOf(_Source source) {
+    if (!_checked.contains(source)) return 0;
+    return double.tryParse(_amountControllers[source]!.text.trim()) ?? 0;
+  }
+
+  String _noteOf(_Source source) {
+    if (!_checked.contains(source)) return '';
+    return _noteControllers[source]!.text.trim();
+  }
+
+  double get _total {
+    return _Source.values.fold<double>(
+      0,
+      (total, source) => total + _amountOf(source),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveExpense() async {
-    if (!_formKey.currentState!.validate()) return;
+    final name = _sector == _otherSector
+        ? _otherNameController.text.trim()
+        : _sector;
 
-    if (widget.isAdmin && !_isEditing && _selectedMemberId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please select a member.')));
+    if (name.isEmpty) {
+      _showMessage('Please type the expense name.');
       return;
     }
 
-    final parsedAmount = double.tryParse(_amountController.text.trim());
-
-    if (parsedAmount == null || parsedAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount.')),
-      );
+    if (_checked.isEmpty) {
+      _showMessage('Tick where the money came from.');
       return;
     }
 
-    final amount = parsedAmount;
-
-    final double fromFund;
-    switch (_paidFrom) {
-      case _PaidFrom.pocket:
-        fromFund = 0;
-      case _PaidFrom.fund:
-        fromFund = amount;
-      case _PaidFrom.both:
-        final part = double.tryParse(_fundAmountController.text.trim());
-
-        if (part == null || part <= 0 || part >= amount) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'The amount from the fund must be more than 0 and less '
-                'than the expense.',
-              ),
-            ),
-          );
-          return;
-        }
-        fromFund = part;
+    for (final source in _Source.values) {
+      if (_checked.contains(source) && _amountOf(source) <= 0) {
+        _showMessage('Please enter the amount for "${source.label}".');
+        return;
+      }
     }
 
-    final category = _isBill ? 'bill' : 'meal';
+    final fund = _amountOf(_Source.fund);
+    final pocket = _amountOf(_Source.pocket);
+    final share = _amountOf(_Source.share);
+    final shareNote = _noteOf(_Source.share);
+
+    // A shared bill is listed with the fixed costs under what it was
+    // for, so its description names it when there is one.
+    final billName = shareNote.isEmpty
+        ? name
+        : shareNote.split('\n').first.trim();
 
     final selectedMember = _members
         .where((member) => member.id == _selectedMemberId)
         .firstOrNull;
 
     final paidById = widget.isAdmin && !_isEditing
-        ? _selectedMemberId!
+        ? _selectedMemberId ?? _currentUser.uid
         : _currentUser.uid;
 
     final paidByName = widget.isAdmin && !_isEditing
         ? selectedMember?.name ?? 'Member'
-        : _currentUser.displayName?.trim().isNotEmpty == true
-        ? _currentUser.displayName!.trim()
-        : _currentUser.email ?? 'Member';
+        : _ownName;
+
+    final mealFields = <String, dynamic>{
+      'name': name,
+      'amount': fund + pocket,
+      'fromFund': fund,
+      'category': 'meal',
+      'fundNote': _noteOf(_Source.fund),
+      'pocketNote': _noteOf(_Source.pocket),
+    };
+
+    final billFields = <String, dynamic>{
+      'name': billName.length > 60 ? billName.substring(0, 60) : billName,
+      'amount': share,
+      'fromFund': 0,
+      'category': 'bill',
+      'fundNote': '',
+      'pocketNote': shareNote,
+    };
 
     setState(() => _isSaving = true);
 
@@ -995,34 +1138,34 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
       if (_isEditing) {
         await expenses.doc(widget.expense!.id).update({
-          'name': _nameController.text.trim(),
-          'amount': amount,
+          ...(share > 0 ? billFields : mealFields),
           'date': Timestamp.fromDate(_selectedDate),
-          'fromFund': fromFund,
-          'category': category,
           'updatedBy': _currentUser.uid,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        await expenses.add({
-          'name': _nameController.text.trim(),
-          'amount': amount,
+        final common = <String, dynamic>{
           'date': Timestamp.fromDate(_selectedDate),
-          'fromFund': fromFund,
-          'category': category,
           'paidById': paidById,
           'paidByName': paidByName,
           'enteredBy': _currentUser.uid,
-          'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
-              ? _currentUser.displayName!.trim()
-              : _currentUser.email ?? 'Member',
+          'enteredByName': _ownName,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
 
-        final amountText = amount % 1 == 0
-            ? amount.toInt().toString()
-            : amount.toStringAsFixed(2);
+        // Meals and a shared bill are counted differently, so they
+        // are saved as two records, together.
+        final batch = FirebaseFirestore.instance.batch();
+
+        if (fund + pocket > 0) {
+          batch.set(expenses.doc(), {...mealFields, ...common});
+        }
+        if (share > 0) {
+          batch.set(expenses.doc(), {...billFields, ...common});
+        }
+
+        await batch.commit();
 
         // Not awaited: the expense is saved either way.
         unawaited(
@@ -1030,7 +1173,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
             groupId: widget.groupId,
             title: 'New expense',
             message:
-                '${_nameController.text.trim()} · ৳$amountText, '
+                '$name · ৳${_plainNumber(fund + pocket + share)}, '
                 'paid by $paidByName',
           ),
         );
@@ -1040,12 +1183,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       Navigator.of(context).pop();
     } on FirebaseException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            saveErrorMessage(error, fallback: 'Unable to save expense.'),
-          ),
-        ),
+      _showMessage(
+        saveErrorMessage(error, fallback: 'Unable to save expense.'),
       );
     } finally {
       if (mounted) {
@@ -1054,260 +1193,236 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     }
   }
 
+  /// The amount field of one ticked source, with its calculator and
+  /// description buttons.
+  Widget _sourceField(_Source source) {
+    final isNoteOpen = _notesOpen.contains(source);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        children: [
+          TextField(
+            controller: _amountControllers[source],
+            enabled: !_isSaving,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: source.label,
+              hintText: 'Amount',
+              prefixText: '৳ ',
+              prefixIcon: Icon(source.icon),
+              border: const OutlineInputBorder(),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Calculator',
+                    onPressed: _isSaving ? null : () => _openCalculator(source),
+                    icon: const Icon(Icons.calculate_outlined),
+                  ),
+                  IconButton(
+                    tooltip: isNoteOpen
+                        ? 'Remove description'
+                        : 'Add description',
+                    onPressed: _isSaving
+                        ? null
+                        : () {
+                            setState(() {
+                              if (isNoteOpen) {
+                                _notesOpen.remove(source);
+                                _noteControllers[source]!.clear();
+                              } else {
+                                _notesOpen.add(source);
+                              }
+                            });
+                          },
+                    icon: Icon(isNoteOpen ? Icons.remove : Icons.add),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isNoteOpen) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _noteControllers[source],
+              enabled: !_isSaving,
+              minLines: 2,
+              maxLines: 5,
+              maxLength: 500,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                labelText: 'Description',
+                hintText: source == _Source.share
+                    ? 'Water bill'
+                    : 'Onion 2kg 80tk\nOil 4lt 1000tk',
+                alignLabelWithHint: true,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final day = _selectedDate.day.toString().padLeft(2, '0');
     final month = _selectedDate.month.toString().padLeft(2, '0');
     final formattedDate = '$day/$month/${_selectedDate.year}';
 
-    final existingPaidByName = widget.expense?.data()?['paidByName'] as String?;
+    final savedPayer = widget.expense?.data()?['paidByName'] as String?;
+    final canPickMember = widget.isAdmin && !_isEditing;
 
     return AlertDialog(
       title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.isAdmin && !_isEditing) ...[
-                if (_isLoadingMembers)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: CircularProgressIndicator(),
-                  )
-                else
-                  DropdownButtonFormField<String>(
-                    // Rebuilt when the member list changes, so the
-                    // selection can never point at a missing member.
-                    key: ValueKey(
-                      _members.map((member) => member.id).join(','),
-                    ),
-                    initialValue: _selectedMemberId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Paid by',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _members.map((member) {
-                      return DropdownMenuItem<String>(
-                        value: member.id,
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                member.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (member.isAppUser) ...[
-                              const SizedBox(width: 8),
-                              const _AppUserChip(),
-                            ],
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _isSaving
-                        ? null
-                        : (value) {
-                            setState(() => _selectedMemberId = value);
-                          },
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please select a member.';
-                      }
-                      return null;
-                    },
-                  ),
-                const SizedBox(height: 16),
-              ],
-              if (_isEditing && existingPaidByName != null) ...[
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.person_outline),
-                  title: const Text('Paid by'),
-                  subtitle: Text(existingPaidByName),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ─── Person ───
+            if (canPickMember && _isLoadingMembers)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(),
                 ),
-                const SizedBox(height: 8),
-              ],
-              TextFormField(
-                controller: _nameController,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Expense name',
-                  hintText: 'Example: Rice or electricity bill',
-                  prefixIcon: Icon(Icons.description_outlined),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the expense name.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ─── Amount field ───
-              TextFormField(
-                controller: _amountController,
-                readOnly: _amountMode == _AmountMode.calculation,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Amount',
-                  hintText: _amountMode == _AmountMode.fixed
-                      ? 'Example: 350'
-                      : null,
-                  prefixText: '৳ ',
-                  prefixIcon: const Icon(Icons.payments_outlined),
-                  suffixIcon: _amountMode == _AmountMode.calculation
-                      ? IconButton(
-                          tooltip: 'Open calculator',
-                          onPressed: _isSaving ? null : _openCalculator,
-                          icon: const Icon(Icons.calculate_outlined),
-                        )
-                      : null,
-                  border: const OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  final parsed = double.tryParse(value?.trim() ?? '');
-                  if (parsed == null || parsed <= 0) {
-                    return 'Please enter a valid amount.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // ─── Mode selector ───
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<_AmountMode>(
-                  segments: const [
-                    ButtonSegment<_AmountMode>(
-                      value: _AmountMode.fixed,
-                      icon: Icon(Icons.edit_outlined, size: 18),
-                      label: Text('Fixed Value'),
-                    ),
-                    ButtonSegment<_AmountMode>(
-                      value: _AmountMode.calculation,
-                      icon: Icon(Icons.calculate_outlined, size: 18),
-                      label: Text('Calculation'),
-                    ),
-                  ],
-                  selected: {_amountMode},
-                  onSelectionChanged: _isSaving
-                      ? null
-                      : (selection) {
-                          final mode = selection.first;
-                          setState(() => _amountMode = mode);
-                          if (mode == _AmountMode.calculation) {
-                            // Open calculator immediately.
-                            _openCalculator();
-                          }
-                        },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ─── What it was for ───
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment<bool>(
-                      value: false,
-                      icon: Icon(Icons.restaurant_outlined, size: 18),
-                      label: Text('Meals'),
-                    ),
-                    ButtonSegment<bool>(
-                      value: true,
-                      icon: Icon(Icons.receipt_long_outlined, size: 18),
-                      label: Text('Shared Bill'),
-                    ),
-                  ],
-                  selected: {_isBill},
-                  onSelectionChanged: _isSaving
-                      ? null
-                      : (selection) {
-                          setState(() => _isBill = selection.first);
-                        },
-                ),
-              ),
-              if (_isBill) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Divided equally among all members, like Wi-Fi. It is '
-                  'not part of the meal rate.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              const SizedBox(height: 16),
-
-              // ─── Whose money ───
-              DropdownButtonFormField<_PaidFrom>(
-                initialValue: _paidFrom,
+              )
+            else if (canPickMember)
+              DropdownButtonFormField<String>(
+                // Rebuilt when the member list changes, so the
+                // selection can never point at a missing member.
+                key: ValueKey(_members.map((member) => member.id).join(',')),
+                initialValue: _selectedMemberId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Paid from',
-                  prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  labelText: 'Person',
+                  prefixIcon: Icon(Icons.person_outline),
                   border: OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: _PaidFrom.pocket,
-                    child: Text('Own pocket'),
-                  ),
-                  DropdownMenuItem(
-                    value: _PaidFrom.fund,
-                    child: Text('Hostel fund'),
-                  ),
-                  DropdownMenuItem(
-                    value: _PaidFrom.both,
-                    child: Text('Part from the fund'),
-                  ),
+                items: [
+                  for (final member in _members)
+                    DropdownMenuItem<String>(
+                      value: member.id,
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              member.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (member.isAppUser) ...[
+                            const SizedBox(width: 8),
+                            const _AppUserChip(),
+                          ],
+                        ],
+                      ),
+                    ),
                 ],
                 onChanged: _isSaving
                     ? null
-                    : (value) {
-                        setState(() => _paidFrom = value ?? _PaidFrom.pocket);
-                      },
-              ),
-              if (_paidFrom == _PaidFrom.both) ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _fundAmountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount from the fund',
-                    hintText: 'The rest counts as paid by the member',
-                    prefixText: '৳ ',
-                    prefixIcon: Icon(Icons.savings_outlined),
-                    border: OutlineInputBorder(),
-                  ),
+                    : (value) => setState(() => _selectedMemberId = value),
+              )
+            else
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Person',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
                 ),
+                child: Text(
+                  _isEditing ? savedPayer ?? 'Member' : _ownName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // ─── Expense name ───
+            DropdownButtonFormField<String>(
+              initialValue: _sector,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Expense',
+                prefixIcon: Icon(Icons.description_outlined),
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final sector in [..._sectors, _otherSector])
+                  DropdownMenuItem<String>(value: sector, child: Text(sector)),
               ],
-              const SizedBox(height: 8),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today_outlined),
-                title: const Text('Date'),
-                subtitle: Text(formattedDate),
-                trailing: TextButton(
-                  onPressed: _isSaving ? null : _selectDate,
-                  child: const Text('Change'),
+              onChanged: _isSaving
+                  ? null
+                  : (value) => setState(() => _sector = value ?? _sector),
+            ),
+            if (_sector == _otherSector) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _otherNameController,
+                enabled: !_isSaving,
+                maxLength: 60,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Expense name',
+                  hintText: 'Example: Cleaning items',
+                  counterText: '',
+                  border: OutlineInputBorder(),
                 ),
               ),
             ],
-          ),
+            const SizedBox(height: 16),
+
+            // ─── Where the money came from ───
+            InkWell(
+              onTap: _isSaving || _available.length == 1
+                  ? null
+                  : _chooseSources,
+              borderRadius: BorderRadius.circular(4),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Paid from',
+                  prefixIcon: const Icon(Icons.checklist_outlined),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: _available.length == 1
+                      ? null
+                      : const Icon(Icons.arrow_drop_down),
+                ),
+                child: Text(
+                  _checked.isEmpty
+                      ? 'Tap to choose'
+                      : [
+                          for (final source in _Source.values)
+                            if (_checked.contains(source)) source.label,
+                        ].join(', '),
+                ),
+              ),
+            ),
+            for (final source in _Source.values)
+              if (_checked.contains(source)) _sourceField(source),
+            if (_checked.length > 1) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Total  ৳${_plainNumber(_total)}',
+                textAlign: TextAlign.end,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('Date'),
+              subtitle: Text(formattedDate),
+              trailing: TextButton(
+                onPressed: _isSaving ? null : _selectDate,
+                child: const Text('Change'),
+              ),
+            ),
+          ],
         ),
       ),
       actions: [
@@ -1316,8 +1431,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed:
-              _isSaving || (widget.isAdmin && !_isEditing && _isLoadingMembers)
+          onPressed: _isSaving || (canPickMember && _isLoadingMembers)
               ? null
               : _saveExpense,
           child: _isSaving
@@ -1333,8 +1447,61 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   }
 }
 
+/// The "Paid from" checklist: tick one or more sources.
+class _SourceChecklist extends StatefulWidget {
+  const _SourceChecklist({required this.available, required this.checked});
+
+  final List<_Source> available;
+  final Set<_Source> checked;
+
+  @override
+  State<_SourceChecklist> createState() => _SourceChecklistState();
+}
+
+class _SourceChecklistState extends State<_SourceChecklist> {
+  late final Set<_Source> _checked = widget.checked;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Paid from'),
+      contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final source in widget.available)
+            CheckboxListTile(
+              value: _checked.contains(source),
+              title: Text(
+                source.label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(source.hint),
+              onChanged: (isChecked) {
+                setState(() {
+                  if (isChecked == true) {
+                    _checked.add(source);
+                  } else {
+                    _checked.remove(source);
+                  }
+                });
+              },
+            ),
+        ],
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_checked),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
-// Calculator dialog — same safe evaluator, keypad, "Use Result"
+// Calculator dialog — a safe evaluator and keypad. "OK" just closes
+// it; "Use It" puts the result into an amount
 // ─────────────────────────────────────────────────────────────
 class _CalculatorDialog extends StatefulWidget {
   const _CalculatorDialog({this.initialValue});
@@ -1477,13 +1644,13 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: const Text('OK'),
         ),
         FilledButton(
           onPressed: _preview == null
               ? null
               : () => Navigator.of(context).pop(_preview),
-          child: const Text('Use Result'),
+          child: const Text('Use It'),
         ),
       ],
     );
