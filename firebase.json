@@ -12,7 +12,8 @@
         "lib/firebase_options.dart": {
           "projectId": "hostel-meal-calculator-1035",
           "configurations": {
-            "android": "1:115727062396:android:187755a46298d9b377c0f9"
+            "android": "1:115727062396:android:187755a46298d9b377c0f9",
+            "web": "1:115727062396:web:e4dd1b298dd80f5977c0f9"
           }
         }
       }
@@ -26,7 +27,7 @@
   },
   "hosting": [
     {
-      "public": "website",
+      "public": "build/hosting",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -34,7 +35,16 @@
       ],
       "headers": [
         {
-          "source": "**/*.@(png|jpg|svg)",
+          "source": "/app/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        {
+          "source": "/*.@(png|jpg|svg)",
           "headers": [
             {
               "key": "Cache-Control",

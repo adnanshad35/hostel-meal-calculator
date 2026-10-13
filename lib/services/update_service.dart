@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// A newer version of the app that is available to download.
@@ -40,6 +41,10 @@ class UpdateService {
   /// Returns the available update, or null when the app is up to date
   /// or the check could not be completed.
   static Future<AppUpdate?> check() async {
+    // The web version is served fresh on every visit, so there is
+    // nothing to download or install.
+    if (kIsWeb) return null;
+
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
 
     try {
