@@ -218,8 +218,17 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         }
       }
 
+      final depositSnapshot = await groupReference.collection('deposits').get();
+      final depositReferences = [
+        for (final deposit in depositSnapshot.docs)
+          if (deposit.data()['date'] is! Timestamp ||
+              _expenseBelongsToMonth(deposit, firstDay, nextMonth))
+            deposit.reference,
+      ];
+
       await _deleteDocuments(mealReferences);
       await _deleteDocuments(expenseReferences);
+      await _deleteDocuments(depositReferences);
 
       final monthlySettingReference = groupReference
           .collection('monthlySettings')
