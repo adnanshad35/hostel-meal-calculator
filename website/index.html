@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HostelMate — hostel meals and expenses, settled fairly</title>
+  <meta name="description" content="HostelMate keeps a hostel's meals, expenses, rent and bills in one place and works out exactly what each member pays or collects. Android app.">
+  <meta name="theme-color" content="#0B3D2C">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="HostelMate">
+  <meta property="og:description" content="Hostel meals and expenses, settled without the arguments.">
+  <meta property="og:url" content="https://hostelmate.web.app">
+  <meta property="og:image" content="https://hostelmate.web.app/icon.png">
+  <link rel="icon" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #0C1711;
+      --ink-soft: #4E5D55;
+      --green: #176B4D;
+      --green-deep: #0B3D2C;
+      --green-bright: #34C38F;
+      --mint: #E8F5EE;
+      --line: #E4EBE7;
+      --paper: #FFFFFF;
+      --canvas: #F7FAF8;
+      --amber: #D98A1F;
+      --radius: 22px;
+      --shadow: 0 24px 60px -24px rgba(11, 61, 44, .28);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--canvas);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; }
+    .wrap { width: min(1120px, 100% - 40px); margin-inline: auto; }
+
+    /* ───────── Navigation ───────── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(11, 61, 44, .82);
+      backdrop-filter: saturate(160%) blur(14px);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    .nav .wrap { display: flex; align-items: center; height: 64px; gap: 28px; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 18px;
+      color: #fff;
+      text-decoration: none;
+      letter-spacing: -.3px;
+    }
+
+    .brand img { width: 30px; height: 30px; border-radius: 8px; }
+
+    .nav-links { display: flex; gap: 26px; margin-left: auto; }
+
+    .nav-links a {
+      color: rgba(255, 255, 255, .78);
+      text-decoration: none;
+      font-size: 14.5px;
+      font-weight: 500;
+      transition: color .15s;
+    }
+
+    .nav-links a:hover { color: #fff; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 14px;
+      transition: transform .15s, box-shadow .15s, background .15s;
+      white-space: nowrap;
+    }
+
+    .btn:hover { transform: translateY(-2px); }
+    .btn svg { width: 19px; height: 19px; flex: none; }
+
+    .btn-small { padding: 9px 16px; font-size: 14px; background: #fff; color: var(--green-deep); }
+
+    .btn-primary {
+      padding: 16px 28px;
+      font-size: 17px;
+      background: #fff;
+      color: var(--green-deep);
+      box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .45);
+    }
+
+    .btn-ghost {
+      padding: 16px 24px;
+      font-size: 17px;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, .28);
+    }
+
+    .btn-ghost:hover { background: rgba(255, 255, 255, .08); }
+
+    .btn-dark {
+      padding: 16px 28px;
+      font-size: 17px;
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 14px 30px -14px rgba(23, 107, 77, .8);
+    }
+
+    /* ───────── Hero ───────── */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+      background:
+        radial-gradient(900px 520px at 85% -10%, rgba(52, 195, 143, .35), transparent 60%),
+        radial-gradient(700px 480px at -10% 110%, rgba(52, 195, 143, .22), transparent 60%),
+        linear-gradient(160deg, #072B1F 0%, var(--green-deep) 45%, #145C42 100%);
+      padding: 76px 0 96px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 72%);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 72%);
+      pointer-events: none;
+    }
+
+    .hero .wrap {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 56px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, .1);
+      border: 1px solid rgba(255, 255, 255, .16);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, .9);
+    }
+
+    .eyebrow i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green-bright);
+      box-shadow: 0 0 0 4px rgba(52, 195, 143, .25);
+    }
+
+    h1 {
+      font-size: clamp(38px, 5.4vw, 62px);
+      line-height: 1.04;
+      letter-spacing: -2px;
+      font-weight: 800;
+      margin: 22px 0 18px;
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(90deg, #7EE8BE, #D8FBEA);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p.sub {
+      font-size: clamp(17px, 1.6vw, 20px);
+      color: rgba(255, 255, 255, .8);
+      max-width: 520px;
+      margin: 0 0 32px;
+    }
+
+    .actions { display: flex; gap: 14px; flex-wrap: wrap; }
+
+    .meta {
+      margin-top: 22px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, .62);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .meta span::before { content: "✓ "; color: var(--green-bright); font-weight: 700; }
+
+    /* ───────── Phone mock-up ───────── */
+    .stage { position: relative; display: flex; justify-content: center; }
+
+    .phone {
+      position: relative;
+      width: 290px;
+      border-radius: 44px;
+      padding: 11px;
+      background: linear-gradient(160deg, #26342D, #0A1410);
+      box-shadow:
+        0 50px 90px -30px rgba(0, 0, 0, .7),
+        0 0 0 1px rgba(255, 255, 255, .08) inset;
+      transform: rotate(3deg);
+      animation: float 7s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: rotate(3deg) translateY(0); }
+      50% { transform: rotate(3deg) translateY(-12px); }
+    }
+
+    .screen {
+      border-radius: 34px;
+      background: #F6F8F5;
+      color: var(--ink);
+      padding: 16px 14px 20px;
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    .screen .bar { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 15px; margin: 4px 2px 12px; }
+    .screen .bar span { display: flex; gap: 8px; }
+    .screen .bar b { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); display: block; }
+
+    .m-head {
+      background: linear-gradient(135deg, var(--green-deep), var(--green));
+      color: #fff;
+      border-radius: 16px;
+      padding: 12px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .m-head strong { font-size: 15px; display: block; }
+    .m-head small { opacity: .8; }
+    .m-head .code { background: rgba(255, 255, 255, .16); border-radius: 10px; padding: 5px 9px; font-weight: 800; letter-spacing: 1px; font-size: 11px; }
+
+    .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+
+    .m-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      min-height: 84px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .m-card .top { display: flex; justify-content: space-between; align-items: center; }
+    .m-card .ico { width: 28px; height: 28px; border-radius: 9px; }
+    .m-card .plus { width: 26px; height: 26px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; line-height: 1; }
+    .m-card b { font-size: 12.5px; }
+    .m-card small { display: block; font-weight: 600; font-size: 10px; }
+
+    .m-result { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-top: 10px; padding: 10px 12px; }
+    .m-result h4 { margin: 0 0 6px; font-size: 12px; display: flex; justify-content: space-between; }
+    .m-result h4 span { color: var(--green); font-weight: 700; }
+    .m-row { display: flex; justify-content: space-between; padding: 4px 0; font-weight: 600; }
+    .pay { color: #D64545; font-weight: 800; }
+    .get { color: #218653; font-weight: 800; }
+
+    .chip {
+      position: absolute;
+      background: #fff;
+      color: var(--ink);
+      border-radius: 16px;
+      padding: 11px 15px;
+      box-shadow: 0 22px 44px -18px rgba(0, 0, 0, .55);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .chip strong { display: block; font-size: 17px; letter-spacing: -.3px; }
+    .chip-a { left: -6px; top: 70px; }
+    .chip-b { right: -10px; bottom: 76px; }
+    .chip-b strong { color: #218653; }
+
+    /* ───────── Sections ───────── */
+    section { padding: 92px 0; }
+
+    .label { color: var(--green); font-weight: 700; font-size: 13.5px; letter-spacing: 1.4px; text-transform: uppercase; }
+
+    h2 {
+      font-size: clamp(30px, 3.8vw, 44px);
+      line-height: 1.1;
+      letter-spacing: -1.3px;
+      font-weight: 800;
+      margin: 12px 0 14px;
+    }
+
+    .lead { font-size: 18px; color: var(--ink-soft); max-width: 620px; margin: 0; }
+    .center { text-align: center; }
+    .center .lead { margin-inline: auto; }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 48px; }
+
+    .step {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      position: relative;
+    }
+
+    .step .n {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: var(--mint);
+      color: var(--green);
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+    }
+
+    .step h3 { margin: 0 0 8px; font-size: 20px; letter-spacing: -.3px; }
+    .step p { margin: 0; color: var(--ink-soft); }
+
+    /* Bento features */
+    .features { background: var(--paper); border-block: 1px solid var(--line); }
+
+    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 48px; }
+
+    .tile {
+      grid-column: span 2;
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+    }
+
+    .tile:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: #CFE3D8; }
+    .tile.wide { grid-column: span 3; }
+
+    .tile.dark {
+      grid-column: span 3;
+      background: linear-gradient(150deg, var(--green-deep), var(--green));
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .tile.dark p { color: rgba(255, 255, 255, .8); }
+
+    .tile .ic {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: var(--mint);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+    }
+
+    .tile.dark .ic { background: rgba(255, 255, 255, .14); color: #fff; }
+    .tile .ic svg { width: 23px; height: 23px; }
+    .tile h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.3px; }
+    .tile p { margin: 0; color: var(--ink-soft); font-size: 15.5px; }
+
+    .formula {
+      margin-top: 18px;
+      background: rgba(0, 0, 0, .2);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13.5px;
+      line-height: 1.8;
+      color: #DFF7EC;
+    }
+
+    /* Roles */
+    .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 48px; }
+
+    .role { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px; }
+    .role h3 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.4px; }
+    .role .who { color: var(--ink-soft); margin: 0 0 18px; }
+    .role ul { list-style: none; margin: 0; padding: 0; }
+    .role li { padding: 9px 0 9px 30px; position: relative; border-top: 1px solid var(--line); }
+
+    .role li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 14px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--mint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.3 2.3 4.7-5' fill='none' stroke='%23176B4D' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/16px no-repeat;
+    }
+
+    /* Install */
+    .install { background: var(--paper); border-block: 1px solid var(--line); }
+    .install-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 40px; margin-top: 44px; align-items: start; }
+
+    .install ol { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+
+    .install li {
+      counter-increment: s;
+      position: relative;
+      padding: 0 0 22px 58px;
+      font-size: 17px;
+    }
+
+    .install li::before {
+      content: counter(s);
+      position: absolute;
+      left: 0;
+      top: -4px;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--green);
+      color: #fff;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+    }
+
+    .install li:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 18px;
+      top: 38px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--line);
+    }
+
+    .install li strong { color: var(--green-deep); }
+
+    .qr {
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 26px;
+      text-align: center;
+    }
+
+    .qr img { width: 180px; height: 180px; display: block; margin: 0 auto 14px; border-radius: 12px; }
+    .qr b { display: block; font-size: 16px; }
+    .qr span { color: var(--ink-soft); font-size: 14.5px; }
+
+    .tip {
+      margin-top: 26px;
+      background: #FFF6E6;
+      border: 1px solid #F3DFB8;
+      border-radius: 16px;
+      padding: 16px 18px;
+      font-size: 15.5px;
+      color: #5B4514;
+    }
+
+    /* Guide */
+    .guide-card {
+      background: linear-gradient(150deg, #0A2F22, var(--green-deep));
+      color: #fff;
+      border-radius: 28px;
+      padding: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 28px;
+      flex-wrap: wrap;
+    }
+
+    .guide-card h2 { margin: 6px 0 10px; }
+    .guide-card p { margin: 0; color: rgba(255, 255, 255, .78); max-width: 560px; }
+    .guide-card .label { color: #7EE8BE; }
+
+    .soon {
+      padding: 12px 20px;
+      border-radius: 99px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    /* FAQ */
+    .faq { max-width: 780px; margin: 44px auto 0; }
+
+    details {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0 22px;
+      margin-bottom: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 19px 0;
+      font-weight: 700;
+      font-size: 17px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--green); transition: transform .2s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    details p { margin: 0 0 20px; color: var(--ink-soft); }
+
+    /* CTA + footer */
+    .cta { text-align: center; padding: 96px 0; }
+    .cta h2 { margin-bottom: 26px; }
+
+    footer { background: #07261B; color: rgba(255, 255, 255, .7); padding: 44px 0; font-size: 14.5px; }
+    footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+    footer .brand { font-size: 17px; }
+    footer a.link { color: #fff; font-weight: 600; text-decoration: none; }
+    footer a.link:hover { text-decoration: underline; }
+
+    /* Reveal on scroll */
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .phone { animation: none; }
+      .reveal { opacity: 1; transform: none; transition: none; }
+      html { scroll-behavior: auto; }
+    }
+
+    @media (max-width: 920px) {
+      .hero { padding: 56px 0 72px; }
+      .hero .wrap { grid-template-columns: 1fr; gap: 56px; text-align: center; }
+      .hero p.sub { margin-inline: auto; }
+      .actions, .meta { justify-content: center; }
+      .nav-links { display: none; }
+      .nav .btn-small { margin-left: auto; }
+      .steps, .roles, .install-grid { grid-template-columns: 1fr; }
+      .tile, .tile.wide, .tile.dark { grid-column: span 6; }
+      section { padding: 68px 0; }
+      .guide-card { padding: 32px 26px; }
+      /* Keep the floating labels clear of the phone's content. */
+      .chip-a { top: -18px; left: 6%; }
+      .chip-b { bottom: -16px; right: 6%; }
+    }
+
+    @media (max-width: 420px) {
+      .chip-a { left: 0; }
+      .chip-b { right: 0; }
+      .btn-primary, .btn-ghost, .btn-dark { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#guide">Guide</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="btn btn-small" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">Download</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow"><i></i>Available now for Android</span>
+        <h1>Hostel meals and expenses, <em>settled without the arguments.</em></h1>
+        <p class="sub">Everyone records their own meals and what they spent. HostelMate works out the meal rate, adds rent and bills, and shows each person exactly what they pay or collect.</p>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Android
+          </a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+
+        <div class="meta">
+          <span>Free to download</span>
+          <span>Android 7.0 or newer</span>
+          <span>About 36 MB</span>
+        </div>
+      </div>
+
+      <!-- An illustration of the app, drawn in HTML. Sample data only. -->
+      <div class="stage" aria-hidden="true">
+        <div class="phone">
+          <div class="screen">
+            <div class="bar">HostelMate <span><b></b><b></b></span></div>
+
+            <div class="m-head">
+              <div><strong>Green View</strong><small>Administrator</small></div>
+              <div class="code">GV2026</div>
+            </div>
+
+            <div class="m-grid">
+              <div class="m-card">
+                <div class="top"><div class="ico" style="background:#E4F3EB"></div><div class="plus" style="background:#176B4D">+</div></div>
+                <div><b>Meals</b><small style="color:#218653">Today: 2</small></div>
+              </div>
+              <div class="m-card">
+                <div class="top"><div class="ico" style="background:#FFF1DB"></div><div class="plus" style="background:#D98A1F">+</div></div>
+                <div><b>Expenses</b></div>
+              </div>
+            </div>
+
+            <div class="m-result">
+              <h4>Overall <span>Copy</span></h4>
+              <div class="m-row"><span>Adnan</span><span class="get">Collect ৳300</span></div>
+              <div class="m-row"><span>Rahim</span><span class="pay">Pay ৳800</span></div>
+              <div class="m-row"><span>Karim</span><span class="pay">Pay ৳450</span></div>
+              <div class="m-row"><span>Salam</span><span class="get">Collect ৳950</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chip chip-a">Meal rate<strong>৳70 per meal</strong></div>
+        <div class="chip chip-b">Rahim added<strong>Rice · ৳1,200</strong></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <section id="how">
+      <div class="wrap">
+        <div class="center reveal">
+          <span class="label">How it works</span>
+          <h2>From daily entries to one fair amount</h2>
+          <p class="lead">The notebook, the calculator and the end-of-month debate, replaced by three small habits.</p>
+        </div>
+
+        <div class="steps">
+          <div class="step reveal">
+            <div class="n">1</div>
+            <h3>Record your meals</h3>
+            <p>Tap +, set lunch and dinner, save. It takes a few seconds, and every member does their own.</p>
+          </div>
+          <div class="step reveal">
+            <div class="n">2</div>
+            <h3>Add what you spent</h3>
+            <p>Bought rice or paid the gas bill? Add the expense and the whole hostel is notified.</p>
+          </div>
+          <div class="step reveal">
+            <div class="n">3</div>
+            <h3>Settle in one tap</h3>
+            <p>At month end the app shows what each person pays or collects. Copy it straight into your group chat.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <div class="wrap">
+        <div class="reveal">
+          <span class="label">Features</span>
+          <h2>Everything a shared kitchen needs</h2>
+          <p class="lead">Built around how hostels actually run, including the people who will never install an app.</p>
+        </div>
+
+        <div class="bento">
+          <div class="tile dark reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></svg></div>
+            <h3>An automatic, transparent calculation</h3>
+            <p>No spreadsheet and no trust required. The same figures appear on every member's phone, with the working shown.</p>
+            <div class="formula">
+              Meal rate = Total cost ÷ Total meals<br>
+              You pay = Your meals × Meal rate − What you spent
+            </div>
+          </div>
+
+          <div class="tile wide reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></div>
+            <h3>Rent and shared bills, in the same total</h3>
+            <p>Enter each member's rent once and split Wi-Fi, electricity or the chef's pay equally. Meals and fixed costs combine into one final amount, and carry over month to month until you change them.</p>
+          </div>
+
+          <div class="tile reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.900 2.100 6.500 5.500"/><path d="M17 8v6M14 11h6"/></svg></div>
+            <h3>Members without the app</h3>
+            <p>Add someone by name. An admin records their meals, and they are included in every calculation.</p>
+          </div>
+
+          <div class="tile reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2.500 7 2.500 7h-17S6 15 6 9z"/><path d="M10 20a2 2 0 004 0"/></svg></div>
+            <h3>Announcements and alerts</h3>
+            <p>Admins post short notices to the hostel. Members are told whenever a new expense is added.</p>
+          </div>
+
+          <div class="tile reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="12" height="14" rx="2.500"/><path d="M4 8v11a2 2 0 002 2h9"/></svg></div>
+            <h3>Made for the group chat</h3>
+            <p>Every result has a Copy button that produces a tidy summary, ready to paste into WhatsApp.</p>
+          </div>
+
+          <div class="tile wide reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6l8-3z"/><path d="M8.500 12l2.500 2.500 4.500-5"/></svg></div>
+            <h3>Private to your hostel</h3>
+            <p>A hostel's meals and expenses can be seen only by its members. Joining needs the hostel's invitation code, and admins can switch joining off at any time.</p>
+          </div>
+
+          <div class="tile wide reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0114-5.300L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 01-14 5.300L4 15"/><path d="M4 20v-5h5"/></svg></div>
+            <h3>Always the same version for everyone</h3>
+            <p>The app checks for updates when it opens and keeps the whole hostel on the latest release, so nobody is looking at different numbers.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="center reveal">
+          <span class="label">For everyone in the hostel</span>
+          <h2>Simple for members, complete for admins</h2>
+        </div>
+
+        <div class="roles">
+          <div class="role reveal">
+            <h3>Members</h3>
+            <p class="who">Everyone who lives in the hostel</p>
+            <ul>
+              <li>Record your own lunch and dinner</li>
+              <li>Add the expenses you paid for</li>
+              <li>See the hostel's meals, expenses and calculation</li>
+              <li>Read announcements from your admins</li>
+            </ul>
+          </div>
+          <div class="role reveal">
+            <h3>Admins</h3>
+            <p class="who">The people who run it</p>
+            <ul>
+              <li>Add members, with or without the app</li>
+              <li>Record or correct entries for anyone</li>
+              <li>Set rent, shared bills, minimum meals and shop dues</li>
+              <li>Post announcements and control who can join</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <div class="wrap">
+        <div class="reveal">
+          <span class="label">Install</span>
+          <h2>Up and running in two minutes</h2>
+          <p class="lead">HostelMate is installed directly from this page, so Android asks for your permission once.</p>
+        </div>
+
+        <div class="install-grid">
+          <div class="reveal">
+            <ol>
+              <li>Tap <strong>Download for Android</strong> on your phone.</li>
+              <li>When the download finishes, open <strong>HostelMate.apk</strong>.</li>
+              <li>If your phone says it can't install from this source, tap <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, and go back.</li>
+              <li>Tap <strong>Install</strong>, then <strong>Open</strong>.</li>
+              <li>Create an account, verify your email, then create a hostel or join one with its invitation code.</li>
+            </ol>
+
+            <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+              Download for Android
+            </a>
+
+            <div class="tip">
+              <strong>Download looks stuck?</strong> Open your browser's Downloads list. If HostelMate.apk shows a warning, choose <strong>Keep</strong> or <strong>Download anyway</strong>. If Play Protect asks, choose <strong>Install anyway</strong>.
+            </div>
+          </div>
+
+          <div class="qr reveal">
+            <img src="qr.png" alt="QR code for hostelmate.web.app" width="180" height="180">
+            <b>On a computer?</b>
+            <span>Scan this with your phone's camera to open this page there.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="guide">
+      <div class="wrap">
+        <div class="guide-card reveal">
+          <div>
+            <span class="label">User guide</span>
+            <h2>A step-by-step guide is on the way</h2>
+            <p>Setting up a hostel, adding members, recording meals and reading the monthly calculation, explained with pictures.</p>
+          </div>
+          <span class="soon">Coming soon</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" style="padding-top:0">
+      <div class="wrap">
+        <div class="center reveal">
+          <span class="label">Questions</span>
+          <h2>Good to know</h2>
+        </div>
+
+        <div class="faq reveal">
+          <details>
+            <summary>Does everyone in the hostel need the app?</summary>
+            <p>No. An admin can add anyone by name and record their meals and expenses for them. They are included in the calculation like everyone else, and can be linked to an account later if they join.</p>
+          </details>
+          <details>
+            <summary>How do I start using it with my hostel?</summary>
+            <p>One person creates the hostel and becomes its admin. The app gives an invitation code to share; everyone else joins with that code. A new hostel is activated by its admin with a voucher code.</p>
+          </details>
+          <details>
+            <summary>Who can see our meals and expenses?</summary>
+            <p>Only the members of your hostel. Other hostels cannot see your records, and nobody can join without your invitation code.</p>
+          </details>
+          <details>
+            <summary>Is there an iPhone or web version?</summary>
+            <p>Not yet. HostelMate currently runs on Android phones. A web version is planned so iPhone and laptop users can take part.</p>
+          </details>
+          <details>
+            <summary>How do I get updates?</summary>
+            <p>The app checks for a new version each time it opens and tells you when one is ready. Updating keeps your account and all your hostel's records.</p>
+          </details>
+          <details>
+            <summary>Why does my phone warn me when installing?</summary>
+            <p>Android shows that message for any app installed from outside the Play Store. Allow the installation once for your browser and it will not ask again for updates.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta" style="padding-top:0">
+      <div class="wrap reveal">
+        <h2>Ready for a calmer month end?</h2>
+        <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+          Download for Android
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
+      <span>Designed and built by <strong style="color:#fff">Abu Adnan Shad</strong> · <a class="link" href="https://www.linkedin.com/in/abuadnanshad/">LinkedIn</a></span>
+    </div>
+  </footer>
+
+  <script>
+    // Fade sections in as they scroll into view.
+    (function () {
+      var items = document.querySelectorAll('.reveal');
+
+      if (!('IntersectionObserver' in window)) {
+        items.forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+
+      items.forEach(function (el) { observer.observe(el); });
+    })();
+  </script>
+
+</body>
+</html>
