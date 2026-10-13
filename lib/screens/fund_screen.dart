@@ -8,6 +8,31 @@ import '../services/group_member_service.dart';
 import '../services/hostel_fund.dart';
 import '../theme/app_theme.dart';
 
+/// Opens the form where an admin records money collected from a
+/// member, unless the hostel is read-only. [month] is the month the
+/// money is for; the current one when left out.
+Future<void> showCollectFundForm(
+  BuildContext context, {
+  required String groupId,
+  DateTime? month,
+}) async {
+  if (!await ensureHostelEditable(context, groupId)) return;
+  if (!context.mounted) return;
+
+  final now = month ?? DateTime.now();
+  final messenger = ScaffoldMessenger.of(context);
+
+  final saved = await showDialog<String>(
+    context: context,
+    builder: (_) =>
+        _DepositDialog(groupId: groupId, month: DateTime(now.year, now.month)),
+  );
+
+  if (saved != null) {
+    messenger.showSnackBar(SnackBar(content: Text(saved)));
+  }
+}
+
 /// The hostel fund for one month: the money collected from members
 /// in advance, and how much of it has been spent. Admins record the
 /// deposits here.
@@ -48,18 +73,8 @@ class _FundScreenState extends State<FundScreen> {
         .snapshots();
   }
 
-  Future<void> _addDeposit() async {
-    if (!await ensureHostelEditable(context, widget.groupId)) return;
-    if (!mounted) return;
-
-    final saved = await showDialog<String>(
-      context: context,
-      builder: (_) => _DepositDialog(groupId: widget.groupId, month: _month),
-    );
-
-    if (saved == null || !mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(saved)));
+  Future<void> _addDeposit() {
+    return showCollectFundForm(context, groupId: widget.groupId, month: _month);
   }
 
   Future<void> _deleteDeposit(FundDeposit deposit) async {
@@ -113,7 +128,7 @@ class _FundScreenState extends State<FundScreen> {
           ? FloatingActionButton.extended(
               onPressed: _addDeposit,
               icon: const Icon(Icons.add),
-              label: const Text('Add Deposit'),
+              label: const Text('Collect Fund'),
             )
           : null,
       body: SafeArea(
@@ -170,11 +185,11 @@ class _FundScreenState extends State<FundScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                _FundLine(label: 'Collected', amount: fund.collected),
-                _FundLine(label: 'Spent from the fund', amount: fund.spent),
+                _FundLine(label: 'Total collected', amount: fund.collected),
+                _FundLine(label: 'Expenses from the fund', amount: fund.spent),
                 const Divider(height: 20),
                 _FundLine(
-                  label: 'Left in the fund',
+                  label: 'Cash in hand',
                   amount: fund.balance,
                   isStrong: true,
                 ),
@@ -196,7 +211,7 @@ class _FundScreenState extends State<FundScreen> {
               padding: const EdgeInsets.all(20),
               child: Text(
                 widget.isAdmin
-                    ? 'No deposits this month. Tap Add Deposit when a '
+                    ? 'Nothing collected this month. Tap Collect Fund when a '
                           'member gives money to the fund.'
                     : 'No deposits have been recorded this month.',
                 textAlign: TextAlign.center,
@@ -433,7 +448,7 @@ class _DepositDialogState extends State<_DepositDialog> {
     final members = _members;
 
     return AlertDialog(
-      title: const Text('Add Deposit'),
+      title: const Text('Collect Fund'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

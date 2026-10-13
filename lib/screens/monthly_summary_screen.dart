@@ -730,16 +730,13 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final rents = fixedCosts?.rents ?? const <String, double>{};
     // The bills the admin set, which carry forward each month.
     final sharedBills = fixedCosts?.bills ?? const <SharedBill>[];
-    // Those, plus the bills members entered as expenses this month.
+    // Those, plus the share costs members entered last month, which
+    // are settled now. This month's wait for the next calculation.
     final allBills = [...sharedBills, ...fund.memberBills];
-    final hasFixedCosts = rents.isNotEmpty || allBills.isNotEmpty;
-    // Set when this month is using figures saved in an earlier month.
-    final carriedFrom =
-        fixedCosts != null &&
-            !fixedCosts.isEmpty &&
-            fixedCosts.monthKey != _monthKey(_selectedMonth)
-        ? _monthName(_monthStartFromKey(fixedCosts.monthKey))
-        : null;
+    final hasFixedCosts =
+        rents.isNotEmpty ||
+        allBills.isNotEmpty ||
+        fund.upcomingBills.isNotEmpty;
     final settlements = FixedCostsCalculator.settle(
       members: result.members,
       rents: rents,
@@ -1065,13 +1062,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      widget.isAdmin
-                          ? 'Add each member\'s rent and the shared bills '
-                                '(Wi-Fi, electricity, chef). Shared bills '
-                                'are divided equally, and everything stays '
-                                'the same each month until you change it.'
-                          : 'No rent or shared bills have been added '
-                                'for this hostel yet.',
+                      'No fixed costs this month.',
                       textAlign: TextAlign.center,
                     ),
                     if (widget.isAdmin) ...[
@@ -1093,37 +1084,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               ),
             )
           else ...[
-            if (carriedFrom != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF2DA),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.history,
-                      size: 18,
-                      color: AppTheme.warning,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.isAdmin
-                            ? 'Carried over from $carriedFrom. Update it '
-                                  'if any bill changed this month.'
-                            : 'Carried over from $carriedFrom.',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
             _AmountListCard(
               title: 'Fixed Cost',
               rows: [
@@ -1153,7 +1113,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               const SizedBox(height: 12),
               _FixedCostsDetails(
                 settlements: settlements,
-                sharedBills: allBills,
+                sharedBills: sharedBills,
+                shareCosts: fund.memberBills,
+                shareCostsMonth: _shortMonth(previousMonth),
+                upcomingShareCosts: fund.upcomingBills,
+                upcomingMonth: _shortMonth(_selectedMonth),
+                settledIn: _shortMonth(
+                  DateTime(_selectedMonth.year, _selectedMonth.month + 1),
+                ),
                 billShare: billShare,
               ),
             ],
@@ -1261,6 +1228,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   String _simpleNumber(double value) {
     return value % 1 == 0 ? value.toInt().toString() : value.toString();
   }
+
+  /// The month's name without the year, such as "September".
+  String _shortMonth(DateTime month) => _monthName(month).split(' ').first;
 }
 
 String _amountText(double value) {
@@ -1423,18 +1393,119 @@ class _FixedCostsDetails extends StatelessWidget {
   const _FixedCostsDetails({
     required this.settlements,
     required this.sharedBills,
+    required this.shareCosts,
+    required this.shareCostsMonth,
+    required this.upcomingShareCosts,
+    required this.upcomingMonth,
+    required this.settledIn,
     required this.billShare,
   });
 
   final List<MemberSettlement> settlements;
+
+  /// The bills the admin set for the month.
   final List<SharedBill> sharedBills;
+
+  /// The share costs counted this month, entered by members during
+  /// [shareCostsMonth], the month before. Shown as one total, with
+  /// each transaction behind the history button.
+  final List<SharedBill> shareCosts;
+  final String shareCostsMonth;
+
+  /// The share costs entered during [upcomingMonth], this month. They
+  /// are not counted yet; they are settled in [settledIn].
+  final List<SharedBill> upcomingShareCosts;
+  final String upcomingMonth;
+  final String settledIn;
+
   final double billShare;
+
+  /// One line for a group of share costs: a name, the button that
+  /// lists them, and their total.
+  Widget _shareCostLine(
+    BuildContext context, {
+    required String label,
+    required List<SharedBill> costs,
+    required String title,
+    Color color = AppTheme.textPrimary,
+  }) {
+    final style = TextStyle(color: color, fontWeight: FontWeight.w500);
+
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Show each share cost',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _showShareCosts(context, costs, title),
+          icon: Icon(Icons.history, size: 20, color: color),
+        ),
+        const Spacer(),
+        Text(
+          '৳${_amountText(FixedCostsCalculator.totalBills(costs))}',
+          style: style,
+        ),
+      ],
+    );
+  }
+
+  void _showShareCosts(
+    BuildContext context,
+    List<SharedBill> shareCosts,
+    String title,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              children: [
+                Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                for (final cost in shareCosts)
+                  _SettlementLine(
+                    label: cost.name,
+                    value: '৳${_amountText(cost.amount)}',
+                  ),
+                const Divider(height: 20),
+                _SettlementLine(
+                  label: 'Total',
+                  value:
+                      '৳${_amountText(FixedCostsCalculator.totalBills(shareCosts))}',
+                  isStrong: true,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final rents = settlements.where((item) => item.rent > 0).toList();
     final totalRent = rents.fold<double>(0, (total, item) => total + item.rent);
+    final hasBills =
+        sharedBills.isNotEmpty ||
+        shareCosts.isNotEmpty ||
+        upcomingShareCosts.isNotEmpty;
 
     Widget heading(String text) {
       return Padding(
@@ -1455,26 +1526,50 @@ class _FixedCostsDetails extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (sharedBills.isNotEmpty) ...[
+            if (hasBills) ...[
               heading('SHARED BILLS'),
               for (final bill in sharedBills)
                 _SettlementLine(
                   label: bill.name,
                   value: '৳${_amountText(bill.amount)}',
                 ),
+              // Last month's share costs are settled now, in one line;
+              // the history button lists the transactions behind it.
+              if (shareCosts.isNotEmpty)
+                _shareCostLine(
+                  context,
+                  label: 'Share costs · $shareCostsMonth',
+                  costs: shareCosts,
+                  title: 'Share Costs · $shareCostsMonth',
+                ),
               _SettlementLine(
                 label: 'Total',
                 value:
-                    '৳${_amountText(FixedCostsCalculator.totalBills(sharedBills))}',
+                    '৳${_amountText(FixedCostsCalculator.totalBills([...sharedBills, ...shareCosts]))}',
               ),
               _SettlementLine(
                 label: 'Each member pays',
                 value: '৳${_amountText(billShare)}',
                 isStrong: true,
               ),
+              // This month's share costs are only listed: they are
+              // divided among the members next month.
+              if (upcomingShareCosts.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _shareCostLine(
+                  context,
+                  label: 'Upcoming · $upcomingMonth',
+                  costs: upcomingShareCosts,
+                  title: 'Share Costs · $upcomingMonth',
+                  color: AppTheme.textSecondary,
+                ),
+                Text(
+                  'Not counted above. Settled in $settledIn.',
+                  style: textTheme.bodySmall,
+                ),
+              ],
             ],
-            if (sharedBills.isNotEmpty && rents.isNotEmpty)
-              const Divider(height: 22),
+            if (hasBills && rents.isNotEmpty) const Divider(height: 22),
             if (rents.isNotEmpty) ...[
               heading('RENT'),
               for (final item in rents)
