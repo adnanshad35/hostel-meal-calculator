@@ -116,9 +116,37 @@ void main() {
     expect(fund.balance, 10000);
     expect(fund.isUsed, isTrue);
     expect(fund.depositsByMember['b'], 3000);
-    expect(fund.billsPaidByMember, {'a': 200.0});
-    expect(fund.memberBills.single.amount, 200);
-    expect(fund.memberBills.single.name, 'Water (paid by Asif)');
+
+    // The water bill waits for next month.
+    expect(fund.memberBills, isEmpty);
+    expect(fund.billsPaidByMember, isEmpty);
+    expect(fund.upcomingBills.single.amount, 200);
+    expect(fund.upcomingBills.single.name, 'Water (paid by Asif)');
+  });
+
+  test('a share cost is settled in the month after it was entered', () {
+    final november = FundCalculator.summarize(
+      month: DateTime(2026, 11),
+      deposits: deposits,
+      expenses: expenses,
+    );
+
+    expect(november.memberBills.single.amount, 200);
+    expect(november.memberBills.single.name, 'Water (paid by Asif)');
+    expect(november.billsPaidByMember, {'a': 200.0});
+    expect(november.upcomingBills, isEmpty);
+    // October's deposits and spending are not November's.
+    expect(november.collected, 0);
+    expect(november.spent, 0);
+
+    // And it is gone again the month after.
+    final december = FundCalculator.summarize(
+      month: DateTime(2026, 12),
+      deposits: deposits,
+      expenses: expenses,
+    );
+    expect(december.memberBills, isEmpty);
+    expect(december.billsPaidByMember, isEmpty);
   });
 
   test('the month closes: balances add up to the money left in the fund', () {
@@ -140,10 +168,11 @@ void main() {
     final asif = settlements.firstWhere((item) => item.id == 'a');
     final babu = settlements.firstWhere((item) => item.id == 'b');
 
-    // Asif: 3,000 + 500 + 200 paid, 625 of meals and 50 of water owed.
-    expect(asif.exactTotal, 3700 - 675);
-    // Babu: 3,000 paid, the same costs.
-    expect(babu.exactTotal, 3000 - 675);
+    // The water bill is settled next month, so October is meals only.
+    // Asif: 3,000 + 500 paid, 625 of meals owed.
+    expect(asif.exactTotal, 3500 - 625);
+    // Babu: 3,000 paid, the same meals.
+    expect(babu.exactTotal, 3000 - 625);
 
     final owedToMembers = settlements.fold<double>(
       0,
@@ -171,7 +200,7 @@ void main() {
 
     expect(fund.billsPaidByMember, isEmpty);
     expect(fund.spent, 900);
-    expect(fund.memberBills.single.name, 'Gas (from fund)');
+    expect(fund.upcomingBills.single.name, 'Gas (from fund)');
   });
 
   test('other months and undated records are ignored', () {

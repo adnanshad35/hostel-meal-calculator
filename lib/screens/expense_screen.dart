@@ -8,6 +8,8 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/fund_service.dart';
 import '../services/group_member_service.dart';
+import '../services/hostel_fund.dart';
+import '../services/monthly_calculator.dart';
 import '../services/notification_service.dart';
 import 'fund_screen.dart';
 
@@ -190,35 +192,187 @@ class ExpenseScreen extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 4),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            FundScreen(groupId: groupId, isAdmin: isAdmin),
-                      ),
-                    );
-                  },
-                  leading: const Icon(
-                    Icons.savings_outlined,
-                    color: Color(0xFF2E7D32),
+              if (isAdmin)
+                _AdminFundCard(
+                  groupId: groupId,
+                  expenses: [
+                    for (final expense in expenses)
+                      FundService.expenseRecord(expense.data()),
+                  ],
+                )
+              else
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              FundScreen(groupId: groupId, isAdmin: isAdmin),
+                        ),
+                      );
+                    },
+                    leading: const Icon(
+                      Icons.savings_outlined,
+                      color: Color(0xFF2E7D32),
+                    ),
+                    title: const Text(
+                      'Hostel Fund',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Text(
+                      'Money collected from members in advance.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
                   ),
-                  title: const Text(
-                    'Hostel Fund',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: const Text(
-                    'Money collected from members in advance.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
                 ),
-              ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// The fund at a glance, for admins
+// ─────────────────────────────────────────────────────────────
+/// This month's fund for the admin who holds it: what was collected,
+/// what was spent from it and the cash left, with a button to record
+/// money collected from a member.
+class _AdminFundCard extends StatefulWidget {
+  const _AdminFundCard({required this.groupId, required this.expenses});
+
+  final String groupId;
+
+  /// This month's expenses.
+  final List<ExpenseRecord> expenses;
+
+  @override
+  State<_AdminFundCard> createState() => _AdminFundCardState();
+}
+
+class _AdminFundCardState extends State<_AdminFundCard> {
+  late final Stream<List<FundDeposit>> _deposits = FundService.watch(
+    widget.groupId,
+  );
+
+  void _openFund() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FundScreen(groupId: widget.groupId, isAdmin: true),
+      ),
+    );
+  }
+
+  static String _taka(double value) {
+    final text = value.abs() % 1 == 0
+        ? value.abs().toInt().toString()
+        : value.abs().toStringAsFixed(2);
+
+    return value < 0 ? '−৳$text' : '৳$text';
+  }
+
+  Widget _figure(String label, double value, {Color? color}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _taka(value),
+              style: TextStyle(
+                color: color ?? const Color(0xFF17211C),
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FundDeposit>>(
+      stream: _deposits,
+      builder: (context, snapshot) {
+        final fund = FundCalculator.summarize(
+          month: DateTime.now(),
+          deposits: snapshot.data ?? const [],
+          expenses: widget.expenses,
+        );
+
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _openFund,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.savings_outlined,
+                        color: Color(0xFF2E7D32),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Hostel Fund',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(context).colorScheme.outline,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (snapshot.hasError)
+                    const Text('Unable to load the fund.')
+                  else
+                    Row(
+                      children: [
+                        _figure('Collected', fund.collected),
+                        const SizedBox(width: 8),
+                        _figure('Expenses', fund.spent),
+                        const SizedBox(width: 8),
+                        _figure(
+                          'Cash in hand',
+                          fund.balance,
+                          color: fund.balance < 0
+                              ? Colors.red
+                              : const Color(0xFF2E7D32),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        showCollectFundForm(context, groupId: widget.groupId),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Collect Fund'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -818,7 +972,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
 
-  /// Shared bills, such as water. Each is saved as its own record.
+  /// The shared bill, such as water, if one was added. At most one,
+  /// saved as its own record.
   final _shareCosts = <_ShareCostRow>[];
 
   // How it was paid. Together these must equal the total.
@@ -848,6 +1003,12 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   bool _shows(_FormField field) {
     return !_hidden.contains(field) || _needed.contains(field);
+  }
+
+  /// True when the member says how much came from each source. With
+  /// only one source switched on, there is nothing to split.
+  bool get _splitsPayment {
+    return _shows(_FormField.pocket) && _shows(_FormField.fund);
   }
 
   bool get _isEditing => widget.expense != null;
@@ -966,6 +1127,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       _fundController.text = _plainNumber(saved.fundPart);
       _needed.add(_FormField.fund);
     }
+    if (saved.pocketPart > 0) _needed.add(_FormField.pocket);
     if (saved.isBill) _needed.add(_FormField.shareCost);
     _needed.add(_FormField.date);
     _pocketController.text = _plainNumber(saved.pocketPart);
@@ -1160,13 +1322,21 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       mealAmount,
       (running, bill) => running + bill.amount,
     );
-    // A hidden field cannot hold an amount: without the fund field
-    // everything was the member's own money, and without the pocket
-    // field their part is whatever the fund did not cover.
-    final fund = _shows(_FormField.fund) ? _amountIn(_fundController) : 0.0;
-    final pocket = _shows(_FormField.fund) && _shows(_FormField.pocket)
-        ? _amountIn(_pocketController)
-        : total - fund;
+    // The split is typed only when both sources are in use. With one
+    // of them, the whole total came from it.
+    final double fund;
+    final double pocket;
+
+    if (_splitsPayment) {
+      fund = _amountIn(_fundController);
+      pocket = _amountIn(_pocketController);
+    } else if (_shows(_FormField.fund) && !_shows(_FormField.pocket)) {
+      fund = total;
+      pocket = 0;
+    } else {
+      fund = 0;
+      pocket = total;
+    }
 
     if (pocket < 0) {
       _showMessage('From meal fund cannot be more than the total.');
@@ -1193,40 +1363,19 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
         ? selectedMember?.name ?? 'Member'
         : _ownName;
 
-    String short(String text) {
-      return text.length > 60 ? text.substring(0, 60) : text;
-    }
-
-    // The fund's money is counted against the meal expense first,
-    // and only what is left of it against the shared bills.
-    var fundLeft = fund;
-
-    double takeFromFund(double amount) {
-      final used = fundLeft < amount ? fundLeft : amount;
-      fundLeft -= used;
-      return used;
-    }
-
-    final mealFields = <String, dynamic>{
-      'name': short(name),
-      'amount': mealAmount,
-      'fromFund': takeFromFund(mealAmount),
-      'category': 'meal',
-      'fundNote': '',
-      'pocketNote': details.length > 500 ? details.substring(0, 500) : details,
-    };
-
-    final billFields = [
-      for (final bill in bills)
-        <String, dynamic>{
-          'name': short(bill.name),
-          'amount': bill.amount,
-          'fromFund': takeFromFund(bill.amount),
-          'category': 'bill',
-          'fundNote': '',
-          'pocketNote': '',
-        },
-    ];
+    // Built in one tested place, so a meal cost is always saved as a
+    // meal expense and a share cost as a shared bill.
+    final entry = ExpenseEntry.split(
+      name: name,
+      details: details,
+      mealCost: mealAmount,
+      shareCosts: [
+        for (final bill in bills) (name: bill.name, amount: bill.amount),
+      ],
+      fromFund: fund,
+    );
+    final mealFields = entry.meal;
+    final billFields = entry.bills;
 
     setState(() => _isSaving = true);
 
@@ -1317,7 +1466,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     );
   }
 
-  /// A description on the left and its amount on the right.
+  /// One thing that was paid for: its description across the full
+  /// width, a line, and its cost underneath, in a single box.
   Widget _costLine({
     required TextEditingController description,
     required TextEditingController amount,
@@ -1325,13 +1475,29 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     required String hint,
     int maxLines = 1,
     Widget? trailing,
-    bool hasCalculator = false,
+    String? title,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: TextField(
+    // The box draws the outline, so the fields inside have none.
+    const plain = InputDecoration(
+      filled: false,
+      isDense: true,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+
+    final box = Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD5DDD8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
             controller: description,
             enabled: !_isSaving,
             // The main description is two lines tall, with room for
@@ -1339,30 +1505,61 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
             minLines: maxLines > 1 ? 2 : 1,
             maxLines: maxLines,
             textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: label,
-              hintText: hint,
-              alignLabelWithHint: true,
-              isDense: true,
-              border: const OutlineInputBorder(),
+            decoration: plain.copyWith(hintText: '$label, e.g. $hint'),
+          ),
+          const Divider(height: 1, color: Color(0xFFD5DDD8)),
+          Row(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 14),
+                child: Text(
+                  'Cost',
+                  style: TextStyle(
+                    color: Color(0xFF647069),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: amount,
+                  enabled: !_isSaving,
+                  textAlign: TextAlign.end,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (_) => _onCostsChanged(),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  decoration: plain.copyWith(hintText: '0', prefixText: '৳ '),
+                ),
+              ),
+              _calculatorButton(amount),
+              ?trailing,
+              const SizedBox(width: 4),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (title == null) return box;
+
+    // Named, so two boxes can be told apart.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF17211C),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: hasCalculator ? 128 : 92,
-          child: TextField(
-            controller: amount,
-            enabled: !_isSaving,
-            textAlign: TextAlign.end,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => _onCostsChanged(),
-            decoration: _amountDecoration(
-              suffixIcon: hasCalculator ? _calculatorButton(amount) : null,
-            ),
-          ),
-        ),
-        ?trailing,
+        box,
       ],
     );
   }
@@ -1500,7 +1697,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   label: 'Description',
                   hint: 'Bazar',
                   maxLines: 5,
-                  hasCalculator: true,
+                  // Named only when a share cost sits beside it.
+                  title: _shareCosts.isEmpty ? null : 'Meal cost',
                 ),
               for (final row in _shareCosts)
                 Padding(
@@ -1508,8 +1706,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   child: _costLine(
                     description: row.description,
                     amount: row.cost,
-                    label: 'Share cost',
+                    label: 'Description',
                     hint: 'Water bill',
+                    title: _isEditingBill ? null : 'Share cost',
                     trailing: _isEditingBill
                         ? null
                         : IconButton(
@@ -1528,7 +1727,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                           ),
                   ),
                 ),
-              if (!_isEditing && _shows(_FormField.shareCost))
+              if (!_isEditing &&
+                  _shareCosts.isEmpty &&
+                  _shows(_FormField.shareCost))
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
@@ -1566,30 +1767,74 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   ],
                 ),
               ],
-              if (_shows(_FormField.pocket))
+              if (_splitsPayment) ...[
                 _paymentLine(
                   label: 'My pocket',
                   icon: Icons.account_balance_wallet_outlined,
                   controller: _pocketController,
                   onTyped: () => _pocketTyped = true,
                 ),
-              if (_shows(_FormField.fund))
                 _paymentLine(
                   label: 'From meal fund',
                   icon: Icons.savings_outlined,
                   controller: _fundController,
                   onTyped: () => _fundTyped = true,
                 ),
+              ] else if (_shows(_FormField.pocket) || _shows(_FormField.fund))
+                // One source only: nothing to type, just a reminder.
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _shows(_FormField.fund)
+                            ? Icons.savings_outlined
+                            : Icons.account_balance_wallet_outlined,
+                        size: 16,
+                        color: const Color(0xFF647069),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _shows(_FormField.fund)
+                            ? 'Paid from the meal fund'
+                            : 'Paid from my pocket',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
               if (_shows(_FormField.date)) ...[
-                const SizedBox(height: 4),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today_outlined),
-                  title: const Text('Date'),
-                  subtitle: Text(formattedDate),
-                  trailing: TextButton(
-                    onPressed: _isSaving ? null : _selectDate,
-                    child: const Text('Change'),
+                const SizedBox(height: 8),
+                // Just the date: tapping it opens the calendar.
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: InkWell(
+                    onTap: _isSaving ? null : _selectDate,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 20,
+                            color: Color(0xFF176B4D),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            formattedDate,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
