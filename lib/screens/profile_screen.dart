@@ -318,11 +318,8 @@ class _ProfileHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.primaryDark, AppTheme.primary],
-        ),
+        gradient: AppTheme.heroGradient,
+        boxShadow: AppTheme.heroShadow,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
@@ -338,7 +335,7 @@ class _ProfileHeader extends StatelessWidget {
             child: Text(
               _initials,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppTheme.accent,
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
               ),

@@ -9,6 +9,7 @@ import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_records.dart';
 import '../services/monthly_calculator.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
@@ -57,11 +58,11 @@ class _MealScreenState extends State<MealScreen> {
     super.initState();
     _membersStream = GroupMemberService.watch(widget.groupId);
     _plansStream = MealPlanService.watchAll(widget.groupId);
-    _mealsStream = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('meals')
-        .snapshots();
+    // This month only: the page shows nothing older.
+    _mealsStream = MonthRecords.meals(
+      widget.groupId,
+      DateTime.now(),
+    ).snapshots();
   }
 
   Future<void> _openMealForm() {

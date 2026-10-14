@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
+import '../services/month_records.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
@@ -87,11 +88,8 @@ class ExpenseScreen extends StatelessWidget {
         label: const Text('Add Expense'),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .collection('expenses')
-            .snapshots(),
+        // This month only: the page shows nothing older.
+        stream: MonthRecords.expenses(groupId, DateTime.now()).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

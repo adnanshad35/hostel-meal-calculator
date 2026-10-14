@@ -5,14 +5,38 @@ class AppTheme {
 
   static const Color primary = Color(0xFF176B4D);
   static const Color primaryDark = Color(0xFF0E4D37);
-  static const Color secondary = Color(0xFFE8A838);
 
-  static const Color background = Color(0xFFF6F8F5);
+  /// A near-black green for the app's richest surfaces, such as the
+  /// card at the top of the dashboard.
+  static const Color ink = Color(0xFF0A241C);
+
+  /// A muted brass, used sparingly to pick out one thing on a dark
+  /// surface. Never as a background for a whole card.
+  static const Color accent = Color(0xFFCDAA63);
+  static const Color secondary = accent;
+
+  /// The same brass, darker, for an icon or a thin line on a light
+  /// surface.
+  static const Color accentDeep = Color(0xFFA5803A);
+
+  static const Color background = Color(0xFFF3F5F2);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceSoft = Color(0xFFEDF5F0);
+  static const Color surfaceSoft = Color(0xFFEEF3EF);
 
-  static const Color textPrimary = Color(0xFF17211C);
-  static const Color textSecondary = Color(0xFF647069);
+  /// The fill of the app's hero cards.
+  static const LinearGradient heroGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [ink, Color(0xFF12503B)],
+  );
+
+  /// The soft shadow under a hero card.
+  static const List<BoxShadow> heroShadow = [
+    BoxShadow(color: Color(0x380A241C), blurRadius: 28, offset: Offset(0, 14)),
+  ];
+
+  static const Color textPrimary = Color(0xFF111C17);
+  static const Color textSecondary = Color(0xFF66716B);
 
   static const Color success = Color(0xFF218653);
   static const Color warning = Color(0xFFE08A17);
@@ -34,9 +58,9 @@ class AppTheme {
           onError: Colors.white,
         );
 
+    // Cards sit on a soft shadow, without an outline.
     final cardShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-      side: const BorderSide(color: Color(0xFFE3E9E5)),
+      borderRadius: BorderRadius.circular(20),
     );
 
     final inputBorder = OutlineInputBorder(
@@ -46,6 +70,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Manrope',
       colorScheme: colorScheme,
       scaffoldBackgroundColor: background,
 
@@ -57,9 +82,10 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: textPrimary,
+          fontFamily: 'Manrope',
           fontSize: 21,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
       ),
 
@@ -99,7 +125,9 @@ class AppTheme {
 
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: const Color(0x260A241C),
+        elevation: 3,
         margin: EdgeInsets.zero,
         shape: cardShape,
       ),
@@ -183,22 +211,31 @@ class AppTheme {
       ),
 
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: textPrimary,
-        contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+        backgroundColor: ink,
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Manrope',
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
 
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         titleTextStyle: const TextStyle(
           color: textPrimary,
-          fontSize: 21,
-          fontWeight: FontWeight.w700,
+          fontFamily: 'Manrope',
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
         ),
         contentTextStyle: const TextStyle(
           color: textSecondary,
+          fontFamily: 'Manrope',
           fontSize: 15,
           height: 1.45,
         ),

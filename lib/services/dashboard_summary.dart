@@ -28,7 +28,7 @@ class DashboardSummary {
     this.myExpense = 0,
   });
 
-  /// The same meal rate, cost and meal total the Monthly Calculation
+  /// The same meal rate, cost and meal total the Details page
   /// shows for the current month.
   final double mealRate;
   final double totalExpense;
