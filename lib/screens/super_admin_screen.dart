@@ -10,6 +10,7 @@ import 'hostel_activation_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'super_admin_billing.dart';
+import 'super_admin_requests.dart';
 
 typedef _AdminData = ({AdminSnapshot data, AdminBilling billing});
 
@@ -33,6 +34,10 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
       label: 'Vouchers',
       icon: Icons.confirmation_number_outlined,
     ),
+    DesktopDestination(
+      label: 'Requests',
+      icon: Icons.lightbulb_outline_rounded,
+    ),
   ];
 
   /// The sidebar on a wide window: the tabs, then the two screens the
@@ -43,7 +48,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     DesktopDestination(label: 'Profile', icon: Icons.account_circle_outlined),
   ];
 
-  static const _noticesIndex = 5;
+  static const _noticesIndex = 6;
 
   /// A notifier, so the screens inside the desktop layout's own
   /// navigator also see a refresh.
@@ -125,7 +130,9 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
       1 => _UsersTab(data: data, onRefresh: _refresh),
       2 => _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
       3 => AdminPaymentsTab(billing: billing, onRefresh: _refresh),
-      _ => AdminVouchersTab(billing: billing, onRefresh: _refresh),
+      4 => AdminVouchersTab(billing: billing, onRefresh: _refresh),
+      // Loads its own list, so it is fresh each time it is opened.
+      _ => const AdminRequestsTab(),
     };
   }
 

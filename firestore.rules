@@ -368,9 +368,12 @@ service cloud.firestore {
               'name',
               'amount',
               'date',
+              'description',
               'updatedBy',
               'updatedAt'
-            ]);
+            ])
+          && request.resource.data.get('description', '') is string
+          && request.resource.data.get('description', '').size() <= 600;
 
         allow delete: if isGroupAdmin(groupId)
           && isHostelActive(groupId);
@@ -559,6 +562,20 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Ideas users send to the developer from the app. Anyone signed
+    // in can send one in their own name; only the super admin reads
+    // them.
+    match /featureRequests/{requestId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 1000;
+
+      allow read, delete: if isSuperAdmin();
+      allow update: if false;
     }
 
     match /invites/{inviteCode} {

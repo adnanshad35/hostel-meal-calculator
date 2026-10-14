@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A lunch or dinner quantity that can be changed with the − and +
-/// buttons (half a meal at a time) or typed directly.
+/// buttons (one meal at a time) or typed directly. A half meal, such
+/// as 1.5, can only be typed.
 class MealCounter extends StatefulWidget {
   const MealCounter({
     super.key,
@@ -125,7 +126,7 @@ class _MealCounterState extends State<MealCounter> {
           visualDensity: VisualDensity.compact,
           tooltip: 'Decrease ${widget.title.toLowerCase()}',
           onPressed: widget.enabled && widget.value > 0
-              ? () => _step(-0.5)
+              ? () => _step(-1)
               : null,
           icon: const Icon(Icons.remove),
         ),
@@ -159,7 +160,7 @@ class _MealCounterState extends State<MealCounter> {
           visualDensity: VisualDensity.compact,
           tooltip: 'Increase ${widget.title.toLowerCase()}',
           onPressed: widget.enabled && widget.value < MealCounter.maxValue
-              ? () => _step(0.5)
+              ? () => _step(1)
               : null,
           icon: const Icon(Icons.add),
         ),

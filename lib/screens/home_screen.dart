@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
+import '../services/profile_service.dart';
 import '../widgets/web_layout.dart';
 import 'create_group_screen.dart';
 import 'desktop_shell.dart';
@@ -33,7 +34,9 @@ class HomeScreen extends StatelessWidget {
   }
 
   String _readUserName(User user, Map<String, dynamic>? userData) {
+    // The nickname first: it is what the hostel shows.
     final possibleNames = [
+      userData?['nickname'],
       userData?['name'],
       userData?['displayName'],
       userData?['fullName'],
@@ -84,6 +87,8 @@ class HomeScreen extends StatelessWidget {
         final role = userData?['role'] as String? ?? 'member';
 
         final name = _readUserName(user, userData);
+        // Used when this member's own meals and expenses are saved.
+        ProfileService.memberName = name;
 
         if (groupId == null || groupId.isEmpty) {
           return _page(

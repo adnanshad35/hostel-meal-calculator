@@ -311,13 +311,19 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     }
   }
 
-  /// Saves one changed switch. The screen shows the new value as soon
-  /// as the hostel's own record reports it.
-  Future<void> _saveSettings(HostelSettings settings) async {
+  /// Saves one changed switch, then says in [message] what can be done
+  /// now. The screen shows the new value as soon as the hostel's own
+  /// record reports it.
+  Future<void> _saveSettings(HostelSettings settings, String message) async {
     setState(() => _isSavingSettings = true);
 
     try {
       await HostelSettingsService.save(widget.groupId, settings);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -412,6 +418,9 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       ? null
                       : (isOn) => _saveSettings(
                           settings.copyWith(membersCanAddMeals: isOn),
+                          isOn
+                              ? 'Members can now add their own meals.'
+                              : 'Only admins can add meals now.',
                         ),
                 ),
                 const SizedBox(height: 8),
@@ -423,17 +432,9 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       ? null
                       : (isOn) => _saveSettings(
                           settings.copyWith(membersCanAddExpenses: isOn),
-                        ),
-                ),
-                const SizedBox(height: 8),
-                _SettingSwitch(
-                  icon: Icons.home_work_outlined,
-                  title: 'Calculate other costs',
-                  value: settings.fixedCostsEnabled,
-                  onChanged: _isSavingSettings
-                      ? null
-                      : (isOn) => _saveSettings(
-                          settings.copyWith(fixedCostsEnabled: isOn),
+                          isOn
+                              ? 'Members can now add their own expenses.'
+                              : 'Only admins can add expenses now.',
                         ),
                 ),
                 const SizedBox(height: 8),
@@ -445,6 +446,11 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       ? null
                       : (isOn) => _saveSettings(
                           settings.copyWith(specialPermission: isOn),
+                          isOn
+                              ? 'Minimum meal and shop due can now be '
+                                    'entered on any date.'
+                              : 'Minimum meal and shop due can now be '
+                                    'entered only from the 25th to the 5th.',
                         ),
                 ),
                 const SizedBox(height: 8),
@@ -464,6 +470,26 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                           )
                         : const Icon(Icons.add),
                     onTap: _isAddingMember ? null : _addShadowMember,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Not ready yet: shown so admins know it is on the way.
+                const Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    enabled: false,
+                    leading: Icon(Icons.home_work_outlined),
+                    title: Text(
+                      'Calculate other costs',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    trailing: Text(
+                      'Coming soon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -565,15 +591,17 @@ class _InviteSwitchCardState extends State<_InviteSwitchCard> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            active
-                ? 'New members can join with the invitation code.'
-                : 'Joining is switched off.',
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              active
+                  ? 'New members can now join with the invitation code.'
+                  : 'No one can join the hostel now.',
+            ),
           ),
-        ),
-      );
+        );
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

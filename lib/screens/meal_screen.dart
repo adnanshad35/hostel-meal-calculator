@@ -10,6 +10,8 @@ import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
+import '../services/profile_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/meal_counter.dart';
 import '../widgets/month_calendar.dart';
 import 'meal_ledger_screen.dart';
@@ -367,10 +369,6 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   bool _isSaving = false;
   bool _hasEntry = false;
 
-  /// True when the counters show what the member's meal plan already
-  /// counts for the day.
-  bool _isFromPlan = false;
-
   /// What a new entry starts with, since most days are one lunch and
   /// one dinner. Nothing is recorded until the member taps Save.
   static const double _defaultMeals = 1;
@@ -466,7 +464,6 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     setState(() {
       _isLoadingEntry = true;
       _hasEntry = false;
-      _isFromPlan = false;
       _lunch = _defaultMeals;
       _dinner = _defaultMeals;
     });
@@ -492,7 +489,6 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         _hasEntry = snapshot.exists;
 
         if (planned != null) {
-          _isFromPlan = true;
           _lunch = planned.lunch;
           _dinner = planned.dinner;
         }
@@ -595,7 +591,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         'groupId': widget.groupId,
         'userId': _selectedMemberId,
         'userName': _isOwnEntry
-            ? _currentUser.displayName ?? 'Member'
+            ? ProfileService.memberName ?? _currentUser.displayName ?? 'Member'
             : _selectedMemberName,
         'dateKey': _dateKey(_selectedDate),
         'date': Timestamp.fromDate(_selectedDate),
@@ -656,114 +652,137 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     final isBusy = _isSaving || _isLoadingEntry;
 
     return AlertDialog(
+      // Wider than the default, with room around each part, so the
+      // form does not feel cramped.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
       title: Text(_hasEntry ? 'Update Meal' : 'Add Meal'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.isAdmin) ...[
-              if (_isLoadingMembers)
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.isAdmin) ...[
+                if (_isLoadingMembers)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    // Rebuilt when the member list changes, so the
+                    // selection can never point at a missing member.
+                    key: ValueKey(
+                      _members.map((member) => member.id).join(','),
+                    ),
+                    initialValue: _selectedMemberId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Meal for',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _members.map((member) {
+                      return DropdownMenuItem<String>(
+                        value: member.id,
+                        // Green for a member who uses the app.
+                        child: Text(
+                          member.id == _currentUser.uid
+                              ? '${member.name} (You)'
+                              : member.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: member.isAppUser
+                              ? const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: _isSaving ? null : _selectMember,
+                  ),
+                const SizedBox(height: 24),
+              ],
+              if (_isLoadingEntry)
                 const Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(24),
                   child: CircularProgressIndicator(),
                 )
-              else
-                DropdownButtonFormField<String>(
-                  // Rebuilt when the member list changes, so the
-                  // selection can never point at a missing member.
-                  key: ValueKey(_members.map((member) => member.id).join(',')),
-                  initialValue: _selectedMemberId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Meal for',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _members.map((member) {
-                    return DropdownMenuItem<String>(
-                      value: member.id,
-                      child: Text(
-                        member.id == _currentUser.uid
-                            ? '${member.name} (You)'
-                            : member.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: _isSaving ? null : _selectMember,
+              else ...[
+                MealCounter(
+                  title: 'Lunch',
+                  icon: Icons.lunch_dining_outlined,
+                  value: _lunch,
+                  enabled: !_isSaving,
+                  onChanged: (value) => setState(() => _lunch = value),
                 ),
-              const SizedBox(height: 8),
-            ],
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: const Text('Date'),
-              subtitle: Text(formattedDate),
-              trailing: TextButton(
-                onPressed: _isSaving ? null : _selectDate,
-                child: const Text('Change'),
-              ),
-            ),
-            if (_isLoadingEntry)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              )
-            else ...[
-              if (_hasEntry) ...[
-                const Text(
-                  'Already entered for this date. Saving will '
-                  'update it.',
+                const SizedBox(height: 20),
+                MealCounter(
+                  title: 'Dinner',
+                  icon: Icons.dinner_dining_outlined,
+                  value: _dinner,
+                  enabled: !_isSaving,
+                  onChanged: (value) => setState(() => _dinner = value),
                 ),
-                const SizedBox(height: 8),
               ],
-              if (_isFromPlan) ...[
-                const Text(
-                  'This is what the meal plan counts for this date. '
-                  'Save to set something different.',
-                ),
-                const SizedBox(height: 8),
-              ],
-              MealCounter(
-                title: 'Lunch',
-                icon: Icons.lunch_dining_outlined,
-                value: _lunch,
-                enabled: !_isSaving,
-                onChanged: (value) => setState(() => _lunch = value),
-              ),
-              const SizedBox(height: 8),
-              MealCounter(
-                title: 'Dinner',
-                icon: Icons.dinner_dining_outlined,
-                value: _dinner,
-                enabled: !_isSaving,
-                onChanged: (value) => setState(() => _dinner = value),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Use − and +, or tap a number to type it.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
-          ],
+          ),
         ),
       ),
+      // The date sits at the bottom left; tapping it opens the
+      // calendar.
+      actionsAlignment: MainAxisAlignment.spaceBetween,
+      actionsPadding: const EdgeInsets.fromLTRB(20, 4, 24, 22),
       actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+        InkWell(
+          onTap: _isSaving ? null : _selectDate,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 20,
+                  color: Color(0xFF176B4D),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        FilledButton(
-          onPressed: isBusy || (widget.isAdmin && _isLoadingMembers)
-              ? null
-              : _save,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: isBusy || (widget.isAdmin && _isLoadingMembers)
+                  ? null
+                  : _save,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
         ),
       ],
     );
