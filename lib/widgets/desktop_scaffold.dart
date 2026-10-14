@@ -125,7 +125,7 @@ class _Sidebar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF0B3D2C), Color(0xFF0A2F22)],
+          colors: [Color(0xFF0D3327), AppTheme.ink],
         ),
       ),
       child: SafeArea(

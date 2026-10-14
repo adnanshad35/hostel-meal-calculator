@@ -282,15 +282,20 @@ class HostelRecordsScreen extends StatelessWidget {
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.initialTab = 0,
   });
 
   final String groupId;
   final bool isAdmin;
 
+  /// 0 opens on the meals, 1 on the expenses.
+  final int initialTab;
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
+      initialIndex: initialTab,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Total Meals & Expenses'),
@@ -736,18 +741,8 @@ class _SummaryCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.primaryDark, AppTheme.primary],
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33176B4D),
-            blurRadius: 22,
-            offset: Offset(0, 10),
-          ),
-        ],
+        gradient: AppTheme.heroGradient,
+        boxShadow: AppTheme.heroShadow,
       ),
       child: Stack(
         children: [
@@ -782,10 +777,10 @@ class _SummaryCard extends StatelessWidget {
                 Text(
                   'MEAL RATE',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.72),
+                    color: AppTheme.accent,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.3,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
                   ),
                 ),
                 Row(
@@ -808,7 +803,7 @@ class _SummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Material(
-                      color: Colors.white,
+                      color: AppTheme.accent,
                       borderRadius: BorderRadius.circular(22),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(22),
@@ -821,7 +816,7 @@ class _SummaryCard extends StatelessWidget {
                               Text(
                                 'Details',
                                 style: TextStyle(
-                                  color: AppTheme.primaryDark,
+                                  color: AppTheme.ink,
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -830,7 +825,7 @@ class _SummaryCard extends StatelessWidget {
                               Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 17,
-                                color: AppTheme.primaryDark,
+                                color: AppTheme.ink,
                               ),
                             ],
                           ),
@@ -1112,7 +1107,7 @@ class _TodayCard extends StatelessWidget {
                         children: [
                           const Icon(
                             Icons.assignment_ind_outlined,
-                            color: AppTheme.primary,
+                            color: AppTheme.accentDeep,
                             size: 24,
                           ),
                           const SizedBox(height: 4),

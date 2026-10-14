@@ -15,6 +15,7 @@ import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import 'fixed_costs_screen.dart';
+import 'hostel_dashboard_screen.dart';
 
 class MonthlySummaryScreen extends StatefulWidget {
   const MonthlySummaryScreen({
@@ -46,8 +47,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   /// entered on any day, not only at the month's end.
   bool _specialPermission = false;
   StreamSubscription<HostelSettings>? _settingsSubscription;
-  bool _showMemberCards = true;
-  bool _showMemberDetails = false;
+
+  /// The members whose own figures are shown under their balance.
+  final Set<String> _openMemberIds = {};
   bool _showFixedDetails = false;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -419,7 +421,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final groupReference = _firestore.collection('groups').doc(widget.groupId);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly Calculation')),
+      appBar: AppBar(title: const Text('Details')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _settingsStream,
         builder: (context, settingsSnapshot) {
@@ -538,6 +540,19 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  /// Opens the hostel's meals (0) or expenses (1), entry by entry.
+  void _openRecords(int tab) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HostelRecordsScreen(
+          groupId: widget.groupId,
+          isAdmin: widget.isAdmin,
+          initialTab: tab,
+        ),
       ),
     );
   }
@@ -781,31 +796,44 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
         // ─── Month navigation ───
-        Row(
-          children: [
-            IconButton(
-              tooltip: 'Previous month',
-              onPressed: _previousMonth,
-              icon: const Icon(Icons.chevron_left),
+        Center(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFFE1E7E3)),
             ),
-            Expanded(
-              child: Text(
-                _monthName(_selectedMonth),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Previous month',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _previousMonth,
+                  icon: const Icon(Icons.chevron_left),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    _monthName(_selectedMonth),
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Next month',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: canGoNext ? _nextMonth : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Next month',
-              onPressed: canGoNext ? _nextMonth : null,
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
 
         // ─── Meals / Fixed / Overall ───
         if (_fixedCostsEnabled)
@@ -836,249 +864,58 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               },
             ),
           ),
-        const SizedBox(height: 16),
+        if (_fixedCostsEnabled) const SizedBox(height: 16),
 
         // ═══ Meals ═══
         if (tab == _CalcTab.meals) ...[
-          // ─── Admin: Min Meals + Shop Due side by side ───
-          if (widget.isAdmin)
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _setMinimumMeals(
-                      currentMinimum: minimumMeals,
-                      currentShopDue: shopDue,
-                    ),
-                    icon: const Icon(Icons.restaurant_menu_outlined, size: 18),
-                    label: Text(
-                      minimumMeals > 0
-                          ? 'Min Meals: ${_simpleNumber(minimumMeals)}'
-                          : 'Min Meals',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _setShopDue(
-                      currentDue: shopDue,
-                      minimumMeals: minimumMeals,
-                    ),
-                    icon: const Icon(Icons.storefront_outlined, size: 18),
-                    label: Text(
-                      shopDue > 0
-                          ? 'Shop Due: ৳${_simpleNumber(shopDue)}'
-                          : 'Shop Due',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-          if (widget.isAdmin) const SizedBox(height: 12),
-
-          // ─── Summary card (tappable to copy) ───
-          _SummaryCard(
+          _RateHero(
             mealRate: result.mealRate,
             totalMealNumber: result.totalMealNumber,
             totalActualMeals: result.totalActualMeals,
             totalExpense: result.totalExpense,
-            shopDue: result.shopDue,
-            memberPaidExpenses: result.memberPaidExpenses,
+            shopDue: shopDue,
+            minimumMeals: minimumMeals,
             previousMonthKey: _monthKey(previousMonth),
             groupId: widget.groupId,
             onCopy: () => _copySummaryCard(result: result),
+            onOpenMeals: () => _openRecords(0),
+            onOpenExpenses: () => _openRecords(1),
+            onEditMinimum: widget.isAdmin
+                ? () => _setMinimumMeals(
+                    currentMinimum: minimumMeals,
+                    currentShopDue: shopDue,
+                  )
+                : null,
+            onEditShopDue: widget.isAdmin
+                ? () => _setShopDue(
+                    currentDue: shopDue,
+                    minimumMeals: minimumMeals,
+                  )
+                : null,
           ),
-
-          const SizedBox(height: 12),
-          if (result.members.isNotEmpty) ...[
-            _AmountListCard(
-              title: 'Meal Calculation',
-              rows: [
-                for (final member in result.members)
-                  _AmountRow.balance(member.name, member.finalBalance),
-              ],
-              onCopy: () => _copyMealBalances(result: result),
+          const SizedBox(height: 14),
+          if (result.members.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'No members were found.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else
+            _MemberBalancesCard(
+              members: result.members,
+              openMemberIds: _openMemberIds,
+              onToggle: (id) {
+                setState(() {
+                  if (!_openMemberIds.remove(id)) _openMemberIds.add(id);
+                });
+              },
+              onCopyBalances: () => _copyMealBalances(result: result),
+              onCopyTable: () => _copyFullTable(result: result),
             ),
-            const SizedBox(height: 12),
-          ],
-          _DetailsToggle(
-            title: 'Details',
-            subtitle: 'Meals, spending and meal expense per member',
-            isExpanded: _showMemberDetails,
-            onTap: () {
-              setState(() => _showMemberDetails = !_showMemberDetails);
-            },
-          ),
-          if (_showMemberDetails) ...[
-            const SizedBox(height: 12),
-            if (result.members.isNotEmpty) ...[
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment<bool>(
-                      value: true,
-                      icon: Icon(Icons.view_agenda_outlined),
-                      label: Text('Card View'),
-                    ),
-                    ButtonSegment<bool>(
-                      value: false,
-                      icon: Icon(Icons.table_chart_outlined),
-                      label: Text('Table View'),
-                    ),
-                  ],
-                  selected: {_showMemberCards},
-                  onSelectionChanged: (selection) {
-                    setState(() => _showMemberCards = selection.first);
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            if (result.members.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'No members were found.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-            else if (_showMemberCards)
-              ...result.members.map(
-                (member) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MemberCalculationCard(
-                    member: member,
-                    mealRate: result.mealRate,
-                    // No copy on individual cards.
-                    onCopy: null,
-                  ),
-                ),
-              )
-            else
-              Card(
-                child: Column(
-                  children: [
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(
-                          AppTheme.surfaceSoft,
-                        ),
-                        columns: const [
-                          DataColumn(label: Text('Member')),
-                          DataColumn(label: Text('Meals')),
-                          DataColumn(label: Text('Spent')),
-                          DataColumn(label: Text('Meal Expense')),
-                          DataColumn(label: Text('Final Result')),
-                        ],
-                        rows: result.members.map((member) {
-                          final finalResult = member.finalBalance < 0
-                              ? 'Pay ৳${member.finalBalance.abs()}'
-                              : member.finalBalance > 0
-                              ? 'Collect ৳${member.finalBalance}'
-                              : 'Settled';
-
-                          final resultColor = member.finalBalance < 0
-                              ? AppTheme.danger
-                              : member.finalBalance > 0
-                              ? AppTheme.success
-                              : AppTheme.textSecondary;
-
-                          final mealText =
-                              member.actualMeals < member.mealNumber
-                              ? '${member.mealNumber.toStringAsFixed(2)}\n'
-                                    'Actual: ${member.actualMeals.toStringAsFixed(2)}'
-                              : member.mealNumber.toStringAsFixed(2);
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                SizedBox(
-                                  width: 120,
-                                  child: Text(
-                                    member.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text(mealText)),
-                              DataCell(
-                                Text('৳${member.spending.toStringAsFixed(2)}'),
-                              ),
-                              DataCell(
-                                Text(
-                                  '৳${member.mealExpense.toStringAsFixed(2)}',
-                                ),
-                              ),
-                              DataCell(
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      finalResult,
-                                      style: TextStyle(
-                                        color: resultColor,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Exact: ${member.exactBalance.toStringAsFixed(2)}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _copyFullTable(result: result),
-                          icon: const Icon(Icons.copy_all_outlined),
-                          label: const Text('Copy Full Table'),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            if (shopDue > 0) ...[
-              const SizedBox(height: 10),
-              Text(
-                'The shop due is included in the total monthly cost but is '
-                'not credited as spending to any individual member.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            if (minimumMeals > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Members below ${_simpleNumber(minimumMeals)} meals are '
-                'calculated using the minimum.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
         ],
 
         // ═══ Fixed ═══
@@ -1518,19 +1355,23 @@ class _SettlementLine extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CARD 1: Summary card — tappable to copy
+// The month at a glance: the meal rate and the figures behind it
 // ─────────────────────────────────────────────────────────────
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
+class _RateHero extends StatelessWidget {
+  const _RateHero({
     required this.mealRate,
     required this.totalMealNumber,
     required this.totalActualMeals,
     required this.totalExpense,
     required this.shopDue,
-    required this.memberPaidExpenses,
+    required this.minimumMeals,
     required this.previousMonthKey,
     required this.groupId,
     required this.onCopy,
+    required this.onOpenMeals,
+    required this.onOpenExpenses,
+    required this.onEditMinimum,
+    required this.onEditShopDue,
   });
 
   final double mealRate;
@@ -1538,106 +1379,216 @@ class _SummaryCard extends StatelessWidget {
   final double totalActualMeals;
   final double totalExpense;
   final double shopDue;
-  final double memberPaidExpenses;
+  final double minimumMeals;
   final String previousMonthKey;
   final String groupId;
   final VoidCallback onCopy;
+  final VoidCallback onOpenMeals;
+  final VoidCallback onOpenExpenses;
+
+  /// Null for members: only an admin sets these two.
+  final VoidCallback? onEditMinimum;
+  final VoidCallback? onEditShopDue;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: AppTheme.surfaceSoft,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onCopy,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    // With a minimum, more meals are charged than were eaten, and the
+    // meal rate comes from the charged total.
+    final hasChargedMeals = (totalMealNumber - totalActualMeals).abs() > 0.001;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 10, 10, 16),
+      decoration: BoxDecoration(
+        gradient: AppTheme.heroGradient,
+        boxShadow: AppTheme.heroShadow,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // ─── Data rows (short labels, dark & bold) ───
-              _StrongInfoRow(
-                label: 'Total Meals',
-                value: totalActualMeals.toStringAsFixed(2),
-              ),
-              // With a minimum, more meals are charged than were eaten,
-              // and the meal rate comes from the charged total.
-              if ((totalMealNumber - totalActualMeals).abs() > 0.001)
-                _StrongInfoRow(
-                  label: 'Charged Meals',
-                  value: totalMealNumber.toStringAsFixed(2),
+              const Expanded(
+                child: Text(
+                  'MEAL RATE',
+                  style: TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                  ),
                 ),
-              _StrongInfoRow(
-                label: 'Member Paid',
-                value: '৳${memberPaidExpenses.toStringAsFixed(2)}',
               ),
-              _StrongInfoRow(
-                label: 'Shop Due',
-                value: '৳${shopDue.toStringAsFixed(2)}',
+              IconButton(
+                tooltip: 'Copy summary',
+                onPressed: onCopy,
+                icon: Icon(
+                  Icons.copy_outlined,
+                  size: 19,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
               ),
-              const Divider(height: 22),
-              _StrongInfoRow(
-                label: 'Total Cost',
-                value: '৳${totalExpense.toStringAsFixed(2)}',
-                emphasize: true,
-              ),
-
-              const SizedBox(height: 14),
-
-              // ─── Meal rate + previous comparison at the BOTTOM ───
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Meal Rate',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '৳${mealRate.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 38,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1,
+                        height: 1.1,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '৳${mealRate.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              color: AppTheme.primary,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  _MealRateComparison(
-                    groupId: groupId,
-                    previousMonthKey: previousMonthKey,
-                    currentRate: mealRate,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.touch_app_outlined,
-                      size: 14,
-                      color: AppTheme.textSecondary,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Tap to copy',
-                      style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _MealRateComparison(
+                  groupId: groupId,
+                  previousMonthKey: previousMonthKey,
+                  currentRate: mealRate,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _HeroFigure(
+                        label: 'Total meals',
+                        value: _amountText(totalActualMeals),
+                        note: hasChargedMeals
+                            ? 'Charged ${_amountText(totalMealNumber)}'
+                            : null,
+                        icon: Icons.chevron_right,
+                        onTap: onOpenMeals,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _HeroFigure(
+                        label: 'Total cost',
+                        value: '৳${_amountText(totalExpense)}',
+                        icon: Icons.chevron_right,
+                        onTap: onOpenExpenses,
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _HeroFigure(
+                        label: 'Min meals',
+                        value: minimumMeals > 0
+                            ? _amountText(minimumMeals)
+                            : '—',
+                        onTap: onEditMinimum,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _HeroFigure(
+                        label: 'Shop due',
+                        value: shopDue > 0 ? '৳${_amountText(shopDue)}' : '—',
+                        onTap: onEditShopDue,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One figure on the [_RateHero]. With [onTap] it can be tapped, and
+/// shows [icon] to say so: a pencil unless told otherwise.
+class _HeroFigure extends StatelessWidget {
+  const _HeroFigure({
+    required this.label,
+    required this.value,
+    this.note,
+    this.onTap,
+    this.icon = Icons.edit_outlined,
+  });
+
+  final String label;
+  final String value;
+  final String? note;
+  final VoidCallback? onTap;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (note != null)
+                      Text(
+                        note!,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.66),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
               ),
+              if (onTap != null) Icon(icon, size: 18, color: AppTheme.accent),
             ],
           ),
         ),
@@ -1647,36 +1598,218 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Strong info row (darker + bigger)
+// Every member's balance. A row opens to show that member's meals,
+// meal expense and spending.
 // ─────────────────────────────────────────────────────────────
-class _StrongInfoRow extends StatelessWidget {
-  const _StrongInfoRow({
-    required this.label,
-    required this.value,
-    this.emphasize = false,
+class _MemberBalancesCard extends StatelessWidget {
+  const _MemberBalancesCard({
+    required this.members,
+    required this.openMemberIds,
+    required this.onToggle,
+    required this.onCopyBalances,
+    required this.onCopyTable,
   });
 
-  final String label;
-  final String value;
-  final bool emphasize;
+  final List<MemberCalculation> members;
+  final Set<String> openMemberIds;
+  final ValueChanged<String> onToggle;
+  final VoidCallback onCopyBalances;
+  final VoidCallback onCopyTable;
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = Theme.of(context).textTheme.titleSmall
-        ?.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w700);
-    final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-      color: emphasize ? AppTheme.primary : AppTheme.textPrimary,
-      fontWeight: emphasize ? FontWeight.w900 : FontWeight.w800,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: Text(label, style: labelStyle)),
-          Text(value, style: valueStyle),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 8, 6, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Members',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<bool>(
+                  tooltip: 'Copy',
+                  icon: const Icon(
+                    Icons.copy_outlined,
+                    size: 20,
+                    color: AppTheme.primary,
+                  ),
+                  onSelected: (isTable) =>
+                      isTable ? onCopyTable() : onCopyBalances(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: false, child: Text('Copy balances')),
+                    PopupMenuItem(value: true, child: Text('Copy full table')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          for (final member in members)
+            _MemberBalanceRow(
+              member: member,
+              isOpen: openMemberIds.contains(member.id),
+              onTap: () => onToggle(member.id),
+            ),
+          const SizedBox(height: 6),
         ],
       ),
+    );
+  }
+}
+
+class _MemberBalanceRow extends StatelessWidget {
+  const _MemberBalanceRow({
+    required this.member,
+    required this.isOpen,
+    required this.onTap,
+  });
+
+  final MemberCalculation member;
+  final bool isOpen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = _AmountRow.balance(member.name, member.finalBalance);
+    final hasChargedMeals =
+        (member.mealNumber - member.actualMeals).abs() > 0.001;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 11, 10, 11),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    member.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  balance.text,
+                  style: TextStyle(
+                    color: balance.color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  isOpen ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
+              ],
+            ),
+            if (isOpen)
+              Container(
+                margin: const EdgeInsets.only(top: 10, right: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Meals',
+                        value: _amountText(member.actualMeals),
+                        note: hasChargedMeals
+                            ? 'Charged ${_amountText(member.mealNumber)}'
+                            : null,
+                      ),
+                    ),
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Meal cost',
+                        value: '৳${_amountText(member.mealExpense)}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Spent',
+                        value: '৳${_amountText(member.spending)}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberFigure extends StatelessWidget {
+  const _MemberFigure({required this.label, required this.value, this.note});
+
+  final String label;
+  final String value;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (note != null)
+          Text(
+            note!,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1723,12 +1856,9 @@ class _MealRateComparison extends StatelessWidget {
           builder: (context, rateSnapshot) {
             final previousRate = rateSnapshot.data;
 
+            // Nothing to compare with: the card shows the rate alone.
             if (previousRate == null || previousRate == 0) {
-              return Text(
-                'No previous data',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: AppTheme.textSecondary),
-              );
+              return const SizedBox.shrink();
             }
 
             final difference = currentRate - previousRate;
@@ -1752,8 +1882,8 @@ class _MealRateComparison extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1868,138 +1998,4 @@ ExpenseRecord _expenseRecord(
     date: (data['date'] as Timestamp?)?.toDate(),
     amount: (data['amount'] as num?)?.toDouble() ?? 0,
   );
-}
-
-// ─────────────────────────────────────────────────────────────
-// CARD 3: Individual member calculation card
-// (NOT copyable — onCopy is null)
-// ─────────────────────────────────────────────────────────────
-class _MemberCalculationCard extends StatelessWidget {
-  const _MemberCalculationCard({
-    required this.member,
-    required this.mealRate,
-    required this.onCopy,
-  });
-
-  final MemberCalculation member;
-  final double mealRate;
-  final VoidCallback? onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final isPayable = member.finalBalance < 0;
-    final isCollectable = member.finalBalance > 0;
-
-    final resultText = isPayable
-        ? 'Pay ৳${member.finalBalance.abs()}'
-        : isCollectable
-        ? 'Collect ৳${member.finalBalance}'
-        : 'Settled';
-
-    final resultColor = isPayable
-        ? AppTheme.danger
-        : isCollectable
-        ? AppTheme.success
-        : AppTheme.textSecondary;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: AppTheme.surfaceSoft,
-                  foregroundColor: AppTheme.primary,
-                  child: Text(
-                    member.name.trim().isEmpty
-                        ? 'M'
-                        : member.name.trim()[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    member.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _CardValueRow(
-              label: 'Actual Meals',
-              value: member.actualMeals.toStringAsFixed(2),
-            ),
-            _CardValueRow(
-              label: 'Charged Meals',
-              value: member.mealNumber.toStringAsFixed(2),
-            ),
-            _CardValueRow(
-              label: 'Meal Expense',
-              value: '৳${member.mealExpense.toStringAsFixed(2)}',
-            ),
-            _CardValueRow(
-              label: 'Spent',
-              value: '৳${member.spending.toStringAsFixed(2)}',
-            ),
-            const Divider(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    resultText,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: resultColor,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CardValueRow extends StatelessWidget {
-  const _CardValueRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
