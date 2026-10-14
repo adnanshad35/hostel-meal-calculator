@@ -8,6 +8,9 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/notification_service.dart';
+import '../services/profile_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/month_calendar.dart';
 
 /// Opens the Add Expense form, unless the hostel is read-only.
 Future<void> showExpenseForm(
@@ -16,6 +19,8 @@ Future<void> showExpenseForm(
   required bool isAdmin,
 }) async {
   if (!await ensureHostelEditable(context, groupId)) return;
+  if (!context.mounted) return;
+  if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
   if (!context.mounted) return;
 
   await showDialog<void>(
@@ -39,6 +44,8 @@ class ExpenseScreen extends StatelessWidget {
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
     if (!await ensureHostelEditable(context, groupId)) return;
+    if (!context.mounted) return;
+    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
     if (!context.mounted) return;
 
     await showDialog<void>(
@@ -195,40 +202,134 @@ class ExpenseScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Total expenses screen
+// Total expenses: the whole hostel's month, as a calendar
 // ─────────────────────────────────────────────────────────────
 class TotalExpensesScreen extends StatelessWidget {
   const TotalExpensesScreen({
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
 
-  Future<void> _openExpenseForm(
-    BuildContext context, {
+  /// True when shown as a tab of another page, which has the title.
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExpenseCalendar(
+      groupId: groupId,
+      isAdmin: isAdmin,
+      embedded: embedded,
+      onlyMine: false,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// My expenses: what the signed-in member paid this month
+// ─────────────────────────────────────────────────────────────
+class MyExpensesScreen extends StatelessWidget {
+  const MyExpensesScreen({
+    super.key,
+    required this.groupId,
+    required this.currentUserId,
+    this.embedded = false,
+  });
+
+  final String groupId;
+  final String currentUserId;
+
+  /// True when shown as a tab of another page, which has the title.
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExpenseCalendar(
+      groupId: groupId,
+      isAdmin: false,
+      embedded: embedded,
+      onlyMine: true,
+    );
+  }
+}
+
+/// This month's expenses on a calendar. Tapping a day lists what was
+/// spent that day; whoever may change an expense can tap it to edit.
+class _ExpenseCalendar extends StatefulWidget {
+  const _ExpenseCalendar({
+    required this.groupId,
+    required this.isAdmin,
+    required this.embedded,
+    required this.onlyMine,
+  });
+
+  final String groupId;
+  final bool isAdmin;
+  final bool embedded;
+
+  /// True for the member's own expenses, false for the whole hostel's.
+  final bool onlyMine;
+
+  @override
+  State<_ExpenseCalendar> createState() => _ExpenseCalendarState();
+}
+
+class _ExpenseCalendarState extends State<_ExpenseCalendar> {
+  late final DateTime _now = DateTime.now();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
+
+  String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // This month only.
+    _expenses = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .collection('expenses')
+        .where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(
+            DateTime(_now.year, _now.month),
+          ),
+        )
+        .where(
+          'date',
+          isLessThan: Timestamp.fromDate(DateTime(_now.year, _now.month + 1)),
+        )
+        .snapshots();
+  }
+
+  Future<void> _openExpenseForm({
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
-    if (!await ensureHostelEditable(context, groupId)) return;
-    if (!context.mounted) return;
+    if (!await ensureHostelEditable(context, widget.groupId)) return;
+    if (!mounted) return;
+    if (!await ensureMemberMayAdd(context, widget.groupId, meals: false)) {
+      return;
+    }
+    if (!mounted) return;
 
     await showDialog<void>(
       context: context,
       builder: (_) => _ExpenseFormDialog(
-        groupId: groupId,
-        isAdmin: isAdmin,
+        groupId: widget.groupId,
+        isAdmin: widget.isAdmin,
         expense: expense,
       ),
     );
   }
 
   Future<void> _deleteExpense(
-    BuildContext context, {
-    required DocumentSnapshot<Map<String, dynamic>> expense,
-    required String name,
-  }) async {
+    DocumentSnapshot<Map<String, dynamic>> expense,
+    String name,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -253,7 +354,7 @@ class TotalExpensesScreen extends StatelessWidget {
       },
     );
 
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
 
@@ -273,332 +374,112 @@ class TotalExpensesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser!;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Total Expenses')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openExpenseForm(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(widget.onlyMine ? 'My Expenses' : 'Total Expenses'),
+            ),
+      floatingActionButton: widget.embedded
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _openExpenseForm,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Expense'),
+            ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .collection('expenses')
-            .orderBy('date', descending: true)
-            .snapshots(),
+        stream: _expenses,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
           if (snapshot.hasError) {
             return const Center(child: Text('Unable to load expenses.'));
           }
 
-          final expenses = _currentMonthExpenses(snapshot.data);
-
-          if (expenses.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No expenses this month.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final total = expenses.fold<double>(0, (currentTotal, expense) {
-            final amount = expense.data()['amount'];
-            return currentTotal + (amount is num ? amount.toDouble() : 0);
-          });
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              Card(
-                color: const Color(0xFFE8F5E9),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text('Shared expenses this month'),
-                      const SizedBox(height: 6),
-                      Text(
-                        '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: const Color(0xFF2E7D32),
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...expenses.map((expense) {
-                final data = expense.data();
-                final name = data['name'] as String? ?? 'Expense';
-                final paidByName =
-                    data['paidByName'] as String? ?? 'Unknown member';
-                final paidById = data['paidById'] as String? ?? '';
-                final amount = data['amount'];
-                final date = (data['date'] as Timestamp?)?.toDate();
-
-                final canEdit = isAdmin || paidById == currentUser.uid;
-
-                return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.receipt_outlined),
-                    ),
-                    title: Text(
-                      name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('${_formatDate(date)}\nPaid by $paidByName'),
-                    isThreeLine: true,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '৳${_formatAmount(amount)}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        if (isAdmin)
-                          PopupMenuButton<String>(
-                            tooltip: 'Expense options',
-                            onSelected: (action) {
-                              if (action == 'edit') {
-                                _openExpenseForm(context, expense: expense);
-                              } else {
-                                _deleteExpense(
-                                  context,
-                                  expense: expense,
-                                  name: name,
-                                );
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (canEdit) ...[
-                          const SizedBox(width: 4),
-                          IconButton(
-                            tooltip: 'Edit expense',
-                            onPressed: () {
-                              _openExpenseForm(context, expense: expense);
-                            },
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          );
+          return _buildCalendar(snapshot.data!.docs);
         },
       ),
+    );
+  }
+
+  Widget _buildCalendar(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final byDay = <int, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+    double total = 0;
+
+    for (final expense in docs) {
+      final data = expense.data();
+      final date = (data['date'] as Timestamp?)?.toDate();
+      if (date == null) continue;
+      if (widget.onlyMine && data['paidById'] != _uid) continue;
+
+      byDay.putIfAbsent(date.day, () => []).add(expense);
+      total += (data['amount'] as num?)?.toDouble() ?? 0;
+    }
+
+    return MonthCalendarView(
+      month: _now,
+      label: widget.onlyMine ? 'My expense' : 'Total expense',
+      total: '৳${_plainAmount(total)}',
+      markedDays: byDay.keys.toSet(),
+      linesOf: (day) {
+        return [for (final expense in byDay[day] ?? const []) _line(expense)];
+      },
+    );
+  }
+
+  CalendarLine _line(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+    final data = expense.data();
+    final name = data['name'] as String? ?? 'Expense';
+    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+    final canEdit = widget.isAdmin || data['paidById'] == _uid;
+
+    return CalendarLine(
+      title: name,
+      // Whose it was, when the list is the whole hostel's; in the
+      // member's own list, what they wrote about it.
+      note: widget.onlyMine
+          ? _firstLine(data['description'])
+          : data['paidByName'] as String?,
+      trailing: '৳${_plainAmount(amount)}',
+      onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
+      action: widget.isAdmin
+          ? PopupMenuButton<String>(
+              tooltip: 'Expense options',
+              padding: EdgeInsets.zero,
+              onSelected: (action) {
+                if (action == 'edit') {
+                  _openExpenseForm(expense: expense);
+                } else {
+                  _deleteExpense(expense, name);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Delete', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            )
+          : null,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// My expenses screen — personal history
-// ─────────────────────────────────────────────────────────────
-class MyExpensesScreen extends StatelessWidget {
-  const MyExpensesScreen({
-    super.key,
-    required this.groupId,
-    required this.currentUserId,
-  });
+/// The first line of a description, or null when there is none.
+String? _firstLine(Object? description) {
+  if (description is! String) return null;
 
-  final String groupId;
-  final String currentUserId;
+  final line = description.trim().split('\n').first.trim();
+  return line.isEmpty ? null : line;
+}
 
-  Future<void> _openExpenseForm(
-    BuildContext context, {
-    DocumentSnapshot<Map<String, dynamic>>? expense,
-  }) async {
-    if (!await ensureHostelEditable(context, groupId)) return;
-    if (!context.mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _ExpenseFormDialog(
-        groupId: groupId,
-        isAdmin: false,
-        expense: expense,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Expenses')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openExpenseForm(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
-      ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .collection('expenses')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Unable to load your expenses.\n${snapshot.error}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-
-          final docs = _currentMonthExpenses(snapshot.data)
-              .where((d) => d.data()['paidById'] == currentUserId)
-              .toList();
-
-          docs.sort((a, b) {
-            final aDate = (a.data()['date'] as Timestamp?)?.toDate();
-            final bDate = (b.data()['date'] as Timestamp?)?.toDate();
-            if (aDate == null && bDate == null) return 0;
-            if (aDate == null) return 1;
-            if (bDate == null) return -1;
-            return bDate.compareTo(aDate);
-          });
-
-          double total = 0;
-          for (final d in docs) {
-            final amount = d.data()['amount'];
-            if (amount is num) total += amount.toDouble();
-          }
-
-          if (docs.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 64,
-                      color: Color(0xFF2E7D32),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'You have not added any expense yet',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Tap Add Expense to record your first expense.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              Card(
-                color: const Color(0xFFE8F5E9),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text('My total expenses'),
-                      const SizedBox(height: 6),
-                      Text(
-                        '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: const Color(0xFF2E7D32),
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...docs.map((expense) {
-                final data = expense.data();
-                final name = data['name'] as String? ?? 'Expense';
-                final amount = data['amount'];
-                final date = (data['date'] as Timestamp?)?.toDate();
-
-                return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.receipt_outlined),
-                    ),
-                    title: Text(
-                      name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(_formatDate(date)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '৳${_formatAmount(amount)}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          tooltip: 'Edit expense',
-                          onPressed: () {
-                            _openExpenseForm(context, expense: expense);
-                          },
-                          icon: const Icon(Icons.edit_outlined),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          );
-        },
-      ),
-    );
-  }
+String _plainAmount(double value) {
+  return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -687,22 +568,6 @@ List<QueryDocumentSnapshot<Map<String, dynamic>>> _currentMonthExpenses(
   }).toList();
 }
 
-String _formatDate(DateTime? date) {
-  if (date == null) return 'Unknown date';
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  return '$day/$month/${date.year}';
-}
-
-String _formatAmount(dynamic amount) {
-  if (amount is num) {
-    return amount.toDouble().toStringAsFixed(2);
-  }
-  return '0.00';
-}
-
-enum _AmountMode { fixed, calculation }
-
 // ─────────────────────────────────────────────────────────────
 // Expense form dialog
 // ─────────────────────────────────────────────────────────────
@@ -726,6 +591,10 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _amountController;
+  late final TextEditingController _descriptionController;
+
+  /// True once the + beside the name has opened the description box.
+  bool _showDescription = false;
 
   late DateTime _selectedDate;
 
@@ -735,8 +604,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   bool _isLoadingMembers = false;
   bool _isSaving = false;
-
-  _AmountMode _amountMode = _AmountMode.fixed;
 
   bool get _isEditing => widget.expense != null;
 
@@ -759,6 +626,10 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           : '',
     );
 
+    final description = (data?['description'] as String? ?? '').trim();
+    _descriptionController = TextEditingController(text: description);
+    _showDescription = description.isNotEmpty;
+
     _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
 
     _selectedMemberId = data?['paidById'] as String? ?? _currentUser.uid;
@@ -773,6 +644,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _membersSubscription?.cancel();
     _nameController.dispose();
     _amountController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -840,6 +712,10 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   /// Opens the calculator dialog. On "Use Result", writes the
   /// computed plain number into the amount field.
   Future<void> _openCalculator() async {
+    // The calculator has its own keypad, so the phone's keyboard is
+    // put away first.
+    FocusScope.of(context).unfocus();
+
     final result = await showDialog<double>(
       context: context,
       builder: (_) =>
@@ -887,9 +763,10 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
     final paidByName = widget.isAdmin && !_isEditing
         ? selectedMember?.name ?? 'Member'
-        : _currentUser.displayName?.trim().isNotEmpty == true
-        ? _currentUser.displayName!.trim()
-        : _currentUser.email ?? 'Member';
+        : ProfileService.memberName ??
+              (_currentUser.displayName?.trim().isNotEmpty == true
+                  ? _currentUser.displayName!.trim()
+                  : _currentUser.email ?? 'Member');
 
     setState(() => _isSaving = true);
 
@@ -899,17 +776,26 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           .doc(widget.groupId)
           .collection('expenses');
 
+      final description = _showDescription
+          ? _descriptionController.text.trim()
+          : '';
+      final savedDescription =
+          (widget.expense?.data()?['description'] as String? ?? '').trim();
+
       if (_isEditing) {
         await expenses.doc(widget.expense!.id).update({
           'name': _nameController.text.trim(),
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
+          // Sent only when it changed.
+          if (description != savedDescription) 'description': description,
           'updatedBy': _currentUser.uid,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
         await expenses.add({
           'name': _nameController.text.trim(),
+          'description': description,
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
           'paidById': paidById,
@@ -965,188 +851,211 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final existingPaidByName = widget.expense?.data()?['paidByName'] as String?;
 
     return AlertDialog(
+      // Wider than the default, with room around each part.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
       title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.isAdmin && !_isEditing) ...[
-                if (_isLoadingMembers)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: CircularProgressIndicator(),
-                  )
-                else
-                  DropdownButtonFormField<String>(
-                    // Rebuilt when the member list changes, so the
-                    // selection can never point at a missing member.
-                    key: ValueKey(
-                      _members.map((member) => member.id).join(','),
+      content: SizedBox(
+        width: 440,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.isAdmin && !_isEditing) ...[
+                  if (_isLoadingMembers)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      // Rebuilt when the member list changes, so the
+                      // selection can never point at a missing member.
+                      key: ValueKey(
+                        _members.map((member) => member.id).join(','),
+                      ),
+                      initialValue: _selectedMemberId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Paid by',
+                        prefixIcon: Icon(Icons.person_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _members.map((member) {
+                        return DropdownMenuItem<String>(
+                          value: member.id,
+                          // Green for a member who uses the app.
+                          child: Text(
+                            member.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: member.isAppUser
+                                ? const TextStyle(
+                                    color: AppTheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: _isSaving
+                          ? null
+                          : (value) {
+                              setState(() => _selectedMemberId = value);
+                            },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a member.';
+                        }
+                        return null;
+                      },
                     ),
-                    initialValue: _selectedMemberId,
-                    isExpanded: true,
+                  const SizedBox(height: 20),
+                ],
+                // Shown to an admin, who may be editing someone else's.
+                if (widget.isAdmin &&
+                    _isEditing &&
+                    existingPaidByName != null) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.person_outline),
+                    title: const Text('Paid by'),
+                    subtitle: Text(existingPaidByName),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                TextFormField(
+                  controller: _nameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: 'Expense name',
+                    prefixIcon: const Icon(Icons.description_outlined),
+                    border: const OutlineInputBorder(),
+                    // Opens a box for what was bought, or closes it.
+                    suffixIcon: IconButton(
+                      tooltip: _showDescription
+                          ? 'Remove description'
+                          : 'Add description',
+                      onPressed: _isSaving
+                          ? null
+                          : () {
+                              setState(() {
+                                _showDescription = !_showDescription;
+                              });
+                            },
+                      icon: Icon(_showDescription ? Icons.remove : Icons.add),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter the expense name.';
+                    }
+                    return null;
+                  },
+                ),
+                if (_showDescription) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descriptionController,
+                    minLines: 2,
+                    maxLines: 5,
+                    maxLength: 400,
+                    textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(
-                      labelText: 'Paid by',
-                      prefixIcon: Icon(Icons.person_outline),
+                      labelText: 'Description',
+                      alignLabelWithHint: true,
+                      counterText: '',
                       border: OutlineInputBorder(),
                     ),
-                    items: _members.map((member) {
-                      return DropdownMenuItem<String>(
-                        value: member.id,
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                member.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (member.isAppUser) ...[
-                              const SizedBox(width: 8),
-                              const _AppUserChip(),
-                            ],
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _isSaving
-                        ? null
-                        : (value) {
-                            setState(() => _selectedMemberId = value);
-                          },
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please select a member.';
-                      }
-                      return null;
-                    },
                   ),
-                const SizedBox(height: 16),
-              ],
-              if (_isEditing && existingPaidByName != null) ...[
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.person_outline),
-                  title: const Text('Paid by'),
-                  subtitle: Text(existingPaidByName),
-                ),
-                const SizedBox(height: 8),
-              ],
-              TextFormField(
-                controller: _nameController,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Expense name',
-                  hintText: 'Example: Rice or electricity bill',
-                  prefixIcon: Icon(Icons.description_outlined),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the expense name.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ─── Amount field ───
-              TextFormField(
-                controller: _amountController,
-                readOnly: _amountMode == _AmountMode.calculation,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Amount',
-                  hintText: _amountMode == _AmountMode.fixed
-                      ? 'Example: 350'
-                      : null,
-                  prefixText: '৳ ',
-                  prefixIcon: const Icon(Icons.payments_outlined),
-                  suffixIcon: _amountMode == _AmountMode.calculation
-                      ? IconButton(
-                          tooltip: 'Open calculator',
-                          onPressed: _isSaving ? null : _openCalculator,
-                          icon: const Icon(Icons.calculate_outlined),
-                        )
-                      : null,
-                  border: const OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  final parsed = double.tryParse(value?.trim() ?? '');
-                  if (parsed == null || parsed <= 0) {
-                    return 'Please enter a valid amount.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // ─── Mode selector ───
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<_AmountMode>(
-                  segments: const [
-                    ButtonSegment<_AmountMode>(
-                      value: _AmountMode.fixed,
-                      icon: Icon(Icons.edit_outlined, size: 18),
-                      label: Text('Fixed Value'),
+                ],
+                const SizedBox(height: 20),
+                // Tapping the amount opens the keyboard; the calculator
+                // icon opens the calculator instead.
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    prefixText: '৳ ',
+                    prefixIcon: const Icon(Icons.payments_outlined),
+                    suffixIcon: IconButton(
+                      tooltip: 'Calculator',
+                      onPressed: _isSaving ? null : _openCalculator,
+                      icon: const Icon(Icons.calculate_outlined),
                     ),
-                    ButtonSegment<_AmountMode>(
-                      value: _AmountMode.calculation,
-                      icon: Icon(Icons.calculate_outlined, size: 18),
-                      label: Text('Calculation'),
-                    ),
-                  ],
-                  selected: {_amountMode},
-                  onSelectionChanged: _isSaving
-                      ? null
-                      : (selection) {
-                          final mode = selection.first;
-                          setState(() => _amountMode = mode);
-                          if (mode == _AmountMode.calculation) {
-                            // Open calculator immediately.
-                            _openCalculator();
-                          }
-                        },
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final parsed = double.tryParse(value?.trim() ?? '');
+                    if (parsed == null || parsed <= 0) {
+                      return 'Please enter a valid amount.';
+                    }
+                    return null;
+                  },
                 ),
-              ),
-
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today_outlined),
-                title: const Text('Date'),
-                subtitle: Text(formattedDate),
-                trailing: TextButton(
-                  onPressed: _isSaving ? null : _selectDate,
-                  child: const Text('Change'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+      // The date sits at the bottom left; tapping it opens the
+      // calendar.
+      actionsAlignment: MainAxisAlignment.spaceBetween,
+      actionsPadding: const EdgeInsets.fromLTRB(20, 4, 24, 22),
       actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+        InkWell(
+          onTap: _isSaving ? null : _selectDate,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 20,
+                  color: AppTheme.primary,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        FilledButton(
-          onPressed:
-              _isSaving || (widget.isAdmin && !_isEditing && _isLoadingMembers)
-              ? null
-              : _saveExpense,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed:
+                  _isSaving ||
+                      (widget.isAdmin && !_isEditing && _isLoadingMembers)
+                  ? null
+                  : _saveExpense,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
         ),
       ],
     );
@@ -1242,10 +1151,9 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
             TextField(
               controller: _controller,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-                signed: true,
-              ),
+              // No on-screen keyboard: the keypad below does the
+              // typing. A physical keyboard still works.
+              keyboardType: TextInputType.none,
               onChanged: _onChanged,
               decoration: const InputDecoration(
                 labelText: 'Expression',
@@ -1511,30 +1419,5 @@ class _ExpressionParser {
     while (_pos < input.length && input[_pos].trim().isEmpty) {
       _pos++;
     }
-  }
-}
-
-class _AppUserChip extends StatelessWidget {
-  const _AppUserChip();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        'App User',
-        style: TextStyle(
-          color: colorScheme.onPrimaryContainer,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
   }
 }

@@ -1,14 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/feature_request_service.dart';
 import '../theme/app_theme.dart';
 
 const String _supportEmail = 'adnanshad1035@gmail.com';
 const String _linkedInUrl = 'https://www.linkedin.com/in/abuadnanshad/';
-const String _gitHubUrl = 'https://github.com/adnanshad35';
+const String _website = 'hostelmate.web.app';
 
+/// About the app and the person who made it, and the place to send
+/// the developer an idea.
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
@@ -37,6 +41,11 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _open(Uri uri, {required String fallbackMessage}) async {
     var opened = false;
 
@@ -46,23 +55,30 @@ class _AboutScreenState extends State<AboutScreen> {
       opened = false;
     }
 
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(fallbackMessage)));
-    }
+    if (!opened && mounted) _showMessage(fallbackMessage);
   }
 
-  void _requestFeature() {
-    _open(
-      Uri(
-        scheme: 'mailto',
-        path: _supportEmail,
-        queryParameters: {'subject': 'HostelMate Feature Request'},
-      ),
-      fallbackMessage:
-          'No email application was found. '
-          'Please email $_supportEmail.',
+  /// Takes the idea in the app and sends it straight to the developer.
+  Future<void> _requestFeature() async {
+    final message = await showDialog<String>(
+      context: context,
+      builder: (_) => const _FeatureRequestDialog(),
     );
+
+    if (message == null || !mounted) return;
+
+    try {
+      await FeatureRequestService.send(message);
+      if (!mounted) return;
+      _showMessage('Sent. Thank you for the idea.');
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      _showMessage(
+        error.code == 'unavailable'
+            ? 'No internet connection. Please try again.'
+            : 'Your request could not be sent. Please try again later.',
+      );
+    }
   }
 
   @override
@@ -70,153 +86,156 @@ class _AboutScreenState extends State<AboutScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: const Text('App and Developer')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
           // ─── App ───
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceSoft,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.restaurant_menu_rounded,
-                          color: AppTheme.primary,
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              'assets/icon/icon.png',
+                              width: 46,
+                              height: 46,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('HostelMate', style: textTheme.titleLarge),
+                                Text(_versionLabel),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'HostelMate keeps a hostel\'s meals and shared '
+                        'expenses in one place. Members record what they '
+                        'eat and what they spend, and the app works out '
+                        'the meal rate and what each person pays or gets '
+                        'back at the end of the month.',
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  onTap: () => _open(
+                    Uri.parse('https://$_website'),
+                    fallbackMessage: 'Unable to open the website.',
+                  ),
+                  leading: const Icon(Icons.public, color: AppTheme.primary),
+                  title: const Text(
+                    _website,
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: const Icon(Icons.open_in_new, size: 19),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ─── Developer ───
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 32,
+                        backgroundColor: AppTheme.surfaceSoft,
+                        backgroundImage: AssetImage(
+                          'assets/images/developer.jpg',
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('HostelMate', style: textTheme.titleLarge),
-                            Text(_versionLabel),
+                            Text('Abu Adnan Shad', style: textTheme.titleLarge),
+                            const Text('Developer'),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'HostelMate helps hostel members manage meals, '
-                    'shared expenses, monthly meal rates, and '
-                    'individual balances clearly. Every member can '
-                    'view meal counts, expenses, calculations, and '
-                    'final pay-or-collect amounts.',
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  onTap: () => _open(
+                    Uri.parse(_linkedInUrl),
+                    fallbackMessage: 'Unable to open LinkedIn.',
                   ),
-                ],
-              ),
+                  leading: const FaIcon(
+                    FontAwesomeIcons.linkedinIn,
+                    color: AppTheme.primary,
+                    size: 21,
+                  ),
+                  title: const Text(
+                    'LinkedIn',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: const Icon(Icons.open_in_new, size: 19),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  onTap: () => _open(
+                    Uri(scheme: 'mailto', path: _supportEmail),
+                    fallbackMessage:
+                        'No email application was found. '
+                        'Please email $_supportEmail.',
+                  ),
+                  leading: const Icon(
+                    Icons.mail_outline,
+                    color: AppTheme.primary,
+                  ),
+                  title: const Text(
+                    _supportEmail,
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: const Icon(Icons.open_in_new, size: 19),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-
-          // ─── Developer ───
-          Text(
-            'Developer',
-            style: textTheme.titleMedium?.copyWith(
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  const CircleAvatar(
-                    radius: 52,
-                    backgroundColor: AppTheme.surfaceSoft,
-                    backgroundImage: AssetImage('assets/images/developer.jpg'),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Abu Adnan Shad',
-                    textAlign: TextAlign.center,
-                    style: textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Computer Science & Engineering graduate\n'
-                    'Flutter and Firebase developer',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _SocialButton(
-                        icon: FontAwesomeIcons.linkedinIn,
-                        tooltip: 'LinkedIn',
-                        color: const Color(0xFF0A66C2),
-                        onPressed: () => _open(
-                          Uri.parse(_linkedInUrl),
-                          fallbackMessage: 'Unable to open LinkedIn.',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      _SocialButton(
-                        icon: FontAwesomeIcons.github,
-                        tooltip: 'GitHub',
-                        color: const Color(0xFF181717),
-                        onPressed: () => _open(
-                          Uri.parse(_gitHubUrl),
-                          fallbackMessage: 'Unable to open GitHub.',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // ─── Feedback ───
           Card(
             clipBehavior: Clip.antiAlias,
             child: ListTile(
               onTap: _requestFeature,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              leading: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF2DA),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.lightbulb_outline_rounded,
-                  color: AppTheme.warning,
-                ),
+              leading: const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: AppTheme.primary,
               ),
               title: const Text(
                 'Request a Feature',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: const Padding(
-                padding: EdgeInsets.only(top: 3),
-                child: Text('Share an idea or improvement'),
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
               trailing: const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
+                Icons.chevron_right,
                 color: AppTheme.textSecondary,
               ),
             ),
@@ -227,30 +246,59 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 }
 
-class _SocialButton extends StatelessWidget {
-  const _SocialButton({
-    required this.icon,
-    required this.tooltip,
-    required this.color,
-    required this.onPressed,
-  });
+/// Where a user writes the idea they want to send.
+class _FeatureRequestDialog extends StatefulWidget {
+  const _FeatureRequestDialog();
 
-  final FaIconData icon;
-  final String tooltip;
-  final Color color;
-  final VoidCallback onPressed;
+  @override
+  State<_FeatureRequestDialog> createState() => _FeatureRequestDialogState();
+}
+
+class _FeatureRequestDialogState extends State<_FeatureRequestDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return IconButton.filledTonal(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: color.withValues(alpha: 0.1),
-        foregroundColor: color,
-        fixedSize: const Size(52, 52),
+    final isEmpty = _controller.text.trim().isEmpty;
+
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      title: const Text('Request a Feature'),
+      content: SizedBox(
+        width: 440,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          minLines: 4,
+          maxLines: 8,
+          maxLength: FeatureRequestService.maxLength,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Description',
+            alignLabelWithHint: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
       ),
-      icon: FaIcon(icon, size: 22),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Send'),
+        ),
+      ],
     );
   }
 }

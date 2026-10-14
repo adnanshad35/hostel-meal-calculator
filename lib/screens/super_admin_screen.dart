@@ -10,6 +10,7 @@ import 'hostel_activation_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'super_admin_billing.dart';
+import 'super_admin_requests.dart';
 
 typedef _AdminData = ({AdminSnapshot data, AdminBilling billing});
 
@@ -33,6 +34,10 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
       label: 'Vouchers',
       icon: Icons.confirmation_number_outlined,
     ),
+    DesktopDestination(
+      label: 'Requests',
+      icon: Icons.lightbulb_outline_rounded,
+    ),
   ];
 
   /// The sidebar on a wide window: the tabs, then the two screens the
@@ -43,7 +48,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     DesktopDestination(label: 'Profile', icon: Icons.account_circle_outlined),
   ];
 
-  static const _noticesIndex = 5;
+  static const _noticesIndex = 6;
 
   /// A notifier, so the screens inside the desktop layout's own
   /// navigator also see a refresh.
@@ -125,7 +130,9 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
       1 => _UsersTab(data: data, onRefresh: _refresh),
       2 => _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
       3 => AdminPaymentsTab(billing: billing, onRefresh: _refresh),
-      _ => AdminVouchersTab(billing: billing, onRefresh: _refresh),
+      4 => AdminVouchersTab(billing: billing, onRefresh: _refresh),
+      // Loads its own list, so it is fresh each time it is opened.
+      _ => const AdminRequestsTab(),
     };
   }
 
@@ -685,8 +692,18 @@ class _UserRow extends StatelessWidget {
         hostel?.name ??
         (user.groupId == null ? 'Not in a hostel' : 'Unknown hostel');
 
+    // The super admin's own account stands out from everyone else's.
+    final isSuperAdmin = user.email.toLowerCase() == SuperAdminService.email;
+
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: isSuperAdmin ? const Color(0xFFFFF6DF) : null,
+      shape: isSuperAdmin
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: AppTheme.secondary, width: 1.4),
+            )
+          : null,
       child: InkWell(
         onTap: () => _showDetails(context),
         child: Padding(
@@ -709,6 +726,15 @@ class _UserRow extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (isSuperAdmin)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: _Chip(
+                          text: 'Super Admin',
+                          icon: Icons.shield_outlined,
+                          color: Color(0xFF9A6A00),
+                        ),
+                      ),
                     if (user.isHostelAdmin)
                       const Padding(
                         padding: EdgeInsets.only(top: 4),
@@ -834,6 +860,25 @@ class _HostelsTabState extends State<_HostelsTab>
       successMessage: days == 0
           ? 'The period of ${hostel.name} has ended.'
           : '${hostel.name} now has $days days left.',
+      onDone: widget.onRefresh,
+    );
+  }
+
+  Future<void> _deleteHostel(AdminHostel hostel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteHostelDialog(
+        hostel: hostel,
+        userCount: widget.data.membersOf(hostel).length,
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await runAdminAction(
+      context,
+      action: () => SuperAdminService.deleteHostel(hostel),
+      successMessage: '${hostel.name} was deleted.',
       onDone: widget.onRefresh,
     );
   }
@@ -989,6 +1034,19 @@ class _HostelsTabState extends State<_HostelsTab>
                     isAdmin: hostel.adminIds.contains(member.id),
                   ),
                 if (members.isEmpty) const Text('No app users in this hostel.'),
+                const Divider(height: 24),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.danger,
+                    side: const BorderSide(color: AppTheme.danger),
+                  ),
+                  onPressed: () {
+                    close();
+                    _deleteHostel(hostel);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete Hostel'),
+                ),
               ],
             ),
           ),
@@ -1093,6 +1151,89 @@ class _HostelsTabState extends State<_HostelsTab>
           );
         },
       ),
+    );
+  }
+}
+
+/// Confirms deleting a hostel. The hostel's name has to be typed, so
+/// it cannot be deleted by a stray tap.
+class _DeleteHostelDialog extends StatefulWidget {
+  const _DeleteHostelDialog({required this.hostel, required this.userCount});
+
+  final AdminHostel hostel;
+  final int userCount;
+
+  @override
+  State<_DeleteHostelDialog> createState() => _DeleteHostelDialogState();
+}
+
+class _DeleteHostelDialogState extends State<_DeleteHostelDialog> {
+  final _nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  bool get _nameMatches {
+    return _nameController.text.trim().toLowerCase() ==
+        widget.hostel.name.trim().toLowerCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final users = widget.userCount;
+
+    return AlertDialog(
+      title: const Text('Delete Hostel?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This deletes ${widget.hostel.name} and all of its meals, '
+              'expenses, monthly settings and members. It cannot be '
+              'undone.',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              users == 0
+                  ? 'No app users are in this hostel.'
+                  : users == 1
+                  ? 'Its 1 user keeps their account and will no longer '
+                        'be in a hostel.'
+                  : 'Its $users users keep their accounts and will no '
+                        'longer be in a hostel.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Type the hostel name to confirm',
+                hintText: widget.hostel.name,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+          onPressed: _nameMatches
+              ? () => Navigator.of(context).pop(true)
+              : null,
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }
@@ -1242,25 +1383,36 @@ class _MemberLine extends StatelessWidget {
 // Small shared pieces
 // ─────────────────────────────────────────────────────────────
 class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
+  const _Chip({required this.text, this.icon, this.color = AppTheme.primary});
 
   final String text;
+  final IconData? icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppTheme.primary,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -70,8 +70,15 @@ class GroupMember {
     return '${words.first[0]}${words.last[0]}'.toUpperCase();
   }
 
+  /// The name the hostel shows for a user: their nickname when they
+  /// have set one, otherwise their full name.
   static String readUserName(Map<String, dynamic> data) {
-    final possibleNames = [data['name'], data['displayName'], data['fullName']];
+    final possibleNames = [
+      data['nickname'],
+      data['name'],
+      data['displayName'],
+      data['fullName'],
+    ];
 
     for (final value in possibleNames) {
       if (value is String && value.trim().isNotEmpty) {

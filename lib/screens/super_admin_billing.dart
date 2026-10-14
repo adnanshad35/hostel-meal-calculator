@@ -288,6 +288,27 @@ class AdminPaymentsTab extends StatelessWidget {
     );
   }
 
+  Future<void> _delete(BuildContext context, PaymentRequest payment) async {
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Delete Payment?',
+      message:
+          'Remove ${payment.trxId} from ${payment.groupName} from the '
+          'records? '
+          '${payment.status == PaymentStatus.approved ? 'The days already given for it stay with the hostel. ' : ''}'
+          'This cannot be undone.',
+    );
+
+    if (!confirmed || !context.mounted) return;
+
+    await runAdminAction(
+      context,
+      action: () => SubscriptionService.deletePayment(payment),
+      successMessage: 'Payment ${payment.trxId} deleted.',
+      onDone: onRefresh,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final info = billing.paymentInfo;
@@ -339,44 +360,20 @@ class AdminPaymentsTab extends StatelessWidget {
                 ?.copyWith(color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 10),
+          if (payments.isNotEmpty) ...[
+            Text(
+              'Press and hold a payment to delete it.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+          ],
           for (final payment in payments) ...[
-            PaymentCard(
+            _ApprovalCard(
               key: ValueKey(payment.trxId),
               payment: payment,
-              actions: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    [
-                      payment.groupName,
-                      if (payment.senderNumber.isNotEmpty)
-                        'from ${payment.senderNumber}',
-                      if (payment.submittedByName.isNotEmpty)
-                        'by ${payment.submittedByName}',
-                    ].join(' · '),
-                  ),
-                  if (payment.status == PaymentStatus.pending) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _reject(context, payment),
-                            child: const Text('Reject'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => _approve(context, payment),
-                            child: const Text('Approve'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+              onApprove: () => _approve(context, payment),
+              onReject: () => _reject(context, payment),
+              onDelete: () => _delete(context, payment),
             ),
             const SizedBox(height: 10),
           ],
@@ -470,6 +467,279 @@ class _PaymentInfoDialogState extends State<_PaymentInfoDialog> {
   }
 }
 
+/// Asks before something is deleted for good.
+Future<bool> _confirmDelete(
+  BuildContext context, {
+  required String title,
+  required String message,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      );
+    },
+  );
+
+  return confirmed == true;
+}
+
+/// One reported payment, laid out for checking it against bKash: who
+/// paid and how much on top, then the transaction ID and the sender's
+/// number, each a tap away from the clipboard.
+class _ApprovalCard extends StatelessWidget {
+  const _ApprovalCard({
+    super.key,
+    required this.payment,
+    required this.onApprove,
+    required this.onReject,
+    required this.onDelete,
+  });
+
+  final PaymentRequest payment;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+  final VoidCallback onDelete;
+
+  Future<void> _copy(BuildContext context, String label, String value) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    await Clipboard.setData(ClipboardData(text: value));
+    messenger.showSnackBar(SnackBar(content: Text('$label copied.')));
+  }
+
+  /// A small label with its value, and a copy button when it is
+  /// something to look up in bKash.
+  Widget _detail(
+    BuildContext context, {
+    required String label,
+    required String value,
+    bool canCopy = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 64,
+            child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (canCopy)
+            InkWell(
+              onTap: () => _copy(context, label, value),
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  Icons.copy_outlined,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = payment.status == PaymentStatus.pending;
+
+    final (status, color) = switch (payment.status) {
+      PaymentStatus.pending => ('Waiting', AppTheme.warning),
+      PaymentStatus.approved => (
+        payment.daysGranted > 0
+            ? 'Approved · ${payment.daysGranted} days'
+            : 'Approved',
+        AppTheme.success,
+      ),
+      PaymentStatus.rejected => ('Rejected', AppTheme.danger),
+    };
+
+    final amount = payment.amount % 1 == 0
+        ? payment.amount.toInt().toString()
+        : payment.amount.toStringAsFixed(2);
+    final date = payment.createdAt;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      // A waiting payment is edged in its colour, so the ones that
+      // need attention are found at a glance.
+      shape: isPending
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: AppTheme.warning, width: 1.4),
+            )
+          : null,
+      child: InkWell(
+        onLongPress: onDelete,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          payment.groupName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Flexible(
+                              flex: 3,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.13),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (date != null) ...[
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  formatSubscriptionDate(date),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      '৳$amount',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              _detail(
+                context,
+                label: 'TrxID',
+                value: payment.trxId,
+                canCopy: true,
+              ),
+              if (payment.senderNumber.isNotEmpty)
+                _detail(
+                  context,
+                  label: 'From',
+                  value: payment.senderNumber,
+                  canCopy: true,
+                ),
+              if (payment.submittedByName.isNotEmpty)
+                _detail(
+                  context,
+                  label: 'Sent by',
+                  value: payment.submittedByName,
+                ),
+              if (payment.status == PaymentStatus.rejected &&
+                  payment.note.isNotEmpty)
+                _detail(context, label: 'Note', value: payment.note),
+              if (isPending) ...[
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                            foregroundColor: AppTheme.danger,
+                          ),
+                          onPressed: onReject,
+                          child: const Text('Reject'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                          ),
+                          onPressed: onApprove,
+                          icon: const Icon(Icons.check, size: 20),
+                          label: const Text('Approve'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Vouchers tab
 // ─────────────────────────────────────────────────────────────
@@ -514,6 +784,28 @@ class AdminVouchersTab extends StatelessWidget {
     );
   }
 
+  Future<void> _delete(BuildContext context, Voucher voucher) async {
+    final used = billing.hostelsUsing(voucher.code);
+
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Delete Voucher?',
+      message:
+          'Delete ${voucher.code}? Nobody will be able to use it again. '
+          '${used == 0 ? '' : 'The $used ${used == 1 ? 'hostel' : 'hostels'} on it now keep their days. '}'
+          'This cannot be undone.',
+    );
+
+    if (!confirmed || !context.mounted) return;
+
+    await runAdminAction(
+      context,
+      action: () => SubscriptionService.deleteVoucher(voucher),
+      successMessage: 'Voucher ${voucher.code} deleted.',
+      onDone: onRefresh,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final vouchers = billing.vouchers;
@@ -531,7 +823,8 @@ class AdminVouchersTab extends StatelessWidget {
           const SizedBox(height: 12),
           const Text(
             'A voucher adds days to a hostel. Each hostel can use a '
-            'voucher once. Switch a voucher off to stop new use.',
+            'voucher once. Switch a voucher off to stop new use, or '
+            'press and hold it to delete it.',
           ),
           const SizedBox(height: 16),
           if (vouchers.isEmpty)
@@ -540,29 +833,36 @@ class AdminVouchersTab extends StatelessWidget {
             for (final voucher in vouchers) ...[
               Card(
                 key: ValueKey(voucher.code),
-                child: SwitchListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
-                  title: Text(
-                    voucher.code,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
+                clipBehavior: Clip.antiAlias,
+                // The switch still answers a tap; holding the card
+                // anywhere offers to delete the voucher.
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: () => _delete(context, voucher),
+                  child: SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
                     ),
+                    title: Text(
+                      voucher.code,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    subtitle: Text(
+                      [
+                        '${voucher.days} days · on '
+                            '${billing.hostelsUsing(voucher.code)} hostels',
+                        if (voucher.note.isNotEmpty) voucher.note,
+                      ].join('\n'),
+                    ),
+                    value: voucher.active,
+                    onChanged: (active) => _setActive(context, voucher, active),
                   ),
-                  subtitle: Text(
-                    [
-                      '${voucher.days} days · on '
-                          '${billing.hostelsUsing(voucher.code)} hostels',
-                      if (voucher.note.isNotEmpty) voucher.note,
-                    ].join('\n'),
-                  ),
-                  value: voucher.active,
-                  onChanged: (active) => _setActive(context, voucher, active),
                 ),
               ),
               const SizedBox(height: 10),

@@ -194,11 +194,6 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Use − and +, or tap a number to type it.',
-              textAlign: TextAlign.center,
-            ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _isSaving ? null : _save,
@@ -213,11 +208,6 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(widget.hasEntry ? 'Update Entry' : 'Create Entry'),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'This administrative change records who edited the entry.',
-              textAlign: TextAlign.center,
             ),
           ],
         ),

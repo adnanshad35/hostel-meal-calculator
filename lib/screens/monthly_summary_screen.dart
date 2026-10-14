@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
+import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
@@ -34,6 +37,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late final Stream<List<MemberMealPlan>> _plansStream;
 
   _CalcTab _tab = _CalcTab.meals;
+
+  /// False for a hostel that settles meals only. The Fixed and Overall
+  /// tabs are then not offered. Always true for now: the setting that
+  /// turns it off is not offered to admins yet.
+  final bool _fixedCostsEnabled = true;
+
+  /// True when the admins allow minimum meals and shop due to be
+  /// entered on any day, not only at the month's end.
+  bool _specialPermission = false;
+  StreamSubscription<HostelSettings>? _settingsSubscription;
   bool _showMemberCards = true;
   bool _showMemberDetails = false;
   bool _showFixedDetails = false;
@@ -47,6 +60,13 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
     _membersStream = GroupMemberService.watch(widget.groupId);
+    _settingsSubscription = HostelSettingsService.watch(widget.groupId)
+        .listen((settings) {
+          if (!mounted) return;
+          setState(() {
+            _specialPermission = settings.specialPermission;
+          });
+        }, onError: (_) {});
     _plansStream = MealPlanService.watchAll(widget.groupId);
     // Every month's settings, because fixed costs carry forward from
     // the last month they were saved in.
@@ -55,6 +75,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         .doc(widget.groupId)
         .collection('monthlySettings')
         .snapshots();
+  }
+
+  @override
+  void dispose() {
+    _settingsSubscription?.cancel();
+    super.dispose();
   }
 
   String _monthKey(DateTime date) {
@@ -115,9 +141,15 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Meal Rate')}: ৳${result.mealRate.toStringAsFixed(2)}',
     );
     buffer.writeln(
-      '${_bold('Total Meal Number')}: '
-      '${result.totalMealNumber.toStringAsFixed(2)}',
+      '${_bold('Total Meals')}: '
+      '${result.totalActualMeals.toStringAsFixed(2)}',
     );
+    if ((result.totalMealNumber - result.totalActualMeals).abs() > 0.001) {
+      buffer.writeln(
+        '${_bold('Charged Meals')}: '
+        '${result.totalMealNumber.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
@@ -146,9 +178,15 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     buffer.writeln('');
 
     buffer.writeln(
-      '${_bold('Total Meal Number')}: '
-      '${result.totalMealNumber.toStringAsFixed(2)}',
+      '${_bold('Total Meals')}: '
+      '${result.totalActualMeals.toStringAsFixed(2)}',
     );
+    if ((result.totalMealNumber - result.totalActualMeals).abs() > 0.001) {
+      buffer.writeln(
+        '${_bold('Charged Meals')}: '
+        '${result.totalMealNumber.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
@@ -279,10 +317,47 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         }, SetOptions(merge: true));
   }
 
+  /// Minimum meals and shop due are settled at the month's end. Says
+  /// so and returns false when they cannot be entered today.
+  bool _canEnterClosingFigures() {
+    if (_specialPermission ||
+        MonthlyCalculator.isClosingWindowOpen(_selectedMonth, DateTime.now())) {
+      return true;
+    }
+
+    final nextMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+    final opens = '25 ${_monthName(_selectedMonth).split(' ').first}';
+    final closes = '5 ${_monthName(nextMonth).split(' ').first}';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Not Open Yet'),
+          content: Text(
+            'Minimum meals and shop due for '
+            '${_monthName(_selectedMonth)} can be entered from $opens '
+            'to $closes. Wait until then, or turn on Special permission '
+            'in Settings.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+    return false;
+  }
+
   Future<void> _setMinimumMeals({
     required double currentMinimum,
     required double currentShopDue,
   }) async {
+    if (!_canEnterClosingFigures()) return;
+
     final minimum = await _showNumberDialog(
       title: 'Set Minimum Meal Number',
       label: 'Minimum meals per member',
@@ -311,6 +386,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required double currentDue,
     required double minimumMeals,
   }) async {
+    if (!_canEnterClosingFigures()) return;
+
     final due = await _showNumberDialog(
       title: 'Set Monthly Shop Due',
       label: 'Shop due amount',
@@ -698,6 +775,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       bills: sharedBills,
     );
 
+    // A hostel that does not use fixed costs sees the meals only.
+    final tab = _fixedCostsEnabled ? _tab : _CalcTab.meals;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
@@ -729,37 +809,38 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         const SizedBox(height: 12),
 
         // ─── Meals / Fixed / Overall ───
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<_CalcTab>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.meals,
-                icon: Icon(Icons.restaurant_outlined, size: 18),
-                label: Text('Meals'),
-              ),
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.fixed,
-                icon: Icon(Icons.home_work_outlined, size: 18),
-                label: Text('Fixed'),
-              ),
-              ButtonSegment<_CalcTab>(
-                value: _CalcTab.overall,
-                icon: Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text('Overall'),
-              ),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (selection) {
-              setState(() => _tab = selection.first);
-            },
+        if (_fixedCostsEnabled)
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<_CalcTab>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.meals,
+                  icon: Icon(Icons.restaurant_outlined, size: 18),
+                  label: Text('Meals'),
+                ),
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.fixed,
+                  icon: Icon(Icons.home_work_outlined, size: 18),
+                  label: Text('Fixed'),
+                ),
+                ButtonSegment<_CalcTab>(
+                  value: _CalcTab.overall,
+                  icon: Icon(Icons.receipt_long_outlined, size: 18),
+                  label: Text('Overall'),
+                ),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (selection) {
+                setState(() => _tab = selection.first);
+              },
+            ),
           ),
-        ),
         const SizedBox(height: 16),
 
         // ═══ Meals ═══
-        if (_tab == _CalcTab.meals) ...[
+        if (tab == _CalcTab.meals) ...[
           // ─── Admin: Min Meals + Shop Due side by side ───
           if (widget.isAdmin)
             Row(
@@ -804,6 +885,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           _SummaryCard(
             mealRate: result.mealRate,
             totalMealNumber: result.totalMealNumber,
+            totalActualMeals: result.totalActualMeals,
             totalExpense: result.totalExpense,
             shopDue: result.shopDue,
             memberPaidExpenses: result.memberPaidExpenses,
@@ -1001,7 +1083,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         ],
 
         // ═══ Fixed ═══
-        if (_tab == _CalcTab.fixed) ...[
+        if (tab == _CalcTab.fixed) ...[
           if (!hasFixedCosts)
             Card(
               child: Padding(
@@ -1137,7 +1219,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         ],
 
         // ═══ Overall: meals + fixed costs, final amounts only ═══
-        if (_tab == _CalcTab.overall) ...[
+        if (tab == _CalcTab.overall) ...[
           if (settlements.isEmpty)
             const Card(
               child: Padding(
@@ -1443,6 +1525,7 @@ class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.mealRate,
     required this.totalMealNumber,
+    required this.totalActualMeals,
     required this.totalExpense,
     required this.shopDue,
     required this.memberPaidExpenses,
@@ -1453,6 +1536,7 @@ class _SummaryCard extends StatelessWidget {
 
   final double mealRate;
   final double totalMealNumber;
+  final double totalActualMeals;
   final double totalExpense;
   final double shopDue;
   final double memberPaidExpenses;
@@ -1475,8 +1559,15 @@ class _SummaryCard extends StatelessWidget {
               // ─── Data rows (short labels, dark & bold) ───
               _StrongInfoRow(
                 label: 'Total Meals',
-                value: totalMealNumber.toStringAsFixed(2),
+                value: totalActualMeals.toStringAsFixed(2),
               ),
+              // With a minimum, more meals are charged than were eaten,
+              // and the meal rate comes from the charged total.
+              if ((totalMealNumber - totalActualMeals).abs() > 0.001)
+                _StrongInfoRow(
+                  label: 'Charged Meals',
+                  value: totalMealNumber.toStringAsFixed(2),
+                ),
               _StrongInfoRow(
                 label: 'Member Paid',
                 value: '৳${memberPaidExpenses.toStringAsFixed(2)}',

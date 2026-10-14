@@ -79,6 +79,23 @@ class HostelSubscription {
 
     return (end.difference(now).inMinutes / (24 * 60)).ceil();
   }
+
+  /// How long the hostel stays active, in words: days, or hours once
+  /// less than a day is left. Empty when it is not active.
+  String timeLeftText(DateTime now) {
+    final end = activeUntil;
+    if (end == null || !now.isBefore(end)) return '';
+
+    final minutes = end.difference(now).inMinutes;
+
+    if (minutes < 24 * 60) {
+      final hours = (minutes / 60).ceil();
+      return hours <= 1 ? '1 hour left' : '$hours hours left';
+    }
+
+    final days = daysLeft(now);
+    return days == 1 ? '1 day left' : '$days days left';
+  }
 }
 
 /// A code that activates a hostel for a number of days. Each hostel
@@ -519,6 +536,18 @@ class SubscriptionService {
 
   static Future<void> setVoucherActive(Voucher voucher, bool active) {
     return _vouchers.doc(voucher.code).update({'active': active});
+  }
+
+  /// Removes a voucher for good. Hostels that already used it keep the
+  /// days it gave them.
+  static Future<void> deleteVoucher(Voucher voucher) {
+    return _vouchers.doc(voucher.code).delete();
+  }
+
+  /// Removes a reported payment from the records. Days already given
+  /// for it stay with the hostel.
+  static Future<void> deletePayment(PaymentRequest payment) {
+    return _payments.doc(payment.trxId).delete();
   }
 
   static Future<void> savePaymentInfo({

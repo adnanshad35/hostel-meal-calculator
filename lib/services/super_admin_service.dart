@@ -173,8 +173,8 @@ class AdminSnapshot {
   }
 }
 
-/// The app-wide administrator. Read-only access to every account and
-/// hostel, plus sending app notices.
+/// The app-wide administrator: sees every account and hostel, sends
+/// app notices, and can delete a hostel.
 class SuperAdminService {
   SuperAdminService._();
 
@@ -202,5 +202,76 @@ class SuperAdminService {
       users: users.docs.map(AdminUser.fromDocument).toList(),
       hostels: hostels.docs.map(AdminHostel.fromDocument).toList(),
     );
+  }
+
+  /// Everything a hostel keeps under its own document. "deposits" is
+  /// listed for hostels that used an earlier trial of a hostel fund.
+  static const _hostelRecords = [
+    'meals',
+    'expenses',
+    'monthlySettings',
+    'mealPlans',
+    'notifications',
+    'members',
+    'deposits',
+  ];
+
+  /// Deletes a hostel for good: its meals, expenses, settings and
+  /// member list, then the hostel itself. Its users keep their
+  /// accounts and are simply no longer in a hostel.
+  ///
+  /// The hostel document goes last, so if this stops halfway the
+  /// hostel is still listed and can be deleted again.
+  static Future<void> deleteHostel(AdminHostel hostel) async {
+    final firestore = FirebaseFirestore.instance;
+    final group = firestore.collection('groups').doc(hostel.id);
+
+    const chunkSize = 400;
+
+    for (final name in _hostelRecords) {
+      final records = await group.collection(name).get();
+
+      for (var start = 0; start < records.docs.length; start += chunkSize) {
+        final batch = firestore.batch();
+        for (final record in records.docs.skip(start).take(chunkSize)) {
+          batch.delete(record.reference);
+        }
+        await batch.commit();
+      }
+    }
+
+    // Anyone whose profile still points at the hostel, whether or not
+    // the hostel's own list names them.
+    final users = await firestore
+        .collection('users')
+        .where('groupId', isEqualTo: hostel.id)
+        .get();
+
+    final batch = firestore.batch();
+
+    for (final user in users.docs) {
+      batch.update(user.reference, {
+        'groupId': null,
+        'role': 'member',
+        'previousGroupId': hostel.id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (hostel.inviteCode.isNotEmpty) {
+      final invite = firestore.collection('invites').doc(hostel.inviteCode);
+
+      if ((await invite.get()).exists) {
+        batch.update(invite, {
+          'active': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    batch.delete(firestore.collection('subscriptions').doc(hostel.id));
+    batch.delete(group);
+
+    await batch.commit();
   }
 }

@@ -68,22 +68,39 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
-    // Type 4 directly instead of pressing + eight times.
+    // Type 4 directly instead of pressing + four times.
     await tester.enterText(find.byType(TextField), '4');
     await tester.pump();
     expect(value, 4);
 
-    // The buttons continue from the typed value.
+    // The buttons continue from the typed value, a whole meal at a
+    // time.
     await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
-    expect(value, 4.5);
-    expect(find.text('4.5'), findsOneWidget);
+    expect(value, 5);
+    expect(find.text('5'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.remove));
     await tester.pump();
     await tester.tap(find.byIcon(Icons.remove));
     await tester.pump();
-    expect(value, 3.5);
+    expect(value, 3);
+
+    // A half meal can still be typed, and the buttons step from it.
+    await tester.enterText(find.byType(TextField), '1.5');
+    await tester.pump();
+    expect(value, 1.5);
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+    expect(value, 2.5);
+    // Minus never goes below zero.
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pump();
+    expect(value, 0);
 
     // Half-typed and invalid text never produce a wrong value.
     await tester.enterText(find.byType(TextField), '2.');

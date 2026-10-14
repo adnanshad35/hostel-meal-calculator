@@ -121,6 +121,7 @@ class MemberCalculation {
 class MonthlyCalculation {
   const MonthlyCalculation({
     required this.totalMealNumber,
+    this.totalActualMeals = 0,
     required this.memberPaidExpenses,
     required this.shopDue,
     required this.totalExpense,
@@ -128,7 +129,12 @@ class MonthlyCalculation {
     required this.members,
   });
 
+  /// The meals charged for: each member's meals, or the minimum when
+  /// they ate fewer. The meal rate is worked out from this.
   final double totalMealNumber;
+
+  /// The meals actually eaten, without the minimum.
+  final double totalActualMeals;
   final double memberPaidExpenses;
   final double shopDue;
   final double totalExpense;
@@ -143,6 +149,16 @@ class MonthlyCalculation {
 /// balance is what they paid minus their charged meals at that rate.
 class MonthlyCalculator {
   MonthlyCalculator._();
+
+  /// Whether the minimum meals and shop due of [month] may be entered
+  /// at [now]. They are settled at the end of the month, so they are
+  /// open from the 25th of that month to the 5th of the next.
+  static bool isClosingWindowOpen(DateTime month, DateTime now) {
+    final opens = DateTime(month.year, month.month, 25);
+    final closes = DateTime(month.year, month.month + 1, 6);
+
+    return !now.isBefore(opens) && now.isBefore(closes);
+  }
 
   static String monthKey(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -224,6 +240,7 @@ class MonthlyCalculator {
 
     final calculations = <MemberCalculation>[];
     double totalMealNumber = 0;
+    double totalActualMeals = 0;
     double memberPaidExpenses = 0;
 
     for (final member in memberById.values) {
@@ -232,6 +249,7 @@ class MonthlyCalculator {
       final spending = memberSpending[member.id] ?? 0;
 
       totalMealNumber += calculatedMealNumber;
+      totalActualMeals += actual;
       memberPaidExpenses += spending;
 
       calculations.add(
@@ -262,6 +280,7 @@ class MonthlyCalculator {
 
     return MonthlyCalculation(
       totalMealNumber: totalMealNumber,
+      totalActualMeals: totalActualMeals,
       memberPaidExpenses: memberPaidExpenses,
       shopDue: shopDue,
       totalExpense: totalExpense,
