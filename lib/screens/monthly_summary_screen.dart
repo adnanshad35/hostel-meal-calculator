@@ -39,8 +39,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   _CalcTab _tab = _CalcTab.meals;
 
   /// False for a hostel that settles meals only. The Fixed and Overall
-  /// tabs are then not offered.
-  bool _fixedCostsEnabled = true;
+  /// tabs are then not offered. Always true for now: the setting that
+  /// turns it off is not offered to admins yet.
+  final bool _fixedCostsEnabled = true;
 
   /// True when the admins allow minimum meals and shop due to be
   /// entered on any day, not only at the month's end.
@@ -63,7 +64,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         .listen((settings) {
           if (!mounted) return;
           setState(() {
-            _fixedCostsEnabled = settings.fixedCostsEnabled;
             _specialPermission = settings.specialPermission;
           });
         }, onError: (_) {});
