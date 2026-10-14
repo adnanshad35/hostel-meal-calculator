@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
+import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/member_name_dialog.dart';
+import 'duty_roster_screen.dart';
 import 'group_settings_screen.dart';
-import 'hostel_activation_screen.dart';
+import 'meal_plan_screen.dart';
 
 class HostelDetailsScreen extends StatefulWidget {
   const HostelDetailsScreen({
@@ -43,6 +45,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
 
   Set<String> _admins = {};
   String _inviteCode = '';
+  DutyRoster _roster = const DutyRoster([]);
 
   /// App users in the hostel. Members without the app are not counted.
   Set<String> _appUserIds = {};
@@ -69,6 +72,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
             _admins = Set<String>.from(admins);
             _appUserIds = Set<String>.from(memberIds);
             _inviteCode = snapshot.data()?['inviteCode'] as String? ?? '';
+            _roster = DutyRoster.fromGroupData(snapshot.data());
           });
         }, onError: (_) {});
   }
@@ -449,23 +453,50 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     }
   }
 
-  void _openActivation() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => HostelActivationScreen(
-          groupId: widget.groupId,
-          groupName: widget.groupName,
-        ),
-      ),
-    );
-  }
-
   Future<void> _copyInviteCode() async {
     await Clipboard.setData(ClipboardData(text: _inviteCode));
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Invitation code copied.')));
+  }
+
+  void _openMealPlan() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            MealPlanScreen(groupId: widget.groupId, isAdmin: widget.isAdmin),
+      ),
+    );
+  }
+
+  void _openDutySettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DutyRosterScreen(groupId: widget.groupId),
+      ),
+    );
+  }
+
+  /// Members in the order of their turns on duty, first to last, with
+  /// those who have no turn after them, by name.
+  List<GroupMember> _byDuty(List<GroupMember> members) {
+    final now = DateTime.now();
+    final sorted = [...members];
+
+    sorted.sort((a, b) {
+      final first = _roster.turnOf(a.id, now)?.turn.fromDate;
+      final second = _roster.turnOf(b.id, now)?.turn.fromDate;
+
+      if (first == null && second == null) {
+        return GroupMember.compareByName(a, b);
+      }
+      if (first == null) return 1;
+      if (second == null) return -1;
+      return first.compareTo(second);
+    });
+
+    return sorted;
   }
 
   void _openMembers() {
@@ -632,8 +663,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isGroupAdmin = widget.isAdmin || _admins.contains(_currentUserId);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.membersOnly ? 'Members' : 'About Hostel'),
@@ -678,57 +707,31 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               if (!widget.membersOnly) ...[
                 _HostelCard(
                   groupName: widget.groupName,
-                  isAdmin: isGroupAdmin,
+                  // Only admins get the settings; a member sees what
+                  // they are instead.
+                  onOpenSettings: widget.isAdmin && !_isBusy
+                      ? _openGroupSettings
+                      : null,
+                  isAdmin: widget.isAdmin,
                   inviteCode: _inviteCode,
                   onCopyCode: _copyInviteCode,
                 ),
                 const SizedBox(height: 10),
-                // How long the hostel is active for.
-                StreamBuilder<HostelSubscription>(
-                  stream: _subscriptionStream,
-                  builder: (context, snapshot) {
-                    final subscription =
-                        snapshot.data ?? const HostelSubscription.none();
-                    final isLoading = !snapshot.hasData && !snapshot.hasError;
-
-                    return SubscriptionStatusCard(
-                      subscription: subscription,
-                      isLoading: isLoading,
-                      action:
-                          isGroupAdmin &&
-                              !isLoading &&
-                              !subscription.accessDisabled
-                          ? FilledButton(
-                              onPressed: _isBusy ? null : _openActivation,
-                              child: Text(
-                                subscription.isActive(DateTime.now())
-                                    ? 'Extend'
-                                    : 'Activate',
-                              ),
-                            )
-                          : null,
-                    );
-                  },
-                ),
-                // Only admins see the settings at all.
-                if (widget.isAdmin) ...[
-                  const SizedBox(height: 10),
-                  Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      onTap: _isBusy ? null : _openGroupSettings,
-                      leading: const Icon(
-                        Icons.settings_outlined,
-                        color: AppTheme.primary,
-                      ),
-                      title: const Text(
-                        'Settings',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onTap: _openMealPlan,
+                    leading: const Icon(
+                      Icons.event_repeat_outlined,
+                      color: AppTheme.primary,
                     ),
+                    title: const Text(
+                      'Meal Plan',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
                   ),
-                ],
+                ),
                 const SizedBox(height: 10),
                 Card(
                   clipBehavior: Clip.antiAlias,
@@ -742,30 +745,41 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       'Members',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    subtitle: Text(
-                      activeMembers.length == 1
-                          ? '1 member'
-                          : '${activeMembers.length} members',
-                    ),
                     trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
               ],
               if (widget.membersOnly) ...[
-                Text(
-                  activeMembers.length == 1
-                      ? '1 member'
-                      : '${activeMembers.length} members',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(color: AppTheme.textSecondary),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        activeMembers.length == 1
+                            ? '1 member'
+                            : '${activeMembers.length} members',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    if (widget.isAdmin)
+                      TextButton.icon(
+                        onPressed: _isBusy ? null : _openDutySettings,
+                        icon: const Icon(
+                          Icons.assignment_ind_outlined,
+                          size: 19,
+                        ),
+                        label: const Text('Duty settings'),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                for (final member in activeMembers) ...[
+                const SizedBox(height: 4),
+                for (final member in _byDuty(activeMembers)) ...[
                   _MemberCard(
                     key: ValueKey(member.id),
                     member: member,
                     isGroupAdmin: _admins.contains(member.id),
                     isCurrentUser: member.id == _currentUserId,
+                    duty: _roster.turnOf(member.id, DateTime.now()),
                     canEdit: widget.isAdmin && !_isBusy,
                     onTap: !widget.isAdmin || _isBusy
                         ? null
@@ -777,17 +791,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         : null,
                   ),
                   const SizedBox(height: 6),
-                ],
-                if (widget.isAdmin) ...[
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Tap a member to manage them. Long-press a member '
-                    'without the app to link them to their app account.',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
                 ],
                 if (deactivatedMembers.isNotEmpty) ...[
                   const SizedBox(height: 24),
@@ -846,6 +849,35 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         : null,
                   ),
                 ),
+                // Admins have this in their settings, with the button
+                // to extend. A member only needs to know how long is
+                // left.
+                if (!widget.isAdmin)
+                  StreamBuilder<HostelSubscription>(
+                    stream: _subscriptionStream,
+                    builder: (context, snapshot) {
+                      final subscription = snapshot.data;
+                      if (subscription == null) return const SizedBox.shrink();
+
+                      final left = subscription.timeLeftText(DateTime.now());
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: Text(
+                          subscription.accessDisabled
+                              ? 'This hostel is suspended'
+                              : left.isEmpty
+                              ? 'The subscription has ended'
+                              : '$left to extend the subscription',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
               ],
             ],
           );
@@ -855,18 +887,23 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   }
 }
 
-/// The hostel's name, the signed-in member's position in it, and the
+/// The hostel's name with, beside it, the way into the settings for
+/// an admin or the word "Member" for anyone else; and under them the
 /// invitation code new members join with.
 class _HostelCard extends StatelessWidget {
   const _HostelCard({
     required this.groupName,
     required this.isAdmin,
+    required this.onOpenSettings,
     required this.inviteCode,
     required this.onCopyCode,
   });
 
   final String groupName;
   final bool isAdmin;
+
+  /// Null for a member, and for an admin while something is saving.
+  final VoidCallback? onOpenSettings;
   final String inviteCode;
   final VoidCallback onCopyCode;
 
@@ -877,29 +914,73 @@ class _HostelCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            leading: const Icon(
-              Icons.apartment_outlined,
-              color: AppTheme.primary,
-              size: 30,
-            ),
-            title: Text(
-              groupName,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Text(
-                isAdmin ? 'You are an administrator' : 'You are a member',
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.apartment_outlined,
+                  color: AppTheme.primary,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    groupName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (isAdmin)
+                  // A solid button, so an admin does not miss it.
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilledButton.icon(
+                      onPressed: onOpenSettings,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      icon: const Icon(Icons.settings, size: 18),
+                      label: const Text('Admin settings'),
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(right: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 19,
+                          color: AppTheme.textSecondary,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Member',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
           if (inviteCode.isNotEmpty) ...[
@@ -949,6 +1030,7 @@ class _MemberCard extends StatelessWidget {
     required this.member,
     required this.isGroupAdmin,
     required this.isCurrentUser,
+    required this.duty,
     required this.canEdit,
     this.onTap,
     this.onLongPress,
@@ -957,18 +1039,18 @@ class _MemberCard extends StatelessWidget {
   final GroupMember member;
   final bool isGroupAdmin;
   final bool isCurrentUser;
+
+  /// Their turn on duty and whether it is over, running or still to
+  /// come. Null for a member with no turn.
+  final ({DutyTurn turn, DutyStatus status})? duty;
   final bool canEdit;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  String get _role {
-    if (!member.isAppUser) return 'No app';
-    return isGroupAdmin ? 'Admin' : 'Member';
-  }
-
   @override
   Widget build(BuildContext context) {
-    // One slim line per member: who they are, then what they are.
+    // One slim line per member: who, when they are on duty, and for
+    // an admin the menu.
     return Card(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
@@ -979,54 +1061,62 @@ class _MemberCard extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+          padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
           child: Row(
             children: [
               _MemberAvatar(member: member),
               const SizedBox(width: 10),
               Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        isCurrentUser ? '${member.name} (You)' : member.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                child: Text(
+                  isCurrentUser ? '${member.name} (You)' : member.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (duty != null) ...[
+                const SizedBox(width: 8),
+                // A finished turn keeps its dates, ticked and faded;
+                // the one running now is in green.
+                if (duty!.status == DutyStatus.done)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      size: 15,
+                      color: Color(0xFFA3ABA7),
                     ),
-                    if (member.isAppUser) ...[
-                      const SizedBox(width: 6),
-                      const _AppUserChip(),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _role,
-                style: TextStyle(
-                  color: isGroupAdmin
-                      ? AppTheme.primary
-                      : AppTheme.textSecondary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (canEdit) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  member.isAppUser
-                      ? Icons.more_vert_rounded
-                      : Icons.edit_outlined,
-                  size: 18,
-                  color: AppTheme.textSecondary,
+                  ),
+                Text(
+                  dutyDatesText(duty!.turn),
+                  style: TextStyle(
+                    color: switch (duty!.status) {
+                      DutyStatus.done => const Color(0xFFA3ABA7),
+                      DutyStatus.current => AppTheme.primary,
+                      DutyStatus.upcoming => AppTheme.textSecondary,
+                    },
+                    fontSize: 12.5,
+                    fontWeight: duty!.status == DutyStatus.current
+                        ? FontWeight.w800
+                        : FontWeight.w600,
+                  ),
                 ),
               ],
+              if (canEdit)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.more_vert_rounded,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
+                )
+              else
+                const SizedBox(width: 6),
             ],
           ),
         ),
@@ -1035,6 +1125,8 @@ class _MemberCard extends StatelessWidget {
   }
 }
 
+/// A member's initials. Green for someone with the app, faded for a
+/// member who was added without it.
 class _MemberAvatar extends StatelessWidget {
   const _MemberAvatar({required this.member});
 
@@ -1047,37 +1139,16 @@ class _MemberAvatar extends StatelessWidget {
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppTheme.surfaceSoft,
+        color: member.isAppUser
+            ? AppTheme.surfaceSoft
+            : const Color(0xFFF1F3F2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         member.initials,
-        style: const TextStyle(
-          color: AppTheme.primary,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _AppUserChip extends StatelessWidget {
-  const _AppUserChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        'App User',
         style: TextStyle(
-          color: AppTheme.primary,
-          fontSize: 11,
+          color: member.isAppUser ? AppTheme.primary : const Color(0xFFA3ABA7),
+          fontSize: 12.5,
           fontWeight: FontWeight.w800,
         ),
       ),

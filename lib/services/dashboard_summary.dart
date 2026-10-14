@@ -24,6 +24,8 @@ class DashboardSummary {
     required this.todayLunch,
     required this.todayDinner,
     this.todayMembers = const [],
+    this.myMeals = 0,
+    this.myExpense = 0,
   });
 
   /// The same meal rate, cost and meal total the Monthly Calculation
@@ -41,6 +43,11 @@ class DashboardSummary {
   /// today are left out.
   final List<TodayMeal> todayMembers;
 
+  /// The signed-in member's own month so far: the meals they ate and
+  /// what they paid for the hostel.
+  final double myMeals;
+  final double myExpense;
+
   /// [meals] and [expenses] may hold other months too; only this
   /// month's are counted.
   static DashboardSummary build({
@@ -51,6 +58,7 @@ class DashboardSummary {
     required List<ExpenseRecord> expenses,
     required double minimumMeals,
     required double shopDue,
+    String? memberId,
   }) {
     final allMeals = [
       ...meals,
@@ -99,13 +107,19 @@ class DashboardSummary {
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
 
+    final mine = result.members
+        .where((member) => member.id == memberId)
+        .firstOrNull;
+
     return DashboardSummary(
       mealRate: result.mealRate,
       totalExpense: result.totalExpense,
-      totalMeals: result.totalMealNumber,
+      totalMeals: result.totalActualMeals,
       todayLunch: lunch,
       todayDinner: dinner,
       todayMembers: todayMembers,
+      myMeals: mine?.actualMeals ?? 0,
+      myExpense: mine?.spending ?? 0,
     );
   }
 }

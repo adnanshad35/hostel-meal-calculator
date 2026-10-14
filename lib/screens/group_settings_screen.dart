@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
+import '../services/subscription_service.dart';
+import 'hostel_activation_screen.dart';
 import '../widgets/member_name_dialog.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
@@ -23,6 +25,9 @@ class GroupSettingsScreen extends StatefulWidget {
 class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   bool _isResetting = false;
   bool _isSavingSettings = false;
+
+  late final Stream<HostelSubscription> _subscription =
+      SubscriptionService.watch(widget.groupId);
   bool _isAddingMember = false;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -357,6 +362,41 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               if (isAdmin) ...[
+                // How long the hostel is active for, and the way to
+                // extend it.
+                StreamBuilder<HostelSubscription>(
+                  stream: _subscription,
+                  builder: (context, snapshot) {
+                    final subscription =
+                        snapshot.data ?? const HostelSubscription.none();
+                    final isLoading = !snapshot.hasData && !snapshot.hasError;
+
+                    return SubscriptionStatusCard(
+                      subscription: subscription,
+                      isLoading: isLoading,
+                      action: !isLoading && !subscription.accessDisabled
+                          ? FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => HostelActivationScreen(
+                                      groupId: widget.groupId,
+                                      groupName: widget.groupName,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                subscription.isActive(DateTime.now())
+                                    ? 'Extend'
+                                    : 'Activate',
+                              ),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
                 if ((groupData['inviteCode'] as String? ?? '').isNotEmpty) ...[
                   _InviteSwitchCard(
                     key: ValueKey(groupData['inviteCode']),
@@ -394,6 +434,17 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       ? null
                       : (isOn) => _saveSettings(
                           settings.copyWith(fixedCostsEnabled: isOn),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                _SettingSwitch(
+                  icon: Icons.lock_open_outlined,
+                  title: 'Special permission',
+                  value: settings.specialPermission,
+                  onChanged: _isSavingSettings
+                      ? null
+                      : (isOn) => _saveSettings(
+                          settings.copyWith(specialPermission: isOn),
                         ),
                 ),
                 const SizedBox(height: 8),

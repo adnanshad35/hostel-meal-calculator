@@ -8,6 +8,7 @@ import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/notification_service.dart';
+import '../widgets/month_calendar.dart';
 
 /// Opens the Add Expense form, unless the hostel is read-only.
 Future<void> showExpenseForm(
@@ -199,42 +200,134 @@ class ExpenseScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Total expenses screen
+// Total expenses: the whole hostel's month, as a calendar
 // ─────────────────────────────────────────────────────────────
 class TotalExpensesScreen extends StatelessWidget {
   const TotalExpensesScreen({
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
 
-  Future<void> _openExpenseForm(
-    BuildContext context, {
+  /// True when shown as a tab of another page, which has the title.
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExpenseCalendar(
+      groupId: groupId,
+      isAdmin: isAdmin,
+      embedded: embedded,
+      onlyMine: false,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// My expenses: what the signed-in member paid this month
+// ─────────────────────────────────────────────────────────────
+class MyExpensesScreen extends StatelessWidget {
+  const MyExpensesScreen({
+    super.key,
+    required this.groupId,
+    required this.currentUserId,
+    this.embedded = false,
+  });
+
+  final String groupId;
+  final String currentUserId;
+
+  /// True when shown as a tab of another page, which has the title.
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExpenseCalendar(
+      groupId: groupId,
+      isAdmin: false,
+      embedded: embedded,
+      onlyMine: true,
+    );
+  }
+}
+
+/// This month's expenses on a calendar. Tapping a day lists what was
+/// spent that day; whoever may change an expense can tap it to edit.
+class _ExpenseCalendar extends StatefulWidget {
+  const _ExpenseCalendar({
+    required this.groupId,
+    required this.isAdmin,
+    required this.embedded,
+    required this.onlyMine,
+  });
+
+  final String groupId;
+  final bool isAdmin;
+  final bool embedded;
+
+  /// True for the member's own expenses, false for the whole hostel's.
+  final bool onlyMine;
+
+  @override
+  State<_ExpenseCalendar> createState() => _ExpenseCalendarState();
+}
+
+class _ExpenseCalendarState extends State<_ExpenseCalendar> {
+  late final DateTime _now = DateTime.now();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
+
+  String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // This month only.
+    _expenses = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .collection('expenses')
+        .where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(
+            DateTime(_now.year, _now.month),
+          ),
+        )
+        .where(
+          'date',
+          isLessThan: Timestamp.fromDate(DateTime(_now.year, _now.month + 1)),
+        )
+        .snapshots();
+  }
+
+  Future<void> _openExpenseForm({
     DocumentSnapshot<Map<String, dynamic>>? expense,
   }) async {
-    if (!await ensureHostelEditable(context, groupId)) return;
-    if (!context.mounted) return;
-    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
-    if (!context.mounted) return;
+    if (!await ensureHostelEditable(context, widget.groupId)) return;
+    if (!mounted) return;
+    if (!await ensureMemberMayAdd(context, widget.groupId, meals: false)) {
+      return;
+    }
+    if (!mounted) return;
 
     await showDialog<void>(
       context: context,
       builder: (_) => _ExpenseFormDialog(
-        groupId: groupId,
-        isAdmin: isAdmin,
+        groupId: widget.groupId,
+        isAdmin: widget.isAdmin,
         expense: expense,
       ),
     );
   }
 
   Future<void> _deleteExpense(
-    BuildContext context, {
-    required DocumentSnapshot<Map<String, dynamic>> expense,
-    required String name,
-  }) async {
+    DocumentSnapshot<Map<String, dynamic>> expense,
+    String name,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -259,7 +352,7 @@ class TotalExpensesScreen extends StatelessWidget {
       },
     );
 
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
 
@@ -279,334 +372,101 @@ class TotalExpensesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser!;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Total Expenses')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openExpenseForm(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(widget.onlyMine ? 'My Expenses' : 'Total Expenses'),
+            ),
+      floatingActionButton: widget.embedded
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _openExpenseForm,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Expense'),
+            ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .collection('expenses')
-            .orderBy('date', descending: true)
-            .snapshots(),
+        stream: _expenses,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
           if (snapshot.hasError) {
             return const Center(child: Text('Unable to load expenses.'));
           }
 
-          final expenses = _currentMonthExpenses(snapshot.data);
-
-          if (expenses.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No expenses this month.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final total = expenses.fold<double>(0, (currentTotal, expense) {
-            final amount = expense.data()['amount'];
-            return currentTotal + (amount is num ? amount.toDouble() : 0);
-          });
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              Card(
-                color: const Color(0xFFE8F5E9),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text('Shared expenses this month'),
-                      const SizedBox(height: 6),
-                      Text(
-                        '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: const Color(0xFF2E7D32),
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...expenses.map((expense) {
-                final data = expense.data();
-                final name = data['name'] as String? ?? 'Expense';
-                final paidByName =
-                    data['paidByName'] as String? ?? 'Unknown member';
-                final paidById = data['paidById'] as String? ?? '';
-                final amount = data['amount'];
-                final date = (data['date'] as Timestamp?)?.toDate();
-
-                final canEdit = isAdmin || paidById == currentUser.uid;
-
-                return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.receipt_outlined),
-                    ),
-                    title: Text(
-                      name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('${_formatDate(date)}\nPaid by $paidByName'),
-                    isThreeLine: true,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '৳${_formatAmount(amount)}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        if (isAdmin)
-                          PopupMenuButton<String>(
-                            tooltip: 'Expense options',
-                            onSelected: (action) {
-                              if (action == 'edit') {
-                                _openExpenseForm(context, expense: expense);
-                              } else {
-                                _deleteExpense(
-                                  context,
-                                  expense: expense,
-                                  name: name,
-                                );
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (canEdit) ...[
-                          const SizedBox(width: 4),
-                          IconButton(
-                            tooltip: 'Edit expense',
-                            onPressed: () {
-                              _openExpenseForm(context, expense: expense);
-                            },
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          );
+          return _buildCalendar(snapshot.data!.docs);
         },
       ),
+    );
+  }
+
+  Widget _buildCalendar(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final byDay = <int, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+    double total = 0;
+
+    for (final expense in docs) {
+      final data = expense.data();
+      final date = (data['date'] as Timestamp?)?.toDate();
+      if (date == null) continue;
+      if (widget.onlyMine && data['paidById'] != _uid) continue;
+
+      byDay.putIfAbsent(date.day, () => []).add(expense);
+      total += (data['amount'] as num?)?.toDouble() ?? 0;
+    }
+
+    return MonthCalendarView(
+      month: _now,
+      label: widget.onlyMine ? 'My expense' : 'Total expense',
+      total: '৳${_plainAmount(total)}',
+      markedDays: byDay.keys.toSet(),
+      linesOf: (day) {
+        return [for (final expense in byDay[day] ?? const []) _line(expense)];
+      },
+    );
+  }
+
+  CalendarLine _line(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+    final data = expense.data();
+    final name = data['name'] as String? ?? 'Expense';
+    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+    final canEdit = widget.isAdmin || data['paidById'] == _uid;
+
+    return CalendarLine(
+      title: name,
+      // Whose it was, when the list is the whole hostel's.
+      note: widget.onlyMine ? null : data['paidByName'] as String?,
+      trailing: '৳${_plainAmount(amount)}',
+      onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
+      action: widget.isAdmin
+          ? PopupMenuButton<String>(
+              tooltip: 'Expense options',
+              padding: EdgeInsets.zero,
+              onSelected: (action) {
+                if (action == 'edit') {
+                  _openExpenseForm(expense: expense);
+                } else {
+                  _deleteExpense(expense, name);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Delete', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            )
+          : null,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// My expenses screen — personal history
-// ─────────────────────────────────────────────────────────────
-class MyExpensesScreen extends StatelessWidget {
-  const MyExpensesScreen({
-    super.key,
-    required this.groupId,
-    required this.currentUserId,
-  });
-
-  final String groupId;
-  final String currentUserId;
-
-  Future<void> _openExpenseForm(
-    BuildContext context, {
-    DocumentSnapshot<Map<String, dynamic>>? expense,
-  }) async {
-    if (!await ensureHostelEditable(context, groupId)) return;
-    if (!context.mounted) return;
-    if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
-    if (!context.mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _ExpenseFormDialog(
-        groupId: groupId,
-        isAdmin: false,
-        expense: expense,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Expenses')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openExpenseForm(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
-      ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .collection('expenses')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Unable to load your expenses.\n${snapshot.error}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-
-          final docs = _currentMonthExpenses(snapshot.data)
-              .where((d) => d.data()['paidById'] == currentUserId)
-              .toList();
-
-          docs.sort((a, b) {
-            final aDate = (a.data()['date'] as Timestamp?)?.toDate();
-            final bDate = (b.data()['date'] as Timestamp?)?.toDate();
-            if (aDate == null && bDate == null) return 0;
-            if (aDate == null) return 1;
-            if (bDate == null) return -1;
-            return bDate.compareTo(aDate);
-          });
-
-          double total = 0;
-          for (final d in docs) {
-            final amount = d.data()['amount'];
-            if (amount is num) total += amount.toDouble();
-          }
-
-          if (docs.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 64,
-                      color: Color(0xFF2E7D32),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'You have not added any expense yet',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Tap Add Expense to record your first expense.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              Card(
-                color: const Color(0xFFE8F5E9),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text('My total expenses'),
-                      const SizedBox(height: 6),
-                      Text(
-                        '৳${total.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: const Color(0xFF2E7D32),
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...docs.map((expense) {
-                final data = expense.data();
-                final name = data['name'] as String? ?? 'Expense';
-                final amount = data['amount'];
-                final date = (data['date'] as Timestamp?)?.toDate();
-
-                return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.receipt_outlined),
-                    ),
-                    title: Text(
-                      name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(_formatDate(date)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '৳${_formatAmount(amount)}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          tooltip: 'Edit expense',
-                          onPressed: () {
-                            _openExpenseForm(context, expense: expense);
-                          },
-                          icon: const Icon(Icons.edit_outlined),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          );
-        },
-      ),
-    );
-  }
+String _plainAmount(double value) {
+  return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -693,20 +553,6 @@ List<QueryDocumentSnapshot<Map<String, dynamic>>> _currentMonthExpenses(
     final value = date.toDate();
     return !value.isBefore(firstDay) && value.isBefore(nextMonth);
   }).toList();
-}
-
-String _formatDate(DateTime? date) {
-  if (date == null) return 'Unknown date';
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  return '$day/$month/${date.year}';
-}
-
-String _formatAmount(dynamic amount) {
-  if (amount is num) {
-    return amount.toDouble().toStringAsFixed(2);
-  }
-  return '0.00';
 }
 
 enum _AmountMode { fixed, calculation }

@@ -41,6 +41,10 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   /// False for a hostel that settles meals only. The Fixed and Overall
   /// tabs are then not offered.
   bool _fixedCostsEnabled = true;
+
+  /// True when the admins allow minimum meals and shop due to be
+  /// entered on any day, not only at the month's end.
+  bool _specialPermission = false;
   StreamSubscription<HostelSettings>? _settingsSubscription;
   bool _showMemberCards = true;
   bool _showMemberDetails = false;
@@ -58,7 +62,10 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     _settingsSubscription = HostelSettingsService.watch(widget.groupId)
         .listen((settings) {
           if (!mounted) return;
-          setState(() => _fixedCostsEnabled = settings.fixedCostsEnabled);
+          setState(() {
+            _fixedCostsEnabled = settings.fixedCostsEnabled;
+            _specialPermission = settings.specialPermission;
+          });
         }, onError: (_) {});
     _plansStream = MealPlanService.watchAll(widget.groupId);
     // Every month's settings, because fixed costs carry forward from
@@ -134,9 +141,15 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Meal Rate')}: ৳${result.mealRate.toStringAsFixed(2)}',
     );
     buffer.writeln(
-      '${_bold('Total Meal Number')}: '
-      '${result.totalMealNumber.toStringAsFixed(2)}',
+      '${_bold('Total Meals')}: '
+      '${result.totalActualMeals.toStringAsFixed(2)}',
     );
+    if ((result.totalMealNumber - result.totalActualMeals).abs() > 0.001) {
+      buffer.writeln(
+        '${_bold('Charged Meals')}: '
+        '${result.totalMealNumber.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
@@ -165,9 +178,15 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     buffer.writeln('');
 
     buffer.writeln(
-      '${_bold('Total Meal Number')}: '
-      '${result.totalMealNumber.toStringAsFixed(2)}',
+      '${_bold('Total Meals')}: '
+      '${result.totalActualMeals.toStringAsFixed(2)}',
     );
+    if ((result.totalMealNumber - result.totalActualMeals).abs() > 0.001) {
+      buffer.writeln(
+        '${_bold('Charged Meals')}: '
+        '${result.totalMealNumber.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
@@ -298,10 +317,47 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         }, SetOptions(merge: true));
   }
 
+  /// Minimum meals and shop due are settled at the month's end. Says
+  /// so and returns false when they cannot be entered today.
+  bool _canEnterClosingFigures() {
+    if (_specialPermission ||
+        MonthlyCalculator.isClosingWindowOpen(_selectedMonth, DateTime.now())) {
+      return true;
+    }
+
+    final nextMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+    final opens = '25 ${_monthName(_selectedMonth).split(' ').first}';
+    final closes = '5 ${_monthName(nextMonth).split(' ').first}';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Not Open Yet'),
+          content: Text(
+            'Minimum meals and shop due for '
+            '${_monthName(_selectedMonth)} can be entered from $opens '
+            'to $closes. Wait until then, or turn on Special permission '
+            'in Settings.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+    return false;
+  }
+
   Future<void> _setMinimumMeals({
     required double currentMinimum,
     required double currentShopDue,
   }) async {
+    if (!_canEnterClosingFigures()) return;
+
     final minimum = await _showNumberDialog(
       title: 'Set Minimum Meal Number',
       label: 'Minimum meals per member',
@@ -330,6 +386,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required double currentDue,
     required double minimumMeals,
   }) async {
+    if (!_canEnterClosingFigures()) return;
+
     final due = await _showNumberDialog(
       title: 'Set Monthly Shop Due',
       label: 'Shop due amount',
@@ -827,6 +885,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           _SummaryCard(
             mealRate: result.mealRate,
             totalMealNumber: result.totalMealNumber,
+            totalActualMeals: result.totalActualMeals,
             totalExpense: result.totalExpense,
             shopDue: result.shopDue,
             memberPaidExpenses: result.memberPaidExpenses,
@@ -1466,6 +1525,7 @@ class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.mealRate,
     required this.totalMealNumber,
+    required this.totalActualMeals,
     required this.totalExpense,
     required this.shopDue,
     required this.memberPaidExpenses,
@@ -1476,6 +1536,7 @@ class _SummaryCard extends StatelessWidget {
 
   final double mealRate;
   final double totalMealNumber;
+  final double totalActualMeals;
   final double totalExpense;
   final double shopDue;
   final double memberPaidExpenses;
@@ -1498,8 +1559,15 @@ class _SummaryCard extends StatelessWidget {
               // ─── Data rows (short labels, dark & bold) ───
               _StrongInfoRow(
                 label: 'Total Meals',
-                value: totalMealNumber.toStringAsFixed(2),
+                value: totalActualMeals.toStringAsFixed(2),
               ),
+              // With a minimum, more meals are charged than were eaten,
+              // and the meal rate comes from the charged total.
+              if ((totalMealNumber - totalActualMeals).abs() > 0.001)
+                _StrongInfoRow(
+                  label: 'Charged Meals',
+                  value: totalMealNumber.toStringAsFixed(2),
+                ),
               _StrongInfoRow(
                 label: 'Member Paid',
                 value: '৳${memberPaidExpenses.toStringAsFixed(2)}',

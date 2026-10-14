@@ -189,4 +189,57 @@ void main() {
     expect(PaymentInfo.fromData(null).isEmpty, isTrue);
     expect(PaymentInfo.fromData(const {'bkashNumber': '017'}).isEmpty, isFalse);
   });
+
+  group('time left', () {
+    final start = DateTime(2026, 10, 1, 12);
+    final subscription = HostelSubscription(periodStart: start, days: 10);
+    // Active until 11 October, 12:00.
+
+    test('is counted in days while more than a day is left', () {
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 1, 13)),
+        '10 days left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 9, 12)),
+        '2 days left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 10, 11)),
+        '2 days left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 10, 12)),
+        '1 day left',
+      );
+    });
+
+    test('is counted in hours on the last day', () {
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 10, 16)),
+        '20 hours left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 11, 2)),
+        '10 hours left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 11, 10, 30)),
+        '2 hours left',
+      );
+      expect(
+        subscription.timeLeftText(DateTime(2026, 10, 11, 11, 40)),
+        '1 hour left',
+      );
+    });
+
+    test('is empty once the period has ended or never started', () {
+      expect(subscription.timeLeftText(DateTime(2026, 10, 11, 12)), '');
+      expect(subscription.timeLeftText(DateTime(2026, 11, 1)), '');
+      expect(
+        const HostelSubscription.none().timeLeftText(DateTime(2026, 10, 5)),
+        '',
+      );
+    });
+  });
 }

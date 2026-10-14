@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
 import '../services/dashboard_summary.dart';
+import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
@@ -47,6 +48,9 @@ class HostelDashboardScreen extends StatefulWidget {
 
 class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
   late final Stream<HostelSettings> _settings = HostelSettingsService.watch(
+    widget.groupId,
+  );
+  late final Stream<DutyRoster> _roster = DutyRosterService.watch(
     widget.groupId,
   );
 
@@ -96,19 +100,23 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 4),
-                      _HostelOverview(
-                        groupId: groupId,
-                        groupName: widget.groupName,
-                        isAdmin: isAdmin,
-                        onOpenCalculation: _openCalculation,
-                        onOpenExpenses: () => _open(
-                          TotalExpensesScreen(
-                            groupId: groupId,
-                            isAdmin: isAdmin,
+                      // Whoever is looking after the hostel today is
+                      // named on the top card.
+                      StreamBuilder<DutyRoster>(
+                        stream: _roster,
+                        builder: (context, roster) => _HostelOverview(
+                          groupId: groupId,
+                          groupName: widget.groupName,
+                          isAdmin: isAdmin,
+                          responsible: roster.data
+                              ?.responsibleOn(DateTime.now())
+                              ?.memberName,
+                          onOpenCalculation: _openCalculation,
+                          onOpenExpenses: () => _open(
+                            MyRecordsScreen(groupId: groupId, initialTab: 1),
                           ),
-                        ),
-                        onOpenMeals: () => _open(
-                          MealLedgerScreen(groupId: groupId, isAdmin: isAdmin),
+                          onOpenMeals: () =>
+                              _open(MyRecordsScreen(groupId: groupId)),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -133,86 +141,292 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.25,
-          children: [
-            _DashboardTile(
-              icon: Icons.restaurant_outlined,
-              title: 'Meals',
-              subtitle: _TodayMealText(groupId: groupId),
-              color: AppTheme.primary,
-              backgroundColor: const Color(0xFFE4F3EB),
-              addTooltip: 'Add meal',
-              onAdd: canAddMeals
-                  ? () => showMealForm(
-                      context,
-                      groupId: groupId,
-                      isAdmin: isAdmin,
-                    )
-                  : null,
-              onTap: () =>
-                  _open(MealScreen(groupId: groupId, isAdmin: isAdmin)),
+        // A member who may not add meals or expenses does not get
+        // that tile at all; an admin always gets both.
+        if (canAddMeals || canAddExpenses)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(left: 2),
+                    child: Text(
+                      'Update',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (canAddMeals)
+                        Expanded(
+                          child: _AddTile(
+                            icon: Icons.restaurant_outlined,
+                            title: 'Meals',
+                            color: AppTheme.primary,
+                            background: AppTheme.surfaceSoft,
+                            addTooltip: 'Add meal',
+                            onAdd: () => showMealForm(
+                              context,
+                              groupId: groupId,
+                              isAdmin: isAdmin,
+                            ),
+                          ),
+                        ),
+                      if (canAddMeals && canAddExpenses)
+                        const SizedBox(width: 10),
+                      if (canAddExpenses)
+                        Expanded(
+                          child: _AddTile(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Expenses',
+                            color: AppTheme.primary,
+                            background: AppTheme.surfaceSoft,
+                            addTooltip: 'Add expense',
+                            onAdd: () => showExpenseForm(
+                              context,
+                              groupId: groupId,
+                              isAdmin: isAdmin,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            _DashboardTile(
-              icon: Icons.receipt_long_outlined,
-              title: 'Expenses',
-              color: const Color(0xFFD78116),
-              backgroundColor: const Color(0xFFFFF1DB),
-              addTooltip: 'Add expense',
-              onAdd: canAddExpenses
-                  ? () => showExpenseForm(
-                      context,
-                      groupId: groupId,
-                      isAdmin: isAdmin,
-                    )
-                  : null,
-              onTap: () =>
-                  _open(ExpenseScreen(groupId: groupId, isAdmin: isAdmin)),
-            ),
-          ],
+          ),
+        if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
+        _LinkRow(
+          icon: Icons.groups_outlined,
+          title: 'Total Meals & Expenses',
+          color: AppTheme.primary,
+          backgroundColor: AppTheme.surfaceSoft,
+          onTap: () =>
+              _open(HostelRecordsScreen(groupId: groupId, isAdmin: isAdmin)),
         ),
         const SizedBox(height: 12),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: ListTile(
-            onTap: () => _open(
-              HostelDetailsScreen(
-                groupId: groupId,
-                groupName: widget.groupName,
-                isAdmin: isAdmin,
-              ),
-            ),
-            leading: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0E9F8),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.info_outline_rounded,
-                color: Color(0xFF7956A8),
-                size: 23,
-              ),
-            ),
-            title: Text(
-              'About Hostel',
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            trailing: const Icon(
-              Icons.arrow_forward_rounded,
-              size: 19,
-              color: AppTheme.textSecondary,
+        _LinkRow(
+          icon: Icons.info_outline_rounded,
+          title: 'About Hostel',
+          color: AppTheme.primary,
+          backgroundColor: AppTheme.surfaceSoft,
+          onTap: () => _open(
+            HostelDetailsScreen(
+              groupId: groupId,
+              groupName: widget.groupName,
+              isAdmin: isAdmin,
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The signed-in member's own meals and expenses this month, on two
+/// tabs.
+class MyRecordsScreen extends StatelessWidget {
+  const MyRecordsScreen({
+    super.key,
+    required this.groupId,
+    this.initialTab = 0,
+  });
+
+  final String groupId;
+
+  /// 0 opens on Meals, 1 on Expenses.
+  final int initialTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return DefaultTabController(
+      length: 2,
+      initialIndex: initialTab,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('My Meals & Expenses'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Meals'),
+              Tab(text: 'Expenses'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            MyMealsScreen(groupId: groupId, currentUserId: uid, embedded: true),
+            MyExpensesScreen(
+              groupId: groupId,
+              currentUserId: uid,
+              embedded: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The whole hostel's meals and expenses this month, on two tabs.
+class HostelRecordsScreen extends StatelessWidget {
+  const HostelRecordsScreen({
+    super.key,
+    required this.groupId,
+    required this.isAdmin,
+  });
+
+  final String groupId;
+  final bool isAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Total Meals & Expenses'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Meals'),
+              Tab(text: 'Expenses'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            MealLedgerScreen(
+              groupId: groupId,
+              isAdmin: isAdmin,
+              embedded: true,
+            ),
+            TotalExpensesScreen(
+              groupId: groupId,
+              isAdmin: isAdmin,
+              embedded: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A short tile for adding an entry. Tapping anywhere on it opens the
+/// form; the + only shows what the tile does.
+class _AddTile extends StatelessWidget {
+  const _AddTile({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.background,
+    required this.onAdd,
+    required this.addTooltip,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final Color background;
+  final VoidCallback onAdd;
+  final String addTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onAdd,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                // Shrinks a little on a narrow phone instead of cutting
+                // the word short.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton.filled(
+                tooltip: addTooltip,
+                onPressed: onAdd,
+                style: IconButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  fixedSize: const Size(38, 38),
+                ),
+                icon: const Icon(Icons.add, size: 21),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A full-width row that opens a page.
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.backgroundColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final Color backgroundColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: color, size: 23),
+        ),
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_rounded,
+          size: 19,
+          color: AppTheme.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -258,6 +472,7 @@ class _HostelOverview extends StatefulWidget {
     required this.groupId,
     required this.groupName,
     required this.isAdmin,
+    required this.responsible,
     required this.onOpenCalculation,
     required this.onOpenExpenses,
     required this.onOpenMeals,
@@ -266,6 +481,9 @@ class _HostelOverview extends StatefulWidget {
   final String groupId;
   final String groupName;
   final bool isAdmin;
+
+  /// The member responsible for the hostel today, if one is set.
+  final String? responsible;
   final VoidCallback onOpenCalculation;
   final VoidCallback onOpenExpenses;
   final VoidCallback onOpenMeals;
@@ -394,6 +612,7 @@ class _HostelOverviewState extends State<_HostelOverview> {
       ],
       minimumMeals: (monthSettings?['minimumMeals'] as num?)?.toDouble() ?? 0,
       shopDue: (monthSettings?['shopDue'] as num?)?.toDouble() ?? 0,
+      memberId: FirebaseAuth.instance.currentUser?.uid,
     );
   }
 
@@ -404,8 +623,6 @@ class _HostelOverviewState extends State<_HostelOverview> {
       children: [
         _SummaryCard(
           groupName: widget.groupName,
-          isAdmin: widget.isAdmin,
-          month: '${_monthNames[_now.month - 1]} ${_now.year}',
           summary: summary,
           hasError: hasError,
           onOpenCalculation: widget.onOpenCalculation,
@@ -413,18 +630,18 @@ class _HostelOverviewState extends State<_HostelOverview> {
           onOpenMeals: widget.onOpenMeals,
         ),
         const SizedBox(height: 12),
-        _TodayMealsCard(now: _now, summary: summary),
+        _TodayCard(now: _now, summary: summary, onDuty: widget.responsible),
       ],
     );
   }
 }
 
-/// The large card: hostel, meal rate, total cost and total meals.
+/// The large card: the hostel, its meal rate, and the member's own
+/// expense and meals. Only the Details button and the two figures
+/// open anything; the card itself does not.
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.groupName,
-    required this.isAdmin,
-    required this.month,
     required this.summary,
     required this.hasError,
     required this.onOpenCalculation,
@@ -433,8 +650,6 @@ class _SummaryCard extends StatelessWidget {
   });
 
   final String groupName;
-  final bool isAdmin;
-  final String month;
   final DashboardSummary? summary;
   final bool hasError;
   final VoidCallback onOpenCalculation;
@@ -524,12 +739,11 @@ class _SummaryCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0D4A3A), Color(0xFF147A5C), Color(0xFF1B6C8F)],
-          stops: [0, 0.55, 1],
+          colors: [AppTheme.primaryDark, AppTheme.primary],
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x33147A5C),
+            color: Color(0x33176B4D),
             blurRadius: 22,
             offset: Offset(0, 10),
           ),
@@ -538,165 +752,123 @@ class _SummaryCard extends StatelessWidget {
       child: Stack(
         children: [
           // Soft shapes that give the card some depth.
-          Positioned(
+          const Positioned(
             top: -46,
             right: -30,
-            child: _Glow(size: 170, opacity: 0.10),
+            child: _Glow(size: 170, opacity: 0.08),
           ),
-          Positioned(
+          const Positioned(
             bottom: -70,
             left: -40,
-            child: _Glow(size: 190, opacity: 0.07),
+            child: _Glow(size: 190, opacity: 0.06),
           ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onOpenCalculation,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 18, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  groupName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'MEAL RATE',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            groupName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            isAdmin ? 'Admin' : 'Member',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      month,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'MEAL RATE',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.3,
-                      ),
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              rate,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 42,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -1,
-                                height: 1.15,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Material(
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          rate,
+                          style: const TextStyle(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(22),
-                              onTap: onOpenCalculation,
-                              child: const Padding(
-                                padding: EdgeInsets.fromLTRB(14, 8, 8, 8),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Details',
-                                      style: TextStyle(
-                                        color: Color(0xFF0D4A3A),
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    SizedBox(width: 2),
-                                    Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 17,
-                                      color: Color(0xFF0D4A3A),
-                                    ),
-                                  ],
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1,
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: onOpenCalculation,
+                        child: const Padding(
+                          padding: EdgeInsets.fromLTRB(14, 7, 8, 7),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Details',
+                                style: TextStyle(
+                                  color: AppTheme.primaryDark,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (hasError)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          'This month could not be loaded.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 13,
+                              SizedBox(width: 2),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 17,
+                                color: AppTheme.primaryDark,
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        _figure(
-                          'Total expense',
-                          summary == null ? '—' : _money(summary.totalExpense),
-                          Icons.payments_outlined,
-                          onOpenExpenses,
-                        ),
-                        const SizedBox(width: 10),
-                        _figure(
-                          'Total meals',
-                          summary == null ? '—' : _count(summary.totalMeals),
-                          Icons.restaurant_outlined,
-                          onOpenMeals,
-                        ),
-                      ],
                     ),
                   ],
                 ),
-              ),
+                if (hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'This month could not be loaded.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    _figure(
+                      'My expense',
+                      summary == null ? '—' : _money(summary.myExpense),
+                      Icons.payments_outlined,
+                      onOpenExpenses,
+                    ),
+                    const SizedBox(width: 10),
+                    _figure(
+                      'My meals',
+                      summary == null ? '—' : _count(summary.myMeals),
+                      Icons.restaurant_outlined,
+                      onOpenMeals,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -724,13 +896,20 @@ class _Glow extends StatelessWidget {
   }
 }
 
-/// How many lunches and dinners the hostel needs today, so anyone can
-/// tell the cook.
-class _TodayMealsCard extends StatelessWidget {
-  const _TodayMealsCard({required this.now, required this.summary});
+/// Today at a glance: how many lunches and dinners the hostel needs,
+/// and which member is on duty.
+class _TodayCard extends StatelessWidget {
+  const _TodayCard({
+    required this.now,
+    required this.summary,
+    required this.onDuty,
+  });
 
   final DateTime now;
   final DashboardSummary? summary;
+
+  /// The member responsible for the hostel today, if one is set.
+  final String? onDuty;
 
   /// Lists who is having lunch (or dinner) today, and how many each.
   void _showWho(
@@ -801,65 +980,45 @@ class _TodayMealsCard extends StatelessWidget {
     );
   }
 
+  /// Lunch or dinner: its icon and name, with the count on the right.
   Widget _meal({
     required String label,
     required double? count,
     required IconData icon,
-    required Color color,
-    required Color background,
     required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: Material(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          count == null ? '—' : _count(count),
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            height: 1.1,
-                          ),
-                        ),
-                      ),
-                    ],
+    return Material(
+      color: AppTheme.surfaceSoft,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          child: Row(
+            children: [
+              Icon(icon, color: AppTheme.primary, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
+              ),
+              Text(
+                count == null ? '—' : _count(count),
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -882,7 +1041,7 @@ class _TodayMealsCard extends StatelessWidget {
                 children: [
                   const Expanded(
                     child: Text(
-                      'Today\'s meals',
+                      'For today',
                       style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 16,
@@ -902,127 +1061,90 @@ class _TodayMealsCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                _meal(
-                  label: 'Lunch',
-                  count: summary?.todayLunch,
-                  icon: Icons.lunch_dining_outlined,
-                  color: const Color(0xFFB86A00),
-                  background: const Color(0xFFFFF1DB),
-                  onTap: () =>
-                      _showWho(context, label: 'Lunch', isDinner: false),
-                ),
-                const SizedBox(width: 10),
-                _meal(
-                  label: 'Dinner',
-                  count: summary?.todayDinner,
-                  icon: Icons.dinner_dining_outlined,
-                  color: const Color(0xFF3D4FA8),
-                  background: const Color(0xFFE6EAFB),
-                  onTap: () =>
-                      _showWho(context, label: 'Dinner', isDinner: true),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardTile extends StatelessWidget {
-  const _DashboardTile({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.backgroundColor,
-    required this.onTap,
-    this.subtitle,
-    this.onAdd,
-    this.addTooltip,
-  });
-
-  final IconData icon;
-  final String title;
-  final Color color;
-  final Color backgroundColor;
-  final VoidCallback onTap;
-
-  /// A single line under the title.
-  final Widget? subtitle;
-
-  /// When set, a + button in the corner adds a record directly, while
-  /// tapping the rest of the card opens the full screen.
-  final VoidCallback? onAdd;
-  final String? addTooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(15, 14, 12, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: color, size: 23),
-                  ),
-                  const Spacer(),
-                  if (onAdd != null)
-                    IconButton.filled(
-                      tooltip: addTooltip,
-                      onPressed: onAdd,
-                      style: IconButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        fixedSize: const Size(40, 40),
-                      ),
-                      icon: const Icon(Icons.add, size: 22),
-                    ),
-                ],
-              ),
-              const Spacer(),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            // Meals on the left, whoever is on duty on the right, the
+            // same height.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
+                    flex: 3,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                height: 1.25,
-                              ),
+                        _meal(
+                          label: 'Lunch',
+                          count: summary?.todayLunch,
+                          icon: Icons.lunch_dining_outlined,
+                          onTap: () => _showWho(
+                            context,
+                            label: 'Lunch',
+                            isDinner: false,
+                          ),
                         ),
-                        ?subtitle,
+                        const SizedBox(height: 8),
+                        _meal(
+                          label: 'Dinner',
+                          count: summary?.todayDinner,
+                          icon: Icons.dinner_dining_outlined,
+                          onTap: () => _showWho(
+                            context,
+                            label: 'Dinner',
+                            isDinner: true,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 19,
-                    color: AppTheme.textSecondary,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceSoft,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.assignment_ind_outlined,
+                            color: AppTheme.primary,
+                            size: 24,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'On duty',
+                            style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            onDuty ?? '—',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1109,99 +1231,6 @@ class _SubscriptionBannerState extends State<_SubscriptionBanner> {
               ),
             if (!isSuspended) widget.child,
           ],
-        );
-      },
-    );
-  }
-}
-
-/// The signed-in member's meals for today, in one short line.
-class _TodayMealText extends StatefulWidget {
-  const _TodayMealText({required this.groupId});
-
-  final String groupId;
-
-  @override
-  State<_TodayMealText> createState() => _TodayMealTextState();
-}
-
-class _TodayMealTextState extends State<_TodayMealText> {
-  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _todayEntry;
-  late final Stream<MemberMealPlan> _plan;
-  late final String _todayKey;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final now = DateTime.now();
-    final month = now.month.toString().padLeft(2, '0');
-    final day = now.day.toString().padLeft(2, '0');
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    _todayKey = MealPlans.dateKey(now);
-    _plan = MealPlanService.watch(widget.groupId, uid);
-
-    // A single document: this member's own entry for today.
-    _todayEntry = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('meals')
-        .doc('${uid}_${now.year}-$month-$day')
-        .snapshots();
-  }
-
-  static String _quantity(num? value) {
-    final number = (value ?? 0).toDouble();
-    return number % 1 == 0
-        ? number.toInt().toString()
-        : number.toStringAsFixed(1);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<MemberMealPlan>(
-      stream: _plan,
-      builder: (context, planSnapshot) {
-        final rules = planSnapshot.data?.rules ?? const <MealPlanRule>[];
-        return _buildText(MealPlans.forDay(rules, _todayKey));
-      },
-    );
-  }
-
-  /// [planned] is what the member's meal plan counts today when they
-  /// have added no entry.
-  Widget _buildText(PlannedMeals? planned) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _todayEntry,
-      builder: (context, snapshot) {
-        final entry = snapshot.data?.data();
-
-        final String text;
-        if (!snapshot.hasData) {
-          text = '';
-        } else if (entry == null && planned != null) {
-          text = 'Today: ${_quantity(planned.total)} (plan)';
-        } else if (entry == null) {
-          text = 'Today: not entered';
-        } else {
-          final total =
-              ((entry['lunch'] as num?) ?? 0) +
-              ((entry['dinner'] as num?) ?? 0);
-          text = 'Today: ${_quantity(total)}';
-        }
-
-        return Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: entry == null && planned == null
-                ? AppTheme.warning
-                : AppTheme.success,
-          ),
         );
       },
     );

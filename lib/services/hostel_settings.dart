@@ -8,6 +8,7 @@ class HostelSettings {
     this.membersCanAddMeals = true,
     this.membersCanAddExpenses = true,
     this.fixedCostsEnabled = true,
+    this.specialPermission = false,
   });
 
   /// Reads the settings from a `groups/{id}` document.
@@ -19,6 +20,7 @@ class HostelSettings {
       membersCanAddMeals: settings['membersCanAddMeals'] != false,
       membersCanAddExpenses: settings['membersCanAddExpenses'] != false,
       fixedCostsEnabled: settings['fixedCostsEnabled'] != false,
+      specialPermission: settings['specialPermission'] == true,
     );
   }
 
@@ -32,16 +34,23 @@ class HostelSettings {
   /// are left out of the monthly calculation.
   final bool fixedCostsEnabled;
 
+  /// When on, the minimum meals and shop due can be entered on any
+  /// day. Off by default: they are then open only from the 25th of
+  /// the month to the 5th of the next.
+  final bool specialPermission;
+
   HostelSettings copyWith({
     bool? membersCanAddMeals,
     bool? membersCanAddExpenses,
     bool? fixedCostsEnabled,
+    bool? specialPermission,
   }) {
     return HostelSettings(
       membersCanAddMeals: membersCanAddMeals ?? this.membersCanAddMeals,
       membersCanAddExpenses:
           membersCanAddExpenses ?? this.membersCanAddExpenses,
       fixedCostsEnabled: fixedCostsEnabled ?? this.fixedCostsEnabled,
+      specialPermission: specialPermission ?? this.specialPermission,
     );
   }
 
@@ -50,6 +59,7 @@ class HostelSettings {
       'membersCanAddMeals': membersCanAddMeals,
       'membersCanAddExpenses': membersCanAddExpenses,
       'fixedCostsEnabled': fixedCostsEnabled,
+      'specialPermission': specialPermission,
     };
   }
 }

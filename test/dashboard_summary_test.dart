@@ -129,6 +129,45 @@ void main() {
     expect(summary.todayMembers.map((member) => member.name), ['Asif', 'Babu']);
   });
 
+  test('shows the signed-in member their own meals and expense', () {
+    DashboardSummary forMember(String id) {
+      return DashboardSummary.build(
+        now: now,
+        members: members,
+        meals: [
+          meal('a', '2026-10-01', 1, 1),
+          meal('a', '2026-10-14', 1, 0),
+          meal('b', '2026-10-01', 2, 2),
+        ],
+        plans: const [],
+        expenses: [
+          ExpenseRecord(
+            paidById: 'a',
+            date: DateTime(2026, 10, 3),
+            amount: 700,
+          ),
+        ],
+        // A minimum is charged, but "my meals" is what was eaten.
+        minimumMeals: 10,
+        shopDue: 0,
+        memberId: id,
+      );
+    }
+
+    final asif = forMember('a');
+    expect(asif.myMeals, 3);
+    expect(asif.myExpense, 700);
+
+    final babu = forMember('b');
+    expect(babu.myMeals, 4);
+    expect(babu.myExpense, 0);
+
+    // Someone who is not in the hostel's list has nothing to show.
+    final stranger = forMember('zzz');
+    expect(stranger.myMeals, 0);
+    expect(stranger.myExpense, 0);
+  });
+
   test('an empty month shows zeros, not an error', () {
     final summary = build();
 

@@ -398,7 +398,6 @@ class SubscriptionStatusCard extends StatelessWidget {
     final now = DateTime.now();
     final isActive = subscription.isActive(now);
     final until = subscription.activeUntil;
-    final daysLeft = subscription.daysLeft(now);
 
     final String title;
     final String subtitle;
@@ -419,9 +418,7 @@ class SubscriptionStatusCard extends StatelessWidget {
     } else if (isActive) {
       title = until == null
           ? 'Active'
-          : daysLeft == 1
-          ? 'Active · 1 day left'
-          : 'Active · $daysLeft days left';
+          : 'Active · ${subscription.timeLeftText(now)}';
       subtitle = until == null
           ? 'Activating…'
           : 'Until ${formatSubscriptionDate(until)}';
