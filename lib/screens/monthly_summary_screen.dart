@@ -12,6 +12,7 @@ import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_records.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import 'fixed_costs_screen.dart';
@@ -35,6 +36,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late DateTime _selectedMonth;
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _settingsStream;
+
+  /// The meals and expenses of the month on screen. Replaced when the
+  /// month changes, so only one month is ever being read.
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _expensesStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
 
   _CalcTab _tab = _CalcTab.meals;
@@ -60,6 +66,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
 
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
+    _watchSelectedMonth();
     _membersStream = GroupMemberService.watch(widget.groupId);
     _settingsSubscription = HostelSettingsService.watch(widget.groupId)
         .listen((settings) {
@@ -107,9 +114,21 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     return '${months[date.month - 1]} ${date.year}';
   }
 
+  void _watchSelectedMonth() {
+    _mealsStream = MonthRecords.meals(
+      widget.groupId,
+      _selectedMonth,
+    ).snapshots();
+    _expensesStream = MonthRecords.expenses(
+      widget.groupId,
+      _selectedMonth,
+    ).snapshots();
+  }
+
   void _previousMonth() {
     setState(() {
       _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+      _watchSelectedMonth();
     });
   }
 
@@ -118,7 +137,10 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final currentMonth = DateTime(now.year, now.month);
     final nextMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     if (nextMonth.isAfter(currentMonth)) return;
-    setState(() => _selectedMonth = nextMonth);
+    setState(() {
+      _selectedMonth = nextMonth;
+      _watchSelectedMonth();
+    });
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -418,7 +440,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final canGoNext = _selectedMonth.isBefore(currentMonth);
 
     final monthKey = _monthKey(_selectedMonth);
-    final groupReference = _firestore.collection('groups').doc(widget.groupId);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Details')),
@@ -451,7 +472,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           );
 
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: groupReference.collection('meals').snapshots(),
+            stream: _mealsStream,
             builder: (context, mealSnapshot) {
               if (mealSnapshot.connectionState == ConnectionState.waiting &&
                   !mealSnapshot.hasData) {
@@ -462,7 +483,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               }
 
               return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: groupReference.collection('expenses').snapshots(),
+                stream: _expensesStream,
                 builder: (context, expenseSnapshot) {
                   if (expenseSnapshot.connectionState ==
                           ConnectionState.waiting &&
@@ -1817,7 +1838,7 @@ class _MemberFigure extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 // Meal rate comparison widget
 // ─────────────────────────────────────────────────────────────
-class _MealRateComparison extends StatelessWidget {
+class _MealRateComparison extends StatefulWidget {
   const _MealRateComparison({
     required this.groupId,
     required this.previousMonthKey,
@@ -1829,85 +1850,93 @@ class _MealRateComparison extends StatelessWidget {
   final double currentRate;
 
   @override
+  State<_MealRateComparison> createState() => _MealRateComparisonState();
+}
+
+class _MealRateComparisonState extends State<_MealRateComparison> {
+  /// Last month's meal rate. Loaded once for each month shown, and
+  /// not again every time the page redraws.
+  late Future<double?> _previousRate = _load();
+
+  Future<double?> _load() {
+    final previousMonthStart = _monthStartFromKey(widget.previousMonthKey);
+
+    return _previousMealRate(
+      groupId: widget.groupId,
+      previousMonthKey: widget.previousMonthKey,
+      previousMonthStart: previousMonthStart,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_MealRateComparison oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.groupId != widget.groupId ||
+        oldWidget.previousMonthKey != widget.previousMonthKey) {
+      _previousRate = _load();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final previousMonthSettings = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(groupId)
-        .collection('monthlySettings')
-        .doc(previousMonthKey)
-        .snapshots();
+    final currentRate = widget.currentRate;
 
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: previousMonthSettings,
-      builder: (context, snapshot) {
-        final previousMonthStart = _monthStartFromKey(previousMonthKey);
-        final previousMonthEnd = DateTime(
-          previousMonthStart.year,
-          previousMonthStart.month + 1,
-        );
+    return FutureBuilder<double?>(
+      future: _previousRate,
+      builder: (context, rateSnapshot) {
+        final previousRate = rateSnapshot.data;
 
-        return FutureBuilder<double?>(
-          future: _previousMealRate(
-            groupId: groupId,
-            previousMonthKey: previousMonthKey,
-            previousMonthStart: previousMonthStart,
-            previousMonthEnd: previousMonthEnd,
+        // Nothing to compare with: the card shows the rate alone.
+        if (previousRate == null || previousRate == 0) {
+          return const SizedBox.shrink();
+        }
+
+        final difference = currentRate - previousRate;
+        final isIncrease = difference > 0;
+        final isDecrease = difference < 0;
+
+        final color = isIncrease
+            ? AppTheme.danger
+            : isDecrease
+            ? AppTheme.success
+            : AppTheme.textSecondary;
+
+        final icon = isIncrease
+            ? Icons.arrow_upward
+            : isDecrease
+            ? Icons.arrow_downward
+            : Icons.remove;
+
+        final sign = isIncrease ? '+' : '';
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
           ),
-          builder: (context, rateSnapshot) {
-            final previousRate = rateSnapshot.data;
-
-            // Nothing to compare with: the card shows the rate alone.
-            if (previousRate == null || previousRate == 0) {
-              return const SizedBox.shrink();
-            }
-
-            final difference = currentRate - previousRate;
-            final isIncrease = difference > 0;
-            final isDecrease = difference < 0;
-
-            final color = isIncrease
-                ? AppTheme.danger
-                : isDecrease
-                ? AppTheme.success
-                : AppTheme.textSecondary;
-
-            final icon = isIncrease
-                ? Icons.arrow_upward
-                : isDecrease
-                ? Icons.arrow_downward
-                : Icons.remove;
-
-            final sign = isIncrease ? '+' : '';
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 4),
+              Text(
+                '$sign৳${difference.abs().toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 16, color: color),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$sign৳${difference.abs().toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'vs last month',
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: color),
-                  ),
-                ],
+              const SizedBox(width: 4),
+              Text(
+                'vs last month',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: color),
               ),
-            );
-          },
+            ],
+          ),
         );
       },
     );
@@ -1923,7 +1952,6 @@ Future<double?> _previousMealRate({
   required String groupId,
   required String previousMonthKey,
   required DateTime previousMonthStart,
-  required DateTime previousMonthEnd,
 }) async {
   final firestore = FirebaseFirestore.instance;
   final groupRef = firestore.collection('groups').doc(groupId);
@@ -1938,8 +1966,15 @@ Future<double?> _previousMealRate({
 
   final members = await GroupMemberService.fetchActive(groupId);
 
-  final mealsSnapshot = await groupRef.collection('meals').get();
-  final expensesSnapshot = await groupRef.collection('expenses').get();
+  // That month's records only.
+  final mealsSnapshot = await MonthRecords.meals(
+    groupId,
+    previousMonthStart,
+  ).get();
+  final expensesSnapshot = await MonthRecords.expenses(
+    groupId,
+    previousMonthStart,
+  ).get();
   final plans = await MealPlanService.fetchAll(groupId);
   final calcMembers = [
     for (final member in members) CalcMember(id: member.id, name: member.name),
