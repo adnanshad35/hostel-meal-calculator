@@ -50,34 +50,16 @@ class MealRecord {
 /// One saved expense, reduced to what the calculation needs.
 class ExpenseRecord {
   const ExpenseRecord({
-    this.name,
     this.paidById,
     this.paidByName,
     this.date,
     this.amount = 0,
-    this.fromFund = 0,
-    this.isBill = false,
   });
 
-  final String? name;
   final String? paidById;
   final String? paidByName;
   final DateTime? date;
   final double amount;
-
-  /// The part of [amount] that was paid with the hostel fund's money
-  /// instead of the member's own.
-  final double fromFund;
-
-  /// True for a shared bill, such as water. It is divided like the
-  /// other fixed costs and takes no part in the meal rate.
-  final bool isBill;
-
-  /// What the hostel fund paid, never more than the expense itself.
-  double get fundPart => min(max(fromFund, 0.0), max(amount, 0.0));
-
-  /// What the member paid from their own pocket.
-  double get pocketPart => max(amount, 0.0) - fundPart;
 }
 
 class MemberCalculation {
@@ -140,7 +122,6 @@ class MonthlyCalculation {
   const MonthlyCalculation({
     required this.totalMealNumber,
     required this.memberPaidExpenses,
-    this.fundPaidExpenses = 0,
     required this.shopDue,
     required this.totalExpense,
     required this.mealRate,
@@ -148,12 +129,7 @@ class MonthlyCalculation {
   });
 
   final double totalMealNumber;
-
-  /// Meal expenses members paid from their own pockets.
   final double memberPaidExpenses;
-
-  /// Meal expenses paid with the hostel fund's money.
-  final double fundPaidExpenses;
   final double shopDue;
   final double totalExpense;
   final double mealRate;
@@ -162,11 +138,9 @@ class MonthlyCalculation {
 
 /// The hostel's monthly meal-rate and balance calculation.
 ///
-/// Meal rate = (meal expenses + shop due) / charged meals, where every
-/// member is charged at least [minimumMeals]. A member's balance is
-/// what they paid from their own pocket minus their charged meals at
-/// that rate. Money spent from the hostel fund raises the meal rate
-/// but is credited to nobody, and shared bills are left out.
+/// Meal rate = (expenses paid by members + shop due) / charged meals,
+/// where every member is charged at least [minimumMeals]. A member's
+/// balance is what they paid minus their charged meals at that rate.
 class MonthlyCalculator {
   MonthlyCalculator._();
 
@@ -189,7 +163,6 @@ class MonthlyCalculator {
     final actualMeals = <String, double>{};
     final memberSpending = <String, double>{};
     final formerMemberIds = <String>{};
-    double fundPaidExpenses = 0;
 
     for (final member in members) {
       actualMeals[member.id] = 0;
@@ -246,11 +219,7 @@ class MonthlyCalculator {
         addFormerMember(userId, expense.paidByName);
       }
 
-      // A shared bill belongs to the fixed costs, not the meal rate.
-      if (expense.isBill) continue;
-
-      memberSpending[userId] = memberSpending[userId]! + expense.pocketPart;
-      fundPaidExpenses += expense.fundPart;
+      memberSpending[userId] = memberSpending[userId]! + expense.amount;
     }
 
     final calculations = <MemberCalculation>[];
@@ -277,7 +246,7 @@ class MonthlyCalculator {
       );
     }
 
-    final totalExpense = memberPaidExpenses + fundPaidExpenses + shopDue;
+    final totalExpense = memberPaidExpenses + shopDue;
     final mealRate = totalMealNumber > 0 ? totalExpense / totalMealNumber : 0.0;
 
     final completedCalculations = calculations.map((calculation) {
@@ -294,7 +263,6 @@ class MonthlyCalculator {
     return MonthlyCalculation(
       totalMealNumber: totalMealNumber,
       memberPaidExpenses: memberPaidExpenses,
-      fundPaidExpenses: fundPaidExpenses,
       shopDue: shopDue,
       totalExpense: totalExpense,
       mealRate: mealRate,

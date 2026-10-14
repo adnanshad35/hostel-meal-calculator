@@ -6,15 +6,12 @@ import 'package:flutter/services.dart';
 import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
-import '../services/fund_service.dart';
-import '../services/hostel_fund.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import 'fixed_costs_screen.dart';
-import 'fund_screen.dart';
 
 class MonthlySummaryScreen extends StatefulWidget {
   const MonthlySummaryScreen({
@@ -35,7 +32,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _settingsStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
-  late final Stream<List<FundDeposit>> _depositsStream;
 
   _CalcTab _tab = _CalcTab.meals;
   bool _showMemberCards = true;
@@ -52,7 +48,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     _selectedMonth = DateTime(now.year, now.month);
     _membersStream = GroupMemberService.watch(widget.groupId);
     _plansStream = MealPlanService.watchAll(widget.groupId);
-    _depositsStream = FundService.watch(widget.groupId);
     // Every month's settings, because fixed costs carry forward from
     // the last month they were saved in.
     _settingsStream = _firestore
@@ -127,12 +122,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
     );
-    if (result.fundPaidExpenses > 0) {
-      buffer.writeln(
-        '${_bold('Paid From Fund')}: '
-        '৳${result.fundPaidExpenses.toStringAsFixed(2)}',
-      );
-    }
     buffer.writeln(
       '${_bold('Shop Due')}: '
       '৳${result.shopDue.toStringAsFixed(2)}',
@@ -164,12 +153,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
     );
-    if (result.fundPaidExpenses > 0) {
-      buffer.writeln(
-        '${_bold('Paid From Fund')}: '
-        '৳${result.fundPaidExpenses.toStringAsFixed(2)}',
-      );
-    }
     buffer.writeln(
       '${_bold('Shop Due')}: '
       '৳${result.shopDue.toStringAsFixed(2)}',
@@ -461,40 +444,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                             shopDue: shopDue,
                           );
 
-                          // Money collected in advance, and what was
-                          // spent from it.
-                          return StreamBuilder<List<FundDeposit>>(
-                            stream: _depositsStream,
-                            builder: (context, depositSnapshot) {
-                              if (depositSnapshot.hasError) {
-                                return const Center(
-                                  child: Text(
-                                    'Unable to load the hostel fund.',
-                                  ),
-                                );
-                              }
-                              if (!depositSnapshot.hasData) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-
-                              return _buildContent(
-                                context,
-                                result: result,
-                                members: members,
-                                fixedCosts: fixedCosts,
-                                fund: FundCalculator.summarize(
-                                  month: _selectedMonth,
-                                  deposits: depositSnapshot.data!,
-                                  expenses: (expenseSnapshot.data?.docs ?? [])
-                                      .map(_expenseRecord),
-                                ),
-                                minimumMeals: minimumMeals,
-                                shopDue: shopDue,
-                                canGoNext: canGoNext,
-                              );
-                            },
+                          return _buildContent(
+                            context,
+                            result: result,
+                            members: members,
+                            fixedCosts: fixedCosts,
+                            minimumMeals: minimumMeals,
+                            shopDue: shopDue,
+                            canGoNext: canGoNext,
                           );
                         },
                       );
@@ -699,9 +656,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     buffer.writeln(_bold('HostelMate – Overall Calculation'));
     buffer.writeln(_bold(_monthName(_selectedMonth)));
     buffer.writeln(includesFixedCosts ? 'Meals + fixed costs' : 'Meals only');
-    if (settlements.any((settlement) => settlement.deposit > 0)) {
-      buffer.writeln('After fund deposits');
-    }
     buffer.writeln('');
 
     for (final settlement in settlements) {
@@ -718,7 +672,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required MonthlyCalculation result,
     required List<CalcMember> members,
     required FixedCosts? fixedCosts,
-    required FundSummary fund,
     required double minimumMeals,
     required double shopDue,
     required bool canGoNext,
@@ -728,28 +681,21 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       _selectedMonth.month - 1,
     );
     final rents = fixedCosts?.rents ?? const <String, double>{};
-    // The bills the admin set, which carry forward each month.
     final sharedBills = fixedCosts?.bills ?? const <SharedBill>[];
-    // Those, plus the bills members entered as expenses this month.
-    final allBills = [...sharedBills, ...fund.memberBills];
-    final hasFixedCosts = rents.isNotEmpty || allBills.isNotEmpty;
+    final hasFixedCosts = rents.isNotEmpty || sharedBills.isNotEmpty;
     // Set when this month is using figures saved in an earlier month.
     final carriedFrom =
-        fixedCosts != null &&
-            !fixedCosts.isEmpty &&
-            fixedCosts.monthKey != _monthKey(_selectedMonth)
+        hasFixedCosts && fixedCosts!.monthKey != _monthKey(_selectedMonth)
         ? _monthName(_monthStartFromKey(fixedCosts.monthKey))
         : null;
     final settlements = FixedCostsCalculator.settle(
       members: result.members,
       rents: rents,
-      bills: allBills,
-      billsPaid: fund.billsPaidByMember,
-      deposits: fund.depositsByMember,
+      bills: sharedBills,
     );
     final billShare = FixedCostsCalculator.billShare(
       members: result.members,
-      bills: allBills,
+      bills: sharedBills,
     );
 
     return ListView(
@@ -861,7 +807,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             totalExpense: result.totalExpense,
             shopDue: result.shopDue,
             memberPaidExpenses: result.memberPaidExpenses,
-            fundPaidExpenses: result.fundPaidExpenses,
             previousMonthKey: _monthKey(previousMonth),
             groupId: widget.groupId,
             onCopy: () => _copySummaryCard(result: result),
@@ -1136,7 +1081,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               ],
               onCopy: () => _copyFixedCosts(
                 settlements: settlements,
-                sharedBills: allBills,
+                sharedBills: sharedBills,
                 billShare: billShare,
               ),
             ),
@@ -1153,7 +1098,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               const SizedBox(height: 12),
               _FixedCostsDetails(
                 settlements: settlements,
-                sharedBills: allBills,
+                sharedBills: sharedBills,
                 billShare: billShare,
               ),
             ],
@@ -1206,9 +1151,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           else
             _AmountListCard(
               title: 'Overall Calculation',
-              subtitle:
-                  '${hasFixedCosts ? 'Meals + fixed costs' : 'Meals only. No fixed costs this month.'}'
-                  '${fund.collected > 0 ? '\nAfter what each member gave to the fund.' : ''}',
+              subtitle: hasFixedCosts
+                  ? 'Meals + fixed costs'
+                  : 'Meals only. No fixed costs this month.',
               rows: [
                 for (final settlement in settlements)
                   _AmountRow.balance(settlement.name, settlement.finalTotal),
@@ -1218,41 +1163,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                 includesFixedCosts: hasFixedCosts,
               ),
             ),
-          if (fund.isUsed || widget.isAdmin) ...[
-            const SizedBox(height: 12),
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FundScreen(
-                        groupId: widget.groupId,
-                        isAdmin: widget.isAdmin,
-                        month: _selectedMonth,
-                      ),
-                    ),
-                  );
-                },
-                leading: const Icon(
-                  Icons.savings_outlined,
-                  color: AppTheme.primary,
-                ),
-                title: const Text(
-                  'Hostel Fund',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(
-                  fund.isUsed
-                      ? 'Collected ৳${_amountText(fund.collected)} · '
-                            'spent ৳${_amountText(fund.spent)} · '
-                            'left ৳${_amountText(fund.balance)}'
-                      : 'Record money collected from members in advance.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-              ),
-            ),
-          ],
         ],
       ],
     );
@@ -1536,7 +1446,6 @@ class _SummaryCard extends StatelessWidget {
     required this.totalExpense,
     required this.shopDue,
     required this.memberPaidExpenses,
-    required this.fundPaidExpenses,
     required this.previousMonthKey,
     required this.groupId,
     required this.onCopy,
@@ -1547,7 +1456,6 @@ class _SummaryCard extends StatelessWidget {
   final double totalExpense;
   final double shopDue;
   final double memberPaidExpenses;
-  final double fundPaidExpenses;
   final String previousMonthKey;
   final String groupId;
   final VoidCallback onCopy;
@@ -1573,11 +1481,6 @@ class _SummaryCard extends StatelessWidget {
                 label: 'Member Paid',
                 value: '৳${memberPaidExpenses.toStringAsFixed(2)}',
               ),
-              if (fundPaidExpenses > 0)
-                _StrongInfoRow(
-                  label: 'Paid From Fund',
-                  value: '৳${fundPaidExpenses.toStringAsFixed(2)}',
-                ),
               _StrongInfoRow(
                 label: 'Shop Due',
                 value: '৳${shopDue.toStringAsFixed(2)}',
@@ -1867,7 +1770,14 @@ MealRecord _mealRecord(QueryDocumentSnapshot<Map<String, dynamic>> document) {
 ExpenseRecord _expenseRecord(
   QueryDocumentSnapshot<Map<String, dynamic>> document,
 ) {
-  return FundService.expenseRecord(document.data());
+  final data = document.data();
+
+  return ExpenseRecord(
+    paidById: data['paidById'] as String?,
+    paidByName: data['paidByName'] as String?,
+    date: (data['date'] as Timestamp?)?.toDate(),
+    amount: (data['amount'] as num?)?.toDouble() ?? 0,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -20,8 +20,6 @@ class MemberSettlement {
     required this.mealBalance,
     required this.rent,
     required this.billShare,
-    this.billsPaid = 0,
-    this.deposit = 0,
   });
 
   final String id;
@@ -34,14 +32,8 @@ class MemberSettlement {
   final double rent;
   final double billShare;
 
-  /// Shared bills this member paid from their own pocket.
-  final double billsPaid;
-
-  /// Money this member gave to the hostel fund.
-  final double deposit;
-
   /// Positive when the member should receive, negative when they owe.
-  double get exactTotal => mealBalance - rent - billShare + billsPaid + deposit;
+  double get exactTotal => mealBalance - rent - billShare;
 
   /// [exactTotal] rounded to a whole taka.
   int get finalTotal => exactTotal.round();
@@ -90,8 +82,6 @@ class FixedCostsCalculator {
     required List<MemberCalculation> members,
     required Map<String, double> rents,
     required List<SharedBill> bills,
-    Map<String, double> billsPaid = const {},
-    Map<String, double> deposits = const {},
   }) {
     final share = billShare(members: members, bills: bills);
 
@@ -103,8 +93,6 @@ class FixedCostsCalculator {
           mealBalance: member.exactBalance,
           rent: rents[member.id] ?? 0,
           billShare: member.isFormer ? 0 : share,
-          billsPaid: billsPaid[member.id] ?? 0,
-          deposit: deposits[member.id] ?? 0,
         ),
     ];
   }

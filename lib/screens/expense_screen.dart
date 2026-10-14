@@ -6,10 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
 import '../services/error_messages.dart';
-import '../services/fund_service.dart';
 import '../services/group_member_service.dart';
 import '../services/notification_service.dart';
-import 'fund_screen.dart';
 
 /// Opens the Add Expense form, unless the hostel is read-only.
 Future<void> showExpenseForm(
@@ -108,9 +106,8 @@ class ExpenseScreen extends StatelessWidget {
 
             totalExpense += value;
 
-            // Only what came out of the member's own pocket.
             if (data['paidById'] == currentUser.uid) {
-              myExpense += FundService.expenseRecord(data).pocketPart;
+              myExpense += value;
             }
           }
 
@@ -189,32 +186,6 @@ class ExpenseScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              const SizedBox(height: 4),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            FundScreen(groupId: groupId, isAdmin: isAdmin),
-                      ),
-                    );
-                  },
-                  leading: const Icon(
-                    Icons.savings_outlined,
-                    color: Color(0xFF2E7D32),
-                  ),
-                  title: const Text(
-                    'Hostel Fund',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: const Text(
-                    'Money collected from members in advance.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
-              ),
             ],
           );
         },
@@ -390,10 +361,7 @@ class TotalExpensesScreen extends StatelessWidget {
                       name,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text(
-                      '${_formatDate(date)}${_expenseNote(data)}\n'
-                      'Paid by $paidByName',
-                    ),
+                    subtitle: Text('${_formatDate(date)}\nPaid by $paidByName'),
                     isThreeLine: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -528,7 +496,8 @@ class MyExpensesScreen extends StatelessWidget {
 
           double total = 0;
           for (final d in docs) {
-            total += FundService.expenseRecord(d.data()).pocketPart;
+            final amount = d.data()['amount'];
+            if (amount is num) total += amount.toDouble();
           }
 
           if (docs.isEmpty) {
@@ -572,7 +541,7 @@ class MyExpensesScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      const Text('Paid from my own pocket'),
+                      const Text('My total expenses'),
                       const SizedBox(height: 6),
                       Text(
                         '৳${total.toStringAsFixed(2)}',
@@ -602,7 +571,7 @@ class MyExpensesScreen extends StatelessWidget {
                       name,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('${_formatDate(date)}${_expenseNote(data)}'),
+                    subtitle: Text(_formatDate(date)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -732,24 +701,7 @@ String _formatAmount(dynamic amount) {
   return '0.00';
 }
 
-/// Marks an expense that is a shared bill or used the fund's money.
-String _expenseNote(Map<String, dynamic> data) {
-  final expense = FundService.expenseRecord(data);
-  final notes = [
-    if (expense.isBill) 'Bill',
-    if (expense.fundPart > 0 && expense.pocketPart == 0)
-      'from fund'
-    else if (expense.fundPart > 0)
-      '৳${_formatAmount(expense.fundPart)} from fund',
-  ];
-
-  return notes.isEmpty ? '' : '  •  ${notes.join(', ')}';
-}
-
 enum _AmountMode { fixed, calculation }
-
-/// Whose money paid for an expense.
-enum _PaidFrom { pocket, fund, both }
 
 // ─────────────────────────────────────────────────────────────
 // Expense form dialog
@@ -774,13 +726,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _amountController;
-  late final TextEditingController _fundAmountController;
 
   late DateTime _selectedDate;
-
-  /// A shared bill, such as water, instead of a meal expense.
-  bool _isBill = false;
-  _PaidFrom _paidFrom = _PaidFrom.pocket;
 
   List<GroupMember> _members = [];
   StreamSubscription<List<GroupMember>>? _membersSubscription;
@@ -814,21 +761,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
     _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
 
-    final saved = data == null ? null : FundService.expenseRecord(data);
-    _isBill = saved?.isBill ?? false;
-    _paidFrom = saved == null || saved.fundPart <= 0
-        ? _PaidFrom.pocket
-        : saved.pocketPart <= 0
-        ? _PaidFrom.fund
-        : _PaidFrom.both;
-    _fundAmountController = TextEditingController(
-      text: _paidFrom == _PaidFrom.both
-          ? (saved!.fundPart % 1 == 0
-                ? saved.fundPart.toInt().toString()
-                : saved.fundPart.toString())
-          : '',
-    );
-
     _selectedMemberId = data?['paidById'] as String? ?? _currentUser.uid;
 
     if (widget.isAdmin && !_isEditing) {
@@ -841,7 +773,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _membersSubscription?.cancel();
     _nameController.dispose();
     _amountController.dispose();
-    _fundAmountController.dispose();
     super.dispose();
   }
 
@@ -946,31 +877,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
     final amount = parsedAmount;
 
-    final double fromFund;
-    switch (_paidFrom) {
-      case _PaidFrom.pocket:
-        fromFund = 0;
-      case _PaidFrom.fund:
-        fromFund = amount;
-      case _PaidFrom.both:
-        final part = double.tryParse(_fundAmountController.text.trim());
-
-        if (part == null || part <= 0 || part >= amount) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'The amount from the fund must be more than 0 and less '
-                'than the expense.',
-              ),
-            ),
-          );
-          return;
-        }
-        fromFund = part;
-    }
-
-    final category = _isBill ? 'bill' : 'meal';
-
     final selectedMember = _members
         .where((member) => member.id == _selectedMemberId)
         .firstOrNull;
@@ -998,8 +904,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'name': _nameController.text.trim(),
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
-          'fromFund': fromFund,
-          'category': category,
           'updatedBy': _currentUser.uid,
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -1008,8 +912,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           'name': _nameController.text.trim(),
           'amount': amount,
           'date': Timestamp.fromDate(_selectedDate),
-          'fromFund': fromFund,
-          'category': category,
           'paidById': paidById,
           'paidByName': paidByName,
           'enteredBy': _currentUser.uid,
@@ -1214,88 +1116,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
               ),
 
               const SizedBox(height: 16),
-
-              // ─── What it was for ───
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment<bool>(
-                      value: false,
-                      icon: Icon(Icons.restaurant_outlined, size: 18),
-                      label: Text('Meals'),
-                    ),
-                    ButtonSegment<bool>(
-                      value: true,
-                      icon: Icon(Icons.receipt_long_outlined, size: 18),
-                      label: Text('Shared Bill'),
-                    ),
-                  ],
-                  selected: {_isBill},
-                  onSelectionChanged: _isSaving
-                      ? null
-                      : (selection) {
-                          setState(() => _isBill = selection.first);
-                        },
-                ),
-              ),
-              if (_isBill) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Divided equally among all members, like Wi-Fi. It is '
-                  'not part of the meal rate.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              const SizedBox(height: 16),
-
-              // ─── Whose money ───
-              DropdownButtonFormField<_PaidFrom>(
-                initialValue: _paidFrom,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Paid from',
-                  prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: _PaidFrom.pocket,
-                    child: Text('Own pocket'),
-                  ),
-                  DropdownMenuItem(
-                    value: _PaidFrom.fund,
-                    child: Text('Hostel fund'),
-                  ),
-                  DropdownMenuItem(
-                    value: _PaidFrom.both,
-                    child: Text('Part from the fund'),
-                  ),
-                ],
-                onChanged: _isSaving
-                    ? null
-                    : (value) {
-                        setState(() => _paidFrom = value ?? _PaidFrom.pocket);
-                      },
-              ),
-              if (_paidFrom == _PaidFrom.both) ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _fundAmountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount from the fund',
-                    hintText: 'The rest counts as paid by the member',
-                    prefixText: '৳ ',
-                    prefixIcon: Icon(Icons.savings_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.calendar_today_outlined),

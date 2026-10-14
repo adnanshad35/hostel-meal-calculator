@@ -280,17 +280,6 @@ service cloud.firestore {
       }
 
       match /expenses/{expenseId} {
-        // An expense is for meals or a shared bill, and part or all
-        // of it may have been paid with the hostel fund's money.
-        function fundFieldsAreValid() {
-          return request.resource.data.get('fromFund', 0) is number
-            && request.resource.data.get('fromFund', 0) >= 0
-            && request.resource.data.get('fromFund', 0)
-              <= request.resource.data.amount
-            && request.resource.data.get('category', 'meal')
-              in ['meal', 'bill'];
-        }
-
         allow read: if canReadHostel(groupId);
 
         allow create: if isGroupMember(groupId)
@@ -317,8 +306,7 @@ service cloud.firestore {
           && request.resource.data.paidByName is string
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
-          && request.resource.data.date is timestamp
-          && fundFieldsAreValid();
+          && request.resource.data.date is timestamp;
 
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
@@ -332,7 +320,6 @@ service cloud.firestore {
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.date is timestamp
-          && fundFieldsAreValid()
           && request.resource.data
             .diff(resource.data)
             .affectedKeys()
@@ -340,30 +327,9 @@ service cloud.firestore {
               'name',
               'amount',
               'date',
-              'fromFund',
-              'category',
               'updatedBy',
               'updatedAt'
             ]);
-
-        allow delete: if isGroupAdmin(groupId)
-          && isHostelActive(groupId);
-      }
-
-      // Money members gave to the hostel fund, recorded by admins.
-      match /deposits/{depositId} {
-        allow read: if canReadHostel(groupId);
-
-        allow create: if isGroupAdmin(groupId)
-          && isHostelActive(groupId)
-          && isRegisteredMember(groupId, request.resource.data.memberId)
-          && request.resource.data.memberName is string
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0
-          && request.resource.data.date is timestamp
-          && request.resource.data.enteredBy == request.auth.uid;
-
-        allow update: if false;
 
         allow delete: if isGroupAdmin(groupId)
           && isHostelActive(groupId);
