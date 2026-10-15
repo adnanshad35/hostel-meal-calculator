@@ -200,7 +200,7 @@ class _MealScreenState extends State<MealScreen> {
                     title: 'Total Meals',
                     value: _displayQuantity(totalMealsMonthly),
                     subtitle: 'This month',
-                    color: const Color(0xFF2E7D32),
+                    color: AppTheme.primary,
                     onTap: _openLedger,
                   ),
                 ),
@@ -211,7 +211,7 @@ class _MealScreenState extends State<MealScreen> {
                     title: 'My Meals',
                     value: _displayQuantity(myMonthlyTotal),
                     subtitle: 'This month',
-                    color: const Color(0xFF2E7D32),
+                    color: AppTheme.primary,
                     onTap: _openMyMeals,
                   ),
                 ),
@@ -272,13 +272,13 @@ class _TodayMealCard extends StatelessWidget {
 
     if (entry == null && planned != null) {
       return Card(
-        color: const Color(0xFFE8F5E9),
+        color: AppTheme.surfaceSoft,
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           onTap: onTap,
           leading: const Icon(
             Icons.event_repeat_outlined,
-            color: Color(0xFF2E7D32),
+            color: AppTheme.primary,
           ),
           title: const Text(
             'Today is counted from your meal plan',
@@ -298,12 +298,11 @@ class _TodayMealCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           onTap: onTap,
-          leading: const Icon(Icons.info_outline, color: Colors.orange),
+          leading: const Icon(Icons.info_outline, color: AppTheme.accentDeep),
           title: const Text(
-            'Today\'s meals not entered',
+            'Today\'s Meals Not Entered',
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
-          subtitle: const Text('Tap Add Meal to record them.'),
         ),
       );
     }
@@ -312,13 +311,13 @@ class _TodayMealCard extends StatelessWidget {
     final dinner = (entry['dinner'] as num?)?.toDouble() ?? 0;
 
     return Card(
-      color: const Color(0xFFE8F5E9),
+      color: AppTheme.surfaceSoft,
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         onTap: onTap,
         leading: const Icon(
           Icons.check_circle_outline,
-          color: Color(0xFF2E7D32),
+          color: AppTheme.primary,
         ),
         title: const Text(
           'Today\'s meals entered',
@@ -553,7 +552,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
           context: context,
           builder: (context) {
             return AlertDialog(
-              title: const Text('Confirm large quantity'),
+              title: const Text('Confirm Large Quantity'),
               content: Text(
                 'You entered ${_displayQuantity(_lunch)} lunch and '
                 '${_displayQuantity(_dinner)} dinner meals. '
@@ -576,6 +575,12 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   }
 
   Future<void> _save() async {
+    // A saved entry may be changed only while the admins allow it.
+    if (_hasEntry && !await ensureMemberMayEdit(context, widget.groupId)) {
+      return;
+    }
+    if (!mounted) return;
+
     final confirmed = await _confirmLargeQuantity();
 
     if (!confirmed || !mounted) return;
@@ -681,9 +686,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                     initialValue: _selectedMemberId,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Meal for',
+                      labelText: 'Meal For',
                       prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
                     ),
                     items: _members.map((member) {
                       return DropdownMenuItem<String>(
@@ -965,7 +969,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
 
     return MonthCalendarView(
       month: _now,
-      label: 'My meals',
+      label: 'My Meals',
       total: _displayQuantity(total),
       markedDays: {
         for (final entry in byDay.entries)
@@ -988,7 +992,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
         if (record == null) {
           return [
             if (canEdit)
-              CalendarLine(title: 'No entry', trailing: '', onTap: edit),
+              CalendarLine(title: 'No Entry', trailing: '', onTap: edit),
           ];
         }
 

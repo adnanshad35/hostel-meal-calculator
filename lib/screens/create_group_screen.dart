@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
 
@@ -129,34 +131,37 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.groups_outlined,
-                  size: 72,
-                  color: Color(0xFF2E7D32),
+                Align(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceSoft,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Icon(
+                      Icons.groups_outlined,
+                      size: 36,
+                      color: AppTheme.primary,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Start a shared meal account',
+                  'Create Your Hostel',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'You will become the administrator of this group.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _createGroup(),
                   decoration: const InputDecoration(
-                    labelText: 'Hostel or mess name',
+                    labelText: 'Hostel or Mess Name',
                     hintText: 'Example: Green View Hostel',
                     prefixIcon: Icon(Icons.home_outlined),
-                    border: OutlineInputBorder(),
                   ),
                   validator: (value) {
                     final name = value?.trim() ?? '';

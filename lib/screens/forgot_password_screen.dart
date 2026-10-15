@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialEmail = ''});
 
@@ -81,7 +83,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const Icon(
                   Icons.mark_email_read_outlined,
                   size: 80,
-                  color: Color(0xFF2E7D32),
+                  color: AppTheme.primary,
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -129,22 +131,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const Icon(
                   Icons.lock_reset_outlined,
                   size: 80,
-                  color: Color(0xFF2E7D32),
+                  color: AppTheme.primary,
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Forgot your password?',
+                  'Forgot Password?',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Enter your registered email address. '
-                  'We will send you a password reset link.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -155,9 +150,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     }
                   },
                   decoration: const InputDecoration(
-                    labelText: 'Email address',
+                    labelText: 'Email Address',
                     prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
                   ),
                   validator: (value) {
                     final email = value?.trim() ?? '';

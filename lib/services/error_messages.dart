@@ -8,8 +8,7 @@ import 'subscription_service.dart';
 
 /// Shown wherever a hostel that is not active refuses a change.
 const String readOnlyMessage =
-    'This hostel is read-only right now. An admin can activate it from '
-    'the hostel dashboard.';
+    'This hostel is not active. An admin can activate it from About Hostel.';
 
 /// A message for a failed save that a member can act on.
 ///
@@ -89,6 +88,34 @@ Future<bool> ensureMemberMayAdd(
             : 'In this hostel, only an admin enters expenses.',
       ),
     ),
+  );
+  return false;
+}
+
+/// Returns true when the signed-in member may change an entry that is
+/// already saved in [groupId]. Admins can switch that off for members
+/// in Admin Settings; a member is then told so and false is returned.
+Future<bool> ensureMemberMayEdit(BuildContext context, String groupId) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  try {
+    final group = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .get()
+        .timeout(const Duration(seconds: 4));
+    final data = group.data();
+
+    final admins = data?['admins'] as List? ?? const [];
+    if (admins.contains(FirebaseAuth.instance.currentUser?.uid)) return true;
+    if (HostelSettings.fromGroupData(data).membersCanEdit) return true;
+  } catch (_) {
+    // The security rules still have the final say.
+    return true;
+  }
+
+  messenger.showSnackBar(
+    const SnackBar(content: Text('Editing is turned off by the admin.')),
   );
   return false;
 }

@@ -55,9 +55,10 @@ service cloud.firestore {
       return isGroupMember(groupId) && isHostelOpen(groupId);
     }
 
-    // A hostel's admins can keep entering meals or expenses to
-    // themselves, in its settings. [what] is 'membersCanAddMeals' or
-    // 'membersCanAddExpenses'; both are allowed unless switched off.
+    // A hostel's admins can keep entering or changing meals and
+    // expenses to themselves, in its settings. [what] is
+    // 'membersCanAddMeals', 'membersCanAddExpenses' or 'membersCanEdit';
+    // each is allowed unless switched off.
     function membersMay(groupId, what) {
       return isGroupAdmin(groupId)
         || get(/databases/$(database)/documents/groups/$(groupId))
@@ -277,6 +278,7 @@ service cloud.firestore {
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
           && membersMay(groupId, 'membersCanAddMeals')
+          && membersMay(groupId, 'membersCanEdit')
           && request.resource.data.userId
             == resource.data.userId
           && (
@@ -289,6 +291,7 @@ service cloud.firestore {
           || (
             isGroupMember(groupId)
             && membersMay(groupId, 'membersCanAddMeals')
+            && membersMay(groupId, 'membersCanEdit')
             && resource.data.userId == request.auth.uid
           )
         );
@@ -351,6 +354,7 @@ service cloud.firestore {
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
           && membersMay(groupId, 'membersCanAddExpenses')
+          && membersMay(groupId, 'membersCanEdit')
           && request.resource.data.paidById
             == resource.data.paidById
           && (
@@ -434,8 +438,10 @@ service cloud.firestore {
             )
           );
 
-        // Members are deactivated, never deleted.
-        allow delete: if false;
+        // App users are deactivated, never deleted. An admin may delete
+        // a member who does not use the app.
+        allow delete: if isGroupAdmin(groupId)
+          && resource.data.get('isAppUser', false) != true;
       }
 
       // In-app notifications inside the hostel: activity recorded by
@@ -449,7 +455,7 @@ service cloud.firestore {
           && request.resource.data.message is string
           && request.resource.data.message.size() <= 600
           && (
-            request.resource.data.type == 'expense'
+            request.resource.data.type in ['expense', 'mealPlan']
             || (
               request.resource.data.type == 'announcement'
               && isGroupAdmin(groupId)

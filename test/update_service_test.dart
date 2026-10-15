@@ -111,7 +111,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Update required'), findsOneWidget);
+    expect(find.text('Update Required'), findsOneWidget);
     expect(find.textContaining('HostelMate 1.1.0 is ready'), findsOneWidget);
     expect(find.text('Shadow members\nAdd Meal dialog'), findsOneWidget);
     expect(find.text('Later'), findsNothing);

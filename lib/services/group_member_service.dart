@@ -155,6 +155,10 @@ class GroupMemberService {
         for (final document in usersSnapshot.docs)
           document.id: GroupMember.readUserName(document.data()),
       };
+      final userPhones = {
+        for (final document in usersSnapshot.docs)
+          document.id: (document.data()['phoneNumber'] as String? ?? '').trim(),
+      };
       final existing = {
         for (final document in membersSnapshot.docs)
           document.id: document.data(),
@@ -167,10 +171,12 @@ class GroupMemberService {
         final reference = _members(groupId).doc(uid);
         final data = existing[uid];
         final userName = userNames[uid];
+        final userPhone = userPhones[uid] ?? '';
 
         if (data == null) {
           batch.set(reference, {
             'name': userName ?? 'Member',
+            'phone': userPhone,
             'isAppUser': true,
             'userId': uid,
             'addedBy': user.uid,
@@ -193,6 +199,12 @@ class GroupMemberService {
             data['name'] != userName &&
             (isAdmin || uid == user.uid)) {
           updates['name'] = userName;
+        }
+
+        // The phone number shown in the member list.
+        if (usersSnapshot.docs.any((document) => document.id == uid) &&
+            (data['phone'] as String? ?? '') != userPhone) {
+          updates['phone'] = userPhone;
         }
 
         if (updates.isNotEmpty) {
@@ -237,6 +249,59 @@ class GroupMemberService {
       'updatedAt': FieldValue.serverTimestamp(),
       'active': true,
     });
+  }
+
+  /// Deletes a member who does not use the app, with every meal,
+  /// expense, meal plan and duty turn recorded for them. Admins only.
+  static Future<void> deleteShadowMember({
+    required String groupId,
+    required GroupMember member,
+  }) async {
+    if (member.isAppUser) {
+      throw Exception('Members who use the app are removed, not deleted.');
+    }
+
+    final group = _group(groupId);
+    final meals = await group
+        .collection('meals')
+        .where('userId', isEqualTo: member.id)
+        .get();
+    final expenses = await group
+        .collection('expenses')
+        .where('paidById', isEqualTo: member.id)
+        .get();
+
+    final references = [
+      for (final meal in meals.docs) meal.reference,
+      for (final expense in expenses.docs) expense.reference,
+    ];
+
+    const chunkSize = 400;
+    for (var start = 0; start < references.length; start += chunkSize) {
+      final batch = _firestore.batch();
+      for (final reference in references.skip(start).take(chunkSize)) {
+        batch.delete(reference);
+      }
+      await batch.commit();
+    }
+
+    final groupData = (await group.get()).data();
+    final duties = groupData?['duties'] as List? ?? const [];
+    final remaining = [
+      for (final duty in duties)
+        if (duty is! Map || duty['memberId'] != member.id) duty,
+    ];
+
+    final batch = _firestore.batch();
+    batch.delete(group.collection('mealPlans').doc(member.id));
+    if (remaining.length != duties.length) {
+      batch.update(group, {
+        'duties': remaining,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.delete(_members(groupId).doc(member.id));
+    await batch.commit();
   }
 
   static Future<void> rename({

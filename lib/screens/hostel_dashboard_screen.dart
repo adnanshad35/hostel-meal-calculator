@@ -14,6 +14,7 @@ import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
 import 'expense_screen.dart';
+import 'duty_roster_screen.dart';
 import 'hostel_activation_screen.dart';
 import 'hostel_details_screen.dart';
 import 'meal_ledger_screen.dart';
@@ -53,6 +54,8 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
   late final Stream<DutyRoster> _roster = DutyRosterService.watch(
     widget.groupId,
   );
+  late final Stream<HostelSubscription> _subscription =
+      SubscriptionService.watch(widget.groupId);
 
   String get groupId => widget.groupId;
   bool get isAdmin => widget.role == 'admin';
@@ -63,6 +66,12 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
 
   void _openCalculation() {
     _open(MonthlySummaryScreen(groupId: groupId, isAdmin: isAdmin));
+  }
+
+  void _openActivation() {
+    _open(
+      HostelActivationScreen(groupId: groupId, groupName: widget.groupName),
+    );
   }
 
   @override
@@ -92,25 +101,23 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
                 _SubscriptionBanner(
-                  groupId: groupId,
-                  groupName: widget.groupName,
-                  isAdmin: isAdmin,
+                  stream: _subscription,
                   // Hidden while the hostel is suspended.
-                  child: Column(
+                  builder: (subscription) => Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 4),
-                      // Whoever is looking after the hostel today is
-                      // named on the top card.
                       StreamBuilder<DutyRoster>(
                         stream: _roster,
                         builder: (context, roster) => _HostelOverview(
                           groupId: groupId,
                           groupName: widget.groupName,
                           isAdmin: isAdmin,
-                          responsible: roster.data
-                              ?.responsibleOn(DateTime.now())
-                              ?.memberName,
+                          subscription: subscription,
+                          onOpenActivation: _openActivation,
+                          responsible: roster.data?.responsibleOn(
+                            DateTime.now(),
+                          ),
                           onOpenCalculation: _openCalculation,
                           onOpenExpenses: () => _open(
                             MyRecordsScreen(groupId: groupId, initialTab: 1),
@@ -477,6 +484,8 @@ class _HostelOverview extends StatefulWidget {
     required this.groupId,
     required this.groupName,
     required this.isAdmin,
+    required this.subscription,
+    required this.onOpenActivation,
     required this.responsible,
     required this.onOpenCalculation,
     required this.onOpenExpenses,
@@ -487,8 +496,12 @@ class _HostelOverview extends StatefulWidget {
   final String groupName;
   final bool isAdmin;
 
-  /// The member responsible for the hostel today, if one is set.
-  final String? responsible;
+  /// Null while it loads.
+  final HostelSubscription? subscription;
+  final VoidCallback onOpenActivation;
+
+  /// The member's turn on duty today, if one is set.
+  final DutyTurn? responsible;
   final VoidCallback onOpenCalculation;
   final VoidCallback onOpenExpenses;
   final VoidCallback onOpenMeals;
@@ -628,6 +641,9 @@ class _HostelOverviewState extends State<_HostelOverview> {
       children: [
         _SummaryCard(
           groupName: widget.groupName,
+          isAdmin: widget.isAdmin,
+          subscription: widget.subscription,
+          onOpenActivation: widget.onOpenActivation,
           summary: summary,
           hasError: hasError,
           onOpenCalculation: widget.onOpenCalculation,
@@ -642,11 +658,17 @@ class _HostelOverviewState extends State<_HostelOverview> {
 }
 
 /// The large card: the hostel, its meal rate, and the member's own
-/// expense and meals. Only the Details button and the two figures
-/// open anything; the card itself does not.
+/// expense and meals.
+///
+/// Until the hostel is activated it is locked: a lock sits in its top
+/// corner, and tapping the card shows the activation instead of the
+/// figures. Once active, the lock becomes a verified badge.
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.groupName,
+    required this.isAdmin,
+    required this.subscription,
+    required this.onOpenActivation,
     required this.summary,
     required this.hasError,
     required this.onOpenCalculation,
@@ -655,14 +677,76 @@ class _SummaryCard extends StatelessWidget {
   });
 
   final String groupName;
+  final bool isAdmin;
+  final HostelSubscription? subscription;
+  final VoidCallback onOpenActivation;
   final DashboardSummary? summary;
   final bool hasError;
+
+  bool get _isLocked =>
+      subscription != null && !subscription!.canEdit(DateTime.now());
+
+  /// The hostel's activation, with the way to activate for an admin.
+  void _showActivation(BuildContext context) {
+    final subscription = this.subscription;
+    if (subscription == null) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Hostel Activation',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 14),
+                SubscriptionStatusCard(
+                  subscription: subscription,
+                  hostelName: groupName,
+                ),
+                const SizedBox(height: 16),
+                if (isAdmin)
+                  FilledButton.icon(
+                    onPressed: subscription.accessDisabled
+                        ? null
+                        : () {
+                            Navigator.of(sheetContext).pop();
+                            onOpenActivation();
+                          },
+                    icon: const Icon(Icons.lock_open_rounded, size: 20),
+                    label: Text(
+                      subscription.isActive(DateTime.now())
+                          ? 'Extend'
+                          : 'Activate',
+                    ),
+                  )
+                else
+                  const Text(
+                    'Ask your admin to activate the hostel.',
+                    textAlign: TextAlign.center,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   final VoidCallback onOpenCalculation;
   final VoidCallback onOpenExpenses;
   final VoidCallback onOpenMeals;
 
   /// One figure in its own box. Tapping it opens the list behind it.
   Widget _figure(
+    BuildContext context,
     String label,
     String value,
     IconData icon,
@@ -677,7 +761,7 @@ class _SummaryCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
+          onTap: _isLocked ? () => _showActivation(context) : onTap,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
             child: Row(
@@ -736,8 +820,9 @@ class _SummaryCard extends StatelessWidget {
     final rate = summary == null
         ? '—'
         : '৳${summary.mealRate.toStringAsFixed(2)}';
+    final isLocked = _isLocked;
 
-    return Container(
+    final card = Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
@@ -762,16 +847,26 @@ class _SummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  groupName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        groupName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    if (subscription != null) ...[
+                      const SizedBox(width: 10),
+                      _StatusBadge(isLocked: isLocked),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -807,7 +902,9 @@ class _SummaryCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(22),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(22),
-                        onTap: onOpenCalculation,
+                        onTap: isLocked
+                            ? () => _showActivation(context)
+                            : onOpenCalculation,
                         child: const Padding(
                           padding: EdgeInsets.fromLTRB(14, 7, 8, 7),
                           child: Row(
@@ -849,14 +946,16 @@ class _SummaryCard extends StatelessWidget {
                 Row(
                   children: [
                     _figure(
-                      'My expense',
+                      context,
+                      'My Expense',
                       summary == null ? '—' : _money(summary.myExpense),
                       Icons.payments_outlined,
                       onOpenExpenses,
                     ),
                     const SizedBox(width: 10),
                     _figure(
-                      'My meals',
+                      context,
+                      'My Meals',
                       summary == null ? '—' : _count(summary.myMeals),
                       Icons.restaurant_outlined,
                       onOpenMeals,
@@ -867,6 +966,43 @@ class _SummaryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    if (!isLocked) return card;
+
+    // Locked: the whole card opens the activation.
+    return GestureDetector(onTap: () => _showActivation(context), child: card);
+  }
+}
+
+/// A lock while the hostel is not active, a verified badge once it is.
+/// Neither opens anything by itself.
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.isLocked});
+
+  final bool isLocked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isLocked
+            ? Colors.white.withValues(alpha: 0.14)
+            : AppTheme.accent.withValues(alpha: 0.18),
+        border: Border.all(
+          color: isLocked
+              ? Colors.white.withValues(alpha: 0.22)
+              : AppTheme.accent.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Icon(
+        isLocked ? Icons.lock_rounded : Icons.verified_rounded,
+        size: 18,
+        color: isLocked ? Colors.white : AppTheme.accent,
       ),
     );
   }
@@ -903,8 +1039,83 @@ class _TodayCard extends StatelessWidget {
   final DateTime now;
   final DashboardSummary? summary;
 
-  /// The member responsible for the hostel today, if one is set.
-  final String? onDuty;
+  /// The member's turn on duty today, if one is set.
+  final DutyTurn? onDuty;
+
+  /// Says what being on duty means, and for which days.
+  void _showDuty(BuildContext context) {
+    final turn = onDuty;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: const Icon(
+            Icons.assignment_ind_outlined,
+            color: AppTheme.accentDeep,
+            size: 32,
+          ),
+          title: const Text('On Duty'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'The duty manager looks after the hostel\'s daily meals '
+                'and shopping for their period.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: turn == null
+                    ? const Text(
+                        'Nobody is on duty today.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          Text(
+                            turn.memberName,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            dutyDatesText(turn),
+                            style: const TextStyle(
+                              color: AppTheme.primary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Okay'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   /// Lists who is having lunch (or dinner) today, and how many each.
   void _showWho(
@@ -989,7 +1200,7 @@ class _TodayCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
           child: Row(
             children: [
               Icon(icon, color: AppTheme.primary, size: 22),
@@ -1011,6 +1222,15 @@ class _TodayCard extends StatelessWidget {
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                   height: 1.1,
+                ),
+              ),
+              // Shows that the row opens the list of who is eating.
+              const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 22,
+                  color: AppTheme.textSecondary,
                 ),
               ),
             ],
@@ -1036,7 +1256,7 @@ class _TodayCard extends StatelessWidget {
                 children: [
                   const Expanded(
                     child: Text(
-                      'For today',
+                      'For Today',
                       style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 16,
@@ -1093,46 +1313,50 @@ class _TodayCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     flex: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceSoft,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.assignment_ind_outlined,
-                            color: AppTheme.accentDeep,
-                            size: 24,
+                    child: Material(
+                      color: AppTheme.surfaceSoft,
+                      borderRadius: BorderRadius.circular(16),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _showDuty(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'On duty',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.assignment_ind_outlined,
+                                color: AppTheme.accentDeep,
+                                size: 24,
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'On Duty',
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                onDuty?.memberName ?? '—',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            onDuty ?? '—',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1146,86 +1370,32 @@ class _TodayCard extends StatelessWidget {
   }
 }
 
-/// Shows whether the hostel is active, and lets an admin activate or
-/// extend it.
-class _SubscriptionBanner extends StatefulWidget {
-  const _SubscriptionBanner({
-    required this.groupId,
-    required this.groupName,
-    required this.isAdmin,
-    required this.child,
-  });
+/// Builds the hostel's content with its activation status, or, while
+/// HostelMate has suspended the hostel, says so instead.
+class _SubscriptionBanner extends StatelessWidget {
+  const _SubscriptionBanner({required this.stream, required this.builder});
 
-  final String groupId;
-  final String groupName;
-  final bool isAdmin;
+  final Stream<HostelSubscription> stream;
 
-  /// The hostel's content, shown below the status card.
-  final Widget child;
-
-  @override
-  State<_SubscriptionBanner> createState() => _SubscriptionBannerState();
-}
-
-class _SubscriptionBannerState extends State<_SubscriptionBanner> {
-  late final Stream<HostelSubscription> _stream;
-
-  @override
-  void initState() {
-    super.initState();
-    _stream = SubscriptionService.watch(widget.groupId);
-  }
-
-  void _openActivation() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => HostelActivationScreen(
-          groupId: widget.groupId,
-          groupName: widget.groupName,
-        ),
-      ),
-    );
-  }
+  /// The hostel's content. The status is null while it loads.
+  final Widget Function(HostelSubscription? subscription) builder;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<HostelSubscription>(
-      stream: _stream,
+      stream: stream,
       builder: (context, snapshot) {
-        final subscription = snapshot.data ?? const HostelSubscription.none();
-        final isLoading = !snapshot.hasData && !snapshot.hasError;
-        final isActive = subscription.isActive(DateTime.now());
-        final isSuspended = subscription.accessDisabled;
+        final subscription = snapshot.data;
 
-        final canEdit = subscription.canEdit(DateTime.now());
+        if (subscription != null && subscription.accessDisabled) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: SubscriptionStatusCard(subscription: subscription),
+          );
+        }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // While the hostel can be edited there is nothing to say
-            // here; its remaining days are shown in Hostel Details.
-            if (!isLoading && !canEdit) ...[
-              const SizedBox(height: 12),
-              SubscriptionStatusCard(
-                subscription: subscription,
-                action: widget.isAdmin && !isSuspended
-                    ? FilledButton(
-                        onPressed: _openActivation,
-                        child: Text(isActive ? 'Extend' : 'Activate'),
-                      )
-                    : null,
-              ),
-            ],
-            if (!isLoading && !isActive && !isSuspended && !widget.isAdmin)
-              const Padding(
-                padding: EdgeInsets.only(top: 6),
-                child: Text(
-                  'Ask your hostel admin to activate it.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            if (!isSuspended) widget.child,
-          ],
+        return builder(
+          snapshot.hasError ? const HostelSubscription.none() : subscription,
         );
       },
     );

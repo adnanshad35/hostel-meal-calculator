@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
             context,
             const _PageMessage(
               icon: Icons.cloud_off_outlined,
-              title: 'Unable to load account',
+              title: 'Unable to Load Account',
             ),
           );
         }
@@ -125,7 +125,7 @@ class HomeScreen extends StatelessWidget {
                 context,
                 const _PageMessage(
                   icon: Icons.apartment_outlined,
-                  title: 'Hostel not found',
+                  title: 'Hostel Not Found',
                 ),
               );
             }
@@ -227,12 +227,6 @@ class _NoHostelView extends StatelessWidget {
               Text(
                 'No Hostel Yet',
                 style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Create a hostel or join with a code.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
               SizedBox(
