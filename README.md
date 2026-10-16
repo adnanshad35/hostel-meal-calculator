@@ -56,23 +56,24 @@ Hostels often include people who will never install an app. An admin can add the
 ### Dashboard
 
 - The month's meal rate, with the member's own expense and meal count, each opening their own records
-- **For today**: how many lunches and dinners the hostel is having, who is eating each, and which member is on duty
+- The card is **locked** until the hostel is activated; tapping it shows the activation (and, for an admin, the way to activate). Once active, the lock becomes a verified badge
+- **For Today**: how many lunches and dinners the hostel is having (tap either to see who is eating), and which member is on duty (tap to see what that means and their dates)
 - One-tap **Add meal** and **Add expense**, shown only when the member is allowed to add them
 - Links to the whole hostel's meals and expenses, and to About Hostel
 
 ### Meals
 
 - Record lunch and dinner for any day of the current month, in steps of one (halves can be typed)
-- **Meal plans**: a member's usual lunch and dinner for a range of days, or until changed; days without an entry are counted from the plan
+- **Meal plans**: a member's usual lunch and dinner for a range of days, or until changed; days without an entry are counted from the plan. A period can be announced to the hostel
 - Admins can record or correct meals for any member, including members without the app
-- A month calendar shows every day's meals, for the hostel or for one member
+- A month calendar with a small card for each day from the 1st to today, for the hostel or for one member
 
 ### Expenses
 
 - Record an expense with a name, an optional description, an amount, and who paid
 - A built-in calculator for the amount, without opening the phone keyboard
 - Admins can add expenses for any member and delete entries
-- A month calendar shows every day's expenses, for the hostel or for one member
+- A month calendar with a small card for each day from the 1st to today, for the hostel or for one member
 
 ### Details (the monthly calculation)
 
@@ -86,20 +87,24 @@ Hostels often include people who will never install an app. An admin can add the
 
 - Create a hostel and receive a six-character invitation code; switch joining off and on
 - Multiple admins per hostel; the last admin cannot leave or be demoted
-- **Settings**: whether members can add meals, whether members can add expenses, special permission, members without the app, and a reset of the current month
-- **Duty roster**: which member looks after the hostel on which dates, with clash checks
-- A member list sorted by duty, with the subscription's remaining time
+- **Admin Settings**: whether members can add meals, add expenses, and edit what they entered (when off, a member enters once and cannot change it), special permission, members without the app, and a reset of the current month
+- **Activation** lives in About Hostel, with the time left
+- **Duty roster**: which member looks after the hostel on which dates, with clash checks; drag a member to swap periods with another
+- A member list sorted by duty, with each member's phone number; admins can delete a member without the app along with their records
 
 ### Profile
 
-- **Nickname**: one word of up to 12 letters, shown inside the hostel instead of the full name
+- An account needs a name (it cannot be changed later), an email, an 11-digit phone number starting with 01, and a password of at least 6 characters with an upper-case letter, a lower-case letter, a digit and a symbol
+- Three wrong passwords in a row stop sign-in on that device for 5 minutes
+- **Nickname**: one word of up to 12 letters, shown inside the hostel instead of the name
 - Password change by email
 - **App and Developer**: about the app, the website, the developer's contacts, and **Request a Feature**, which sends a message straight to the super admin
 
 ### Notifications
 
-- **Inside a hostel:** announcements written by admins (up to 50 words) and an alert whenever a member adds an expense
+- **Inside a hostel:** announcements written by admins (up to 50 words), an alert whenever a member adds an expense, and meal plan periods a member chose to announce
 - **App-wide:** notices from the super admin, shown as a pop-up and kept in a list
+- Anyone can remove a notice from their own list once it is a day old
 - An unread count appears on each bell icon
 
 Notifications are in-app. They appear while the app is open and the next time it is opened; they are not pushed to a closed phone.
@@ -163,12 +168,9 @@ Together they owe ৳500, which is exactly the shop due.
 
 A hostel is **active** for a number of days. When the period ends it becomes **read-only**: every record stays visible, but meals, expenses, and monthly settings cannot be added or changed until it is activated again.
 
-A hostel admin activates or extends the hostel in one of two ways:
+A hostel admin activates or extends the hostel from About Hostel, or by tapping the locked dashboard card, with a **voucher**: a code issued by the super admin. Each hostel can use a given voucher once. Extending an active hostel adds days to the end of its period.
 
-1. **Voucher.** Enter a code issued by the super admin. Each hostel can use a given voucher once. Extending an active hostel adds days to the end of its period.
-2. **bKash payment.** Send the payment, then submit the transaction ID, amount, and sender number. The super admin checks it and approves it with the number of days to add. A transaction ID can be submitted only once.
-
-Payments are verified manually on purpose: it needs no payment-gateway account and no server.
+**Paying with bKash** is coming in the next update. The super admin panel can already review reported payments.
 
 ## Architecture
 
@@ -371,7 +373,7 @@ firebase deploy --only firestore:rules
 
 - **No iPhone app.** iPhone users use the web version.
 - **In-app notifications only.** Nothing is delivered while the app is closed.
-- **Manual payment verification.** Each bKash payment is checked by hand.
+- **Vouchers only for now.** Paying with bKash in the app is planned for the next update.
 - **Internet required for changes.** Cached data can be viewed offline, but saves need a connection.
 - **Distributed outside the Play Store.** Users install from a link and Android asks them to allow it.
 - **English only.**

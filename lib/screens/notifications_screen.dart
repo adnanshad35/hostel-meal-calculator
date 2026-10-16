@@ -22,6 +22,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   late final Stream<List<AppNotification>> _stream;
+  late final Stream<Set<String>> _hidden = NotificationService.watchHidden();
 
   bool get _isGroup => widget.groupId != null;
 
@@ -111,6 +112,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Takes a notice off this user's own list. Offered once it is a
+  /// day old.
+  Future<void> _hide(AppNotification item) async {
+    try {
+      await NotificationService.hideForMe(item.id);
+    } catch (error) {
+      _showError(error, 'Unable to remove it.');
+    }
+  }
+
   Future<void> _delete(AppNotification item) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -164,87 +175,102 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               label: const Text('Announce'),
             )
           : null,
-      body: StreamBuilder<List<AppNotification>>(
-        stream: _stream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: StreamBuilder<Set<String>>(
+        stream: _hidden,
+        builder: (context, hidden) => StreamBuilder<List<AppNotification>>(
+          stream: _stream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (snapshot.hasError) {
-            return const Center(child: Text('Unable to load notifications.'));
-          }
+            if (snapshot.hasError) {
+              return const Center(child: Text('Unable to load notifications.'));
+            }
 
-          final items = snapshot.data ?? const <AppNotification>[];
+            final hiddenIds = hidden.data ?? const <String>{};
+            final items = [
+              for (final item in snapshot.data ?? const <AppNotification>[])
+                if (!hiddenIds.contains(item.id)) item,
+            ];
+            final now = DateTime.now();
 
-          if (items.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+            if (items.isEmpty) {
+              return Center(
                 child: Text(
-                  _isGroup
-                      ? 'No hostel notifications yet.'
-                      : 'No notices yet. Updates and important news '
-                            'about the app will appear here.',
+                  _isGroup ? 'No notifications yet.' : 'No notices yet.',
                   textAlign: TextAlign.center,
                 ),
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final item = items[index];
-
-              return Card(
-                key: ValueKey(item.id),
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  onLongPress: _canAnnounce ? () => _delete(item) : null,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: item.isAnnouncement
-                          ? const Color(0xFFFFF2DA)
-                          : AppTheme.surfaceSoft,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      item.isAnnouncement
-                          ? Icons.campaign_outlined
-                          : Icons.receipt_long_outlined,
-                      color: item.isAnnouncement
-                          ? AppTheme.warning
-                          : AppTheme.primary,
-                    ),
-                  ),
-                  title: Text(
-                    item.title.isEmpty ? 'Notification' : item.title,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      '${item.message}\n${_formatTime(item.createdAt)}',
-                    ),
-                  ),
-                ),
               );
-            },
-          );
-        },
+            }
+
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final canHide = NotificationService.canHide(item, now);
+                final icon = item.isAnnouncement
+                    ? Icons.campaign_outlined
+                    : item.type == 'mealPlan'
+                    ? Icons.event_busy_outlined
+                    : Icons.receipt_long_outlined;
+
+                return Card(
+                  key: ValueKey(item.id),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onLongPress: _canAnnounce ? () => _delete(item) : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceSoft,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: item.isAnnouncement
+                            ? AppTheme.accentDeep
+                            : AppTheme.primary,
+                      ),
+                    ),
+                    trailing: canHide
+                        ? IconButton(
+                            tooltip: 'Remove',
+                            onPressed: () => _hide(item),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: AppTheme.textSecondary,
+                            ),
+                          )
+                        : null,
+                    title: Text(
+                      item.title.isEmpty ? 'Notification' : item.title,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        '${item.message}\n${_formatTime(item.createdAt)}',
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -305,12 +331,6 @@ class _AnnouncementDialogState extends State<_AnnouncementDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                widget.isGroup
-                    ? 'Every member of this hostel will see it.'
-                    : 'Every user of the app will see this.',
-              ),
-              const SizedBox(height: 16),
               if (!widget.isGroup) ...[
                 TextFormField(
                   controller: _titleController,

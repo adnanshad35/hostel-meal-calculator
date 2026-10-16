@@ -1215,7 +1215,6 @@ class _DeleteHostelDialogState extends State<_DeleteHostelDialog> {
               decoration: InputDecoration(
                 labelText: 'Type the hostel name to confirm',
                 hintText: widget.hostel.name,
-                border: const OutlineInputBorder(),
               ),
             ),
           ],

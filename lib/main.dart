@@ -134,13 +134,14 @@ class WelcomeScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineLarge,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Text(
-                  'A clear and simple way to manage '
-                  'shared meals, expenses, and monthly balances.',
+                  'Meals, Expenses & Balances',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge
-                      ?.copyWith(color: AppTheme.textSecondary),
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 44),
                 FilledButton(
@@ -151,25 +152,6 @@ class WelcomeScreen extends StatelessWidget {
                 OutlinedButton(
                   onPressed: () => _openRegisterScreen(context),
                   child: const Text('Create New Account'),
-                ),
-                const SizedBox(height: 28),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.shield_outlined,
-                      size: 17,
-                      color: AppTheme.textSecondary,
-                    ),
-                    SizedBox(width: 7),
-                    Text(
-                      'Securely powered by Firebase',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),

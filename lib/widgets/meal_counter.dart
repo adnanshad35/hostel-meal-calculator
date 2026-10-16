@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../theme/app_theme.dart';
+
 import 'package:flutter/services.dart';
 
 /// A lunch or dinner quantity that can be changed with the − and +
@@ -113,7 +116,7 @@ class _MealCounterState extends State<MealCounter> {
 
     return Row(
       children: [
-        Icon(widget.icon, size: 24, color: const Color(0xFF2E7D32)),
+        Icon(widget.icon, size: 24, color: AppTheme.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(

@@ -101,11 +101,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Active · 25 days left'), findsOneWidget);
-    expect(find.text('Read-only'), findsNWidgets(2));
-    expect(
-      find.text('This hostel has not been activated yet.'),
-      findsOneWidget,
-    );
+    expect(find.text('Expired'), findsOneWidget);
+    expect(find.text('Not Activated'), findsOneWidget);
     expect(find.textContaining('Ended on'), findsOneWidget);
   });
 
@@ -244,7 +241,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Read-only'), findsOneWidget);
     expect(
-      find.textContaining('Editing has been switched off'),
+      find.textContaining('Editing is switched off'),
       findsOneWidget,
     );
     expect(find.text('Suspended'), findsOneWidget);
@@ -279,7 +276,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await _pump(tester, const MaintenanceScreen(message: 'Back at 9 PM.'));
-    expect(find.text('Under maintenance'), findsOneWidget);
+    expect(find.text('Under Maintenance'), findsOneWidget);
     expect(find.text('Back at 9 PM.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

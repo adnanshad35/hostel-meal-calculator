@@ -48,6 +48,10 @@ class ExpenseScreen extends StatelessWidget {
     if (!context.mounted) return;
     if (!await ensureMemberMayAdd(context, groupId, meals: false)) return;
     if (!context.mounted) return;
+    if (expense != null && !await ensureMemberMayEdit(context, groupId)) {
+      return;
+    }
+    if (!context.mounted) return;
 
     await showDialog<void>(
       context: context,
@@ -127,7 +131,7 @@ class ExpenseScreen extends StatelessWidget {
                       title: 'Total Expense',
                       value: '৳${totalExpense.toStringAsFixed(2)}',
                       subtitle: 'This month',
-                      color: const Color(0xFF2E7D32),
+                      color: AppTheme.primary,
                       onTap: () => _openTotalExpenses(context),
                     ),
                   ),
@@ -138,7 +142,7 @@ class ExpenseScreen extends StatelessWidget {
                       title: 'My Expense',
                       value: '৳${myExpense.toStringAsFixed(2)}',
                       subtitle: 'This month',
-                      color: const Color(0xFF2E7D32),
+                      color: AppTheme.primary,
                       onTap: () => _openMyExpenses(context),
                     ),
                   ),
@@ -154,20 +158,15 @@ class ExpenseScreen extends StatelessWidget {
                         Icon(
                           Icons.receipt_long_outlined,
                           size: 56,
-                          color: Color(0xFF2E7D32),
+                          color: AppTheme.primary,
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'No expenses this month',
+                          'No Expenses This Month',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Tap Add Expense to record the first expense.',
-                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -175,19 +174,17 @@ class ExpenseScreen extends StatelessWidget {
                 )
               else
                 Card(
-                  color: const Color(0xFFE8F5E9),
+                  color: AppTheme.surfaceSoft,
                   child: ListTile(
                     leading: const Icon(
                       Icons.info_outline,
-                      color: Color(0xFF2E7D32),
+                      color: AppTheme.primary,
                     ),
                     title: Text(
-                      '${expenses.length} expense'
-                      '${expenses.length == 1 ? '' : 's'} this month',
+                      '${expenses.length} '
+                      '${expenses.length == 1 ? 'Expense' : 'Expenses'} '
+                      'This Month',
                       style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: const Text(
-                      'Tap Total Expense to view the full list.',
                     ),
                   ),
                 ),
@@ -313,6 +310,11 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
       return;
     }
     if (!mounted) return;
+    if (expense != null &&
+        !await ensureMemberMayEdit(context, widget.groupId)) {
+      return;
+    }
+    if (!mounted) return;
 
     await showDialog<void>(
       context: context,
@@ -343,7 +345,7 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Delete'),
             ),
@@ -420,7 +422,7 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
 
     return MonthCalendarView(
       month: _now,
-      label: widget.onlyMine ? 'My expense' : 'Total expense',
+      label: widget.onlyMine ? 'My Expense' : 'Total Expense',
       total: '৳${_plainAmount(total)}',
       markedDays: byDay.keys.toSet(),
       linesOf: (day) {
@@ -459,7 +461,10 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
                 PopupMenuItem(value: 'edit', child: Text('Edit')),
                 PopupMenuItem(
                   value: 'delete',
-                  child: Text('Delete', style: TextStyle(color: Colors.red)),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: AppTheme.danger),
+                  ),
                 ),
               ],
             )
@@ -814,7 +819,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
         unawaited(
           NotificationService.notifyGroup(
             groupId: widget.groupId,
-            title: 'New expense',
+            title: 'New Expense',
             message:
                 '${_nameController.text.trim()} · ৳$amountText, '
                 'paid by $paidByName',
@@ -878,9 +883,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                       initialValue: _selectedMemberId,
                       isExpanded: true,
                       decoration: const InputDecoration(
-                        labelText: 'Paid by',
+                        labelText: 'Paid By',
                         prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
                       ),
                       items: _members.map((member) {
                         return DropdownMenuItem<String>(
@@ -919,7 +923,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.person_outline),
-                    title: const Text('Paid by'),
+                    title: const Text('Paid By'),
                     subtitle: Text(existingPaidByName),
                   ),
                   const SizedBox(height: 8),
@@ -928,9 +932,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
-                    labelText: 'Expense name',
+                    labelText: 'Expense Name',
                     prefixIcon: const Icon(Icons.description_outlined),
-                    border: const OutlineInputBorder(),
                     // Opens a box for what was bought, or closes it.
                     suffixIcon: IconButton(
                       tooltip: _showDescription
@@ -965,7 +968,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                       labelText: 'Description',
                       alignLabelWithHint: true,
                       counterText: '',
-                      border: OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -986,7 +988,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                       onPressed: _isSaving ? null : _openCalculator,
                       icon: const Icon(Icons.calculate_outlined),
                     ),
-                    border: const OutlineInputBorder(),
                   ),
                   validator: (value) {
                     final parsed = double.tryParse(value?.trim() ?? '');
@@ -1156,7 +1157,6 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
               decoration: const InputDecoration(
                 labelText: 'Expression',
                 hintText: 'Example: 10+45+5-60+1200',
-                border: OutlineInputBorder(),
                 prefixText: '৳ ',
               ),
             ),
@@ -1165,15 +1165,12 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: AppTheme.surfaceSoft,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.calculate_outlined,
-                    color: Color(0xFF2E7D32),
-                  ),
+                  const Icon(Icons.calculate_outlined, color: AppTheme.primary),
                   const SizedBox(width: 8),
                   const Text('Result: '),
                   Expanded(
@@ -1183,7 +1180,7 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
                           : '৳${_preview!.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF2E7D32),
+                        color: AppTheme.primary,
                       ),
                       textAlign: TextAlign.right,
                     ),
@@ -1305,8 +1302,8 @@ class _Key extends StatelessWidget {
         onPressed: disabled ? null : onTap,
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          foregroundColor: highlight ? const Color(0xFF2E7D32) : null,
-          side: highlight ? const BorderSide(color: Color(0xFF2E7D32)) : null,
+          foregroundColor: highlight ? AppTheme.primary : null,
+          side: highlight ? const BorderSide(color: AppTheme.primary) : null,
         ),
         child: Text(
           label,

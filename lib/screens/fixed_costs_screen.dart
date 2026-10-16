@@ -195,16 +195,10 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Text(widget.monthName, style: textTheme.titleLarge),
-            const SizedBox(height: 4),
-            const Text(
-              'These apply from this month on, until you change them.',
-            ),
             const SizedBox(height: 20),
 
             // ─── Rent ───
             Text('Rent', style: textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text('Enter what each member pays. Leave empty for none.'),
             const SizedBox(height: 12),
             if (widget.members.isEmpty)
               const Text('No members were found.')
@@ -228,12 +222,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
             const SizedBox(height: 12),
 
             // ─── Shared bills ───
-            Text('Shared bills', style: textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text(
-              'Divided equally among all members. Rows without an '
-              'amount are ignored.',
-            ),
+            Text('Shared Bills', style: textTheme.titleMedium),
             const SizedBox(height: 12),
             for (final row in _billRows) ...[
               Row(
@@ -292,7 +281,7 @@ class _FixedCostsScreenState extends State<FixedCostsScreen> {
               child: TextButton.icon(
                 onPressed: _isSaving ? null : _addBillRow,
                 icon: const Icon(Icons.add),
-                label: const Text('Add another bill'),
+                label: const Text('Add Another Bill'),
               ),
             ),
             const SizedBox(height: 24),

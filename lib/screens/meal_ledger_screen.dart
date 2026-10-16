@@ -206,33 +206,38 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       }
     });
 
+    CalendarLine totalOf(int day) {
+      double lunch = 0;
+      double dinner = 0;
+      for (final meal in (byDay[day] ?? const <String, _DayMeal>{}).values) {
+        if (!counts(day, meal)) continue;
+        lunch += meal.lunch;
+        dinner += meal.dinner;
+      }
+
+      return CalendarLine(
+        title: 'Total',
+        trailing: _meals(lunch, dinner),
+        isStrong: true,
+        // Leaves the room the members' menu takes, so the total lines
+        // up with their figures.
+        action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
+      );
+    }
+
     return MonthCalendarView(
       month: _now,
-      label: 'Total meals',
+      label: 'Total Meals',
       total: _quantity(monthTotal),
       markedDays: markedDays,
       emptyText: 'No members',
+      shortLinesOf: (day) => members.isEmpty ? const [] : [totalOf(day)],
       linesOf: (day) {
         final meals = byDay[day] ?? const <String, _DayMeal>{};
         if (members.isEmpty) return const [];
 
-        double lunch = 0;
-        double dinner = 0;
-        for (final meal in meals.values) {
-          if (!counts(day, meal)) continue;
-          lunch += meal.lunch;
-          dinner += meal.dinner;
-        }
-
         return [
-          CalendarLine(
-            title: 'Total',
-            trailing: _meals(lunch, dinner),
-            isStrong: true,
-            // Leaves the room the members' menu takes, so the total
-            // lines up with their figures.
-            action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
-          ),
+          totalOf(day),
           for (final member in members)
             CalendarLine(
               title: member.name,

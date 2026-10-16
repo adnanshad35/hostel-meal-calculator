@@ -52,7 +52,7 @@ class _MemberNameDialogState extends State<MemberNameDialog> {
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
-            labelText: 'Full name',
+            labelText: 'Name',
             prefixIcon: Icon(Icons.person_outline),
           ),
           validator: (value) {

@@ -7,6 +7,7 @@ class HostelSettings {
   const HostelSettings({
     this.membersCanAddMeals = true,
     this.membersCanAddExpenses = true,
+    this.membersCanEdit = true,
     this.fixedCostsEnabled = true,
     this.specialPermission = false,
   });
@@ -19,6 +20,7 @@ class HostelSettings {
     return HostelSettings(
       membersCanAddMeals: settings['membersCanAddMeals'] != false,
       membersCanAddExpenses: settings['membersCanAddExpenses'] != false,
+      membersCanEdit: settings['membersCanEdit'] != false,
       fixedCostsEnabled: settings['fixedCostsEnabled'] != false,
       specialPermission: settings['specialPermission'] == true,
     );
@@ -29,6 +31,10 @@ class HostelSettings {
 
   /// When off, only admins enter and change expenses.
   final bool membersCanAddExpenses;
+
+  /// When off, a member enters a meal or an expense once and cannot
+  /// change it afterwards. Admins always can.
+  final bool membersCanEdit;
 
   /// When off, the hostel settles meals only: rent and shared bills
   /// are left out of the monthly calculation.
@@ -42,6 +48,7 @@ class HostelSettings {
   HostelSettings copyWith({
     bool? membersCanAddMeals,
     bool? membersCanAddExpenses,
+    bool? membersCanEdit,
     bool? fixedCostsEnabled,
     bool? specialPermission,
   }) {
@@ -49,6 +56,7 @@ class HostelSettings {
       membersCanAddMeals: membersCanAddMeals ?? this.membersCanAddMeals,
       membersCanAddExpenses:
           membersCanAddExpenses ?? this.membersCanAddExpenses,
+      membersCanEdit: membersCanEdit ?? this.membersCanEdit,
       fixedCostsEnabled: fixedCostsEnabled ?? this.fixedCostsEnabled,
       specialPermission: specialPermission ?? this.specialPermission,
     );
@@ -58,6 +66,7 @@ class HostelSettings {
     return {
       'membersCanAddMeals': membersCanAddMeals,
       'membersCanAddExpenses': membersCanAddExpenses,
+      'membersCanEdit': membersCanEdit,
       'fixedCostsEnabled': fixedCostsEnabled,
       'specialPermission': specialPermission,
     };

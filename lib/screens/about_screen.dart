@@ -282,7 +282,6 @@ class _FeatureRequestDialogState extends State<_FeatureRequestDialog> {
           decoration: const InputDecoration(
             labelText: 'Description',
             alignLabelWithHint: true,
-            border: OutlineInputBorder(),
           ),
           onChanged: (_) => setState(() {}),
         ),

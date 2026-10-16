@@ -383,7 +383,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
 
     final minimum = await _showNumberDialog(
       title: 'Set Minimum Meal Number',
-      label: 'Minimum meals per member',
+      label: 'Minimum Meals per Member',
       hint: 'Example: 20',
       currentValue: currentMinimum,
     );
@@ -413,7 +413,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
 
     final due = await _showNumberDialog(
       title: 'Set Monthly Shop Due',
-      label: 'Shop due amount',
+      label: 'Shop Due Amount',
       hint: 'Example: 2000',
       prefixText: '৳ ',
       currentValue: currentDue,
@@ -1317,7 +1317,7 @@ class _FixedCostsDetails extends StatelessWidget {
                     '৳${_amountText(FixedCostsCalculator.totalBills(sharedBills))}',
               ),
               _SettlementLine(
-                label: 'Each member pays',
+                label: 'Each Member Pays',
                 value: '৳${_amountText(billShare)}',
                 isStrong: true,
               ),
@@ -1332,7 +1332,7 @@ class _FixedCostsDetails extends StatelessWidget {
                   value: '৳${_amountText(item.rent)}',
                 ),
               _SettlementLine(
-                label: 'Total rent',
+                label: 'Total Rent',
                 value: '৳${_amountText(totalRent)}',
                 isStrong: true,
               ),
@@ -1489,7 +1489,7 @@ class _RateHero extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _HeroFigure(
-                        label: 'Total meals',
+                        label: 'Total Meals',
                         value: _amountText(totalActualMeals),
                         note: hasChargedMeals
                             ? 'Charged ${_amountText(totalMealNumber)}'
@@ -1501,7 +1501,7 @@ class _RateHero extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _HeroFigure(
-                        label: 'Total cost',
+                        label: 'Total Cost',
                         value: '৳${_amountText(totalExpense)}',
                         icon: Icons.chevron_right,
                         onTap: onOpenExpenses,
@@ -1514,7 +1514,7 @@ class _RateHero extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _HeroFigure(
-                        label: 'Min meals',
+                        label: 'Min Meals',
                         value: minimumMeals > 0
                             ? _amountText(minimumMeals)
                             : '—',
@@ -1524,7 +1524,7 @@ class _RateHero extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _HeroFigure(
-                        label: 'Shop due',
+                        label: 'Shop Due',
                         value: shopDue > 0 ? '৳${_amountText(shopDue)}' : '—',
                         onTap: onEditShopDue,
                       ),
@@ -1668,8 +1668,8 @@ class _MemberBalancesCard extends StatelessWidget {
                   onSelected: (isTable) =>
                       isTable ? onCopyTable() : onCopyBalances(),
                   itemBuilder: (_) => const [
-                    PopupMenuItem(value: false, child: Text('Copy balances')),
-                    PopupMenuItem(value: true, child: Text('Copy full table')),
+                    PopupMenuItem(value: false, child: Text('Copy Balances')),
+                    PopupMenuItem(value: true, child: Text('Copy Full Table')),
                   ],
                 ),
               ],
@@ -1768,7 +1768,7 @@ class _MemberBalanceRow extends StatelessWidget {
                     ),
                     Expanded(
                       child: _MemberFigure(
-                        label: 'Meal cost',
+                        label: 'Meal Cost',
                         value: '৳${_amountText(member.mealExpense)}',
                       ),
                     ),

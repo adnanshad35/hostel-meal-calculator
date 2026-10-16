@@ -28,8 +28,9 @@ class CalendarLine {
 }
 
 /// A month of records as a calendar: one figure for the month on top,
-/// the days that have an entry picked out in colour, and the details
-/// of whichever day is tapped underneath.
+/// the days that have an entry picked out in colour, and underneath a
+/// small card for each day, from the 1st up to today. Tapping a day in
+/// the calendar brings its card into view.
 class MonthCalendarView extends StatefulWidget {
   const MonthCalendarView({
     super.key,
@@ -38,6 +39,7 @@ class MonthCalendarView extends StatefulWidget {
     required this.total,
     required this.markedDays,
     required this.linesOf,
+    this.shortLinesOf,
     this.emptyText = 'No entry',
   });
 
@@ -53,6 +55,11 @@ class MonthCalendarView extends StatefulWidget {
 
   /// The details of one day of the month.
   final List<CalendarLine> Function(int day) linesOf;
+
+  /// A shorter version of a day's details, such as just its total, for
+  /// the cards of the days not picked. Without it every card shows the
+  /// full details.
+  final List<CalendarLine> Function(int day)? shortLinesOf;
 
   /// Shown for a day with nothing to list.
   final String emptyText;
@@ -82,6 +89,9 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   late final DateTime _today = DateTime.now();
   late int _selectedDay;
 
+  /// One key per day card, to scroll to it.
+  final Map<int, GlobalKey> _dayKeys = {};
+
   bool get _isCurrentMonth =>
       _today.year == widget.month.year && _today.month == widget.month.month;
 
@@ -97,10 +107,35 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
         '${_dayNames[date.weekday - 1]}';
   }
 
+  void _select(int day) {
+    setState(() => _selectedDay = day);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _dayKeys[day]?.currentContext;
+      if (target != null && target.mounted) {
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.1,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final month = widget.month;
-    final lines = widget.linesOf(_selectedDay);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    // Past to present: the 1st up to today, or the whole of an earlier
+    // month. A later day appears too once it is picked.
+    final lastDay = _isCurrentMonth ? _today.day : daysInMonth;
+    final days = [
+      for (var day = 1; day <= lastDay; day++)
+        if (widget.linesOf(day).isNotEmpty) day,
+      if (_selectedDay > lastDay && widget.linesOf(_selectedDay).isNotEmpty)
+        _selectedDay,
+    ];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -168,32 +203,26 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
             child: _grid(),
           ),
         ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 10, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _dateText(DateTime(month.year, month.month, _selectedDay)),
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (lines.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(widget.emptyText),
-                  )
-                else
-                  for (final line in lines) _LineRow(line: line),
-              ],
+        const SizedBox(height: 14),
+        if (days.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(widget.emptyText, textAlign: TextAlign.center),
+          )
+        else
+          for (final day in days)
+            Padding(
+              key: _dayKeys.putIfAbsent(day, GlobalKey.new),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _DayCard(
+                date: _dateText(DateTime(month.year, month.month, day)),
+                lines: day == _selectedDay || widget.shortLinesOf == null
+                    ? widget.linesOf(day)
+                    : widget.shortLinesOf!(day),
+                isSelected: day == _selectedDay,
+                onTap: day == _selectedDay ? null : () => _select(day),
+              ),
             ),
-          ),
-        ),
       ],
     );
   }
@@ -265,7 +294,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
       child: Center(
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: () => setState(() => _selectedDay = day),
+          onTap: () => _select(day),
           child: Container(
             width: 38,
             height: 38,
@@ -294,6 +323,58 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   }
 }
 
+/// One day's details in a small card: the date, then its lines.
+class _DayCard extends StatelessWidget {
+  const _DayCard({
+    required this.date,
+    required this.lines,
+    required this.isSelected,
+    this.onTap,
+  });
+
+  final String date;
+  final List<CalendarLine> lines;
+  final bool isSelected;
+
+  /// Picks the day, for a card that shows only its short details.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      elevation: isSelected ? 3 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isSelected ? AppTheme.primary : const Color(0xFFE3E9E5),
+          width: isSelected ? 1.4 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 6, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                date,
+                style: TextStyle(
+                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              for (final line in lines) _LineRow(line: line),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LineRow extends StatelessWidget {
   const _LineRow({required this.line});
 
@@ -307,7 +388,7 @@ class _LineRow extends StatelessWidget {
       onTap: line.onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
             Expanded(

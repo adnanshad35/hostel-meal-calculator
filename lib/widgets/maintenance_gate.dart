@@ -77,7 +77,7 @@ class MaintenanceScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'Under maintenance',
+                  'Under Maintenance',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),

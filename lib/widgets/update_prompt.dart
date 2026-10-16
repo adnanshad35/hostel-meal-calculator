@@ -75,7 +75,7 @@ class UpdateDialog extends StatelessWidget {
       canPop: false,
       child: AlertDialog(
         icon: const Icon(Icons.system_update_rounded, size: 36),
-        title: const Text('Update required'),
+        title: const Text('Update Required'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

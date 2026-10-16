@@ -6,6 +6,7 @@ import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/meal_counter.dart';
 
@@ -66,15 +67,16 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return ownName.isEmpty ? 'Member' : ownName;
   }
 
-  Future<void> _save(List<MealPlanRule> rules, String message) async {
-    if (!await ensureHostelEditable(context, widget.groupId)) return;
-    if (!mounted) return;
+  /// Returns true once the plan is saved.
+  Future<bool> _save(List<MealPlanRule> rules, String message) async {
+    if (!await ensureHostelEditable(context, widget.groupId)) return false;
+    if (!mounted) return false;
     // A meal plan is a way of entering meals, so the same setting
     // decides whether a member may change one.
     if (!await ensureMemberMayAdd(context, widget.groupId, meals: true)) {
-      return;
+      return false;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);
@@ -88,6 +90,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       );
 
       messenger.showSnackBar(SnackBar(content: Text(message)));
+      return true;
     } on FirebaseException catch (error) {
       messenger.showSnackBar(
         SnackBar(
@@ -96,6 +99,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
         ),
       );
+      return false;
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -138,18 +142,31 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   }
 
   Future<void> _addPeriod(MemberMealPlan plan) async {
-    final rule = await showDialog<MealPlanRule>(
+    final result = await showDialog<({MealPlanRule rule, bool announce})>(
       context: context,
       builder: (_) => _PeriodDialog(earliestDate: _earliestDate),
     );
 
-    if (rule == null || !mounted) return;
+    if (result == null || !mounted) return;
 
-    await _save([...plan.rules, rule], 'Period saved.');
+    final rule = result.rule;
+    final name = _memberName;
+    final saved = await _save([...plan.rules, rule], 'Period saved.');
+
+    if (saved && result.announce) {
+      await NotificationService.notifyGroup(
+        groupId: widget.groupId,
+        type: 'mealPlan',
+        title: 'Meal Plan of $name',
+        message:
+            '${_periodText(rule)}: '
+            '${rule.lunch == 0 && rule.dinner == 0 ? 'Away' : '${_describeMeals(rule.lunch, rule.dinner)} each day'}',
+      );
+    }
   }
 
   /// Removes a period that has not started, or stops one that has.
-  Future<void> _removePeriod(MemberMealPlan plan, MealPlanRule rule) {
+  Future<bool> _removePeriod(MemberMealPlan plan, MealPlanRule rule) {
     final now = DateTime.now();
     final today = MealPlans.dateKey(now);
     final hasStarted = rule.fromDate.compareTo(today) < 0;
@@ -234,8 +251,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               0;
     }).toList()..sort((a, b) => a.fromDate.compareTo(b.fromDate));
 
-    final isOwnPlan = _memberId == _user.uid;
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
@@ -247,9 +262,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 : null,
             isExpanded: true,
             decoration: const InputDecoration(
-              labelText: 'Meal plan of',
+              labelText: 'Member',
               prefixIcon: Icon(Icons.person_outline),
-              border: OutlineInputBorder(),
             ),
             items: [
               for (final member in members)
@@ -267,14 +281,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        Text(
-          'On a day with no meal entry, the plan is counted instead. '
-          'An entry added for a day always replaces the plan for that '
-          'day.',
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: AppTheme.textSecondary),
-        ),
-        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
@@ -283,7 +289,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               children: [
                 const _CardTitle(
                   icon: Icons.event_repeat_outlined,
-                  text: 'Every day',
+                  text: 'Every Day',
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -296,14 +302,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  current == null
-                      ? 'A day without an entry counts as no meals.'
-                      : 'Counted since ${_dateLabel(current.fromDate)}, '
-                            'until ${isOwnPlan ? 'you change' : 'changed'} '
-                            'it.',
-                ),
+                if (current != null) ...[
+                  const SizedBox(height: 2),
+                  Text('Since ${_dateLabel(current.fromDate)}'),
+                ],
                 if (upcoming != null) ...[
                   const SizedBox(height: 6),
                   Text(
@@ -336,16 +338,13 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               children: [
                 const _CardTitle(
                   icon: Icons.luggage_outlined,
-                  text: 'Away or different days',
+                  text: 'Away or Different Days',
                 ),
                 const SizedBox(height: 6),
                 if (periods.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Nothing planned. Add a period for a trip, or for '
-                      'days with different meals.',
-                    ),
+                    child: Text('Nothing planned.'),
                   )
                 else
                   for (final period in periods)
@@ -383,6 +382,17 @@ String _describeMeals(double lunch, double dinner) {
 
   return '${MealCounter.format(lunch)} lunch · '
       '${MealCounter.format(dinner)} dinner';
+}
+
+/// A period's first and last meal, such as "16 Oct lunch → 18 Oct
+/// dinner".
+String _periodText(MealPlanRule rule) {
+  final end = rule.toDate ?? rule.fromDate;
+
+  return '${_dateLabel(rule.fromDate)} '
+      '${rule.startsAtDinner ? 'dinner' : 'lunch'} → '
+      '${_dateLabel(end)} '
+      '${rule.endsAfterLunch ? 'lunch' : 'dinner'}';
 }
 
 String _dateLabel(String dateKey) {
@@ -446,7 +456,6 @@ class _PeriodRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final end = rule.toDate ?? rule.fromDate;
     final ends = !hasStarted || canRemoveOutright;
 
     return Row(
@@ -458,10 +467,7 @@ class _PeriodRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${_dateLabel(rule.fromDate)} '
-                  '${rule.startsAtDinner ? 'dinner' : 'lunch'} → '
-                  '${_dateLabel(end)} '
-                  '${rule.endsAfterLunch ? 'lunch' : 'dinner'}',
+                  _periodText(rule),
                   style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -577,11 +583,6 @@ class _EverydayDialogState extends State<_EverydayDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Counted on every day without a meal entry. Set both to '
-              '0 to count nothing.',
-            ),
-            const SizedBox(height: 12),
             MealCounter(
               title: 'Lunch',
               icon: Icons.lunch_dining_outlined,
@@ -641,6 +642,7 @@ class _PeriodDialogState extends State<_PeriodDialog> {
   bool _endsAfterLunch = false;
   double _lunch = 0;
   double _dinner = 0;
+  bool _announce = false;
 
   @override
   void initState() {
@@ -678,18 +680,78 @@ class _PeriodDialogState extends State<_PeriodDialog> {
     if (picked != null && mounted) setState(() => _to = picked);
   }
 
-  Widget _mealChoice({
+  /// One end of the period: a calendar icon, the label and date, and
+  /// which meal of that day it starts or ends with.
+  Widget _end({
+    required String label,
+    required DateTime date,
+    required VoidCallback onPickDate,
     required bool isDinner,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool> onMealChanged,
   }) {
-    return SegmentedButton<bool>(
-      showSelectedIcon: false,
-      segments: const [
-        ButtonSegment(value: false, label: Text('Lunch')),
-        ButtonSegment(value: true, label: Text('Dinner')),
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: onPickDate,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_month_outlined,
+                    size: 22,
+                    color: AppTheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          _dateLabel(MealPlans.dateKey(date)),
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          segments: const [
+            ButtonSegment(value: false, label: Text('Lunch')),
+            ButtonSegment(value: true, label: Text('Dinner')),
+          ],
+          selected: {isDinner},
+          onSelectionChanged: (selection) => onMealChanged(selection.first),
+        ),
       ],
-      selected: {isDinner},
-      onSelectionChanged: (selection) => onChanged(selection.first),
     );
   }
 
@@ -700,25 +762,25 @@ class _PeriodDialogState extends State<_PeriodDialog> {
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _DateLine(label: 'From', date: _from, onChange: _changeFrom),
-            _mealChoice(
+            _end(
+              label: 'From',
+              date: _from,
+              onPickDate: _changeFrom,
               isDinner: _startsAtDinner,
-              onChanged: (value) => setState(() => _startsAtDinner = value),
+              onMealChanged: (value) => setState(() => _startsAtDinner = value),
             ),
-            const SizedBox(height: 8),
-            _DateLine(label: 'Until', date: _to, onChange: _changeTo),
-            _mealChoice(
+            const SizedBox(height: 4),
+            _end(
+              label: 'Until',
+              date: _to,
+              onPickDate: _changeTo,
               isDinner: !_endsAfterLunch,
-              onChanged: (value) => setState(() => _endsAfterLunch = !value),
+              onMealChanged: (value) =>
+                  setState(() => _endsAfterLunch = !value),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Meals to count on each of these days. Leave both at 0 '
-              'when you are away.',
-            ),
-            const SizedBox(height: 10),
             MealCounter(
               title: 'Lunch',
               icon: Icons.lunch_dining_outlined,
@@ -732,13 +794,29 @@ class _PeriodDialogState extends State<_PeriodDialog> {
               value: _dinner,
               onChanged: (value) => setState(() => _dinner = value),
             ),
-            if (_isEmpty) ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(
+                Icons.campaign_outlined,
+                color: AppTheme.primary,
+              ),
+              title: const Text(
+                'Set an Announcement',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              value: _announce,
+              onChanged: (value) => setState(() => _announce = value),
+            ),
+            if (_isEmpty)
               const Text(
                 'The period must end after it starts.',
                 style: TextStyle(color: AppTheme.danger),
               ),
-            ],
           ],
         ),
       ),
@@ -751,8 +829,8 @@ class _PeriodDialogState extends State<_PeriodDialog> {
           onPressed: _isEmpty
               ? null
               : () {
-                  Navigator.of(context).pop(
-                    MealPlanRule(
+                  Navigator.of(context).pop((
+                    rule: MealPlanRule(
                       lunch: _lunch,
                       dinner: _dinner,
                       fromDate: MealPlans.dateKey(_from),
@@ -760,7 +838,8 @@ class _PeriodDialogState extends State<_PeriodDialog> {
                       toDate: MealPlans.dateKey(_to),
                       endsAfterLunch: _endsAfterLunch,
                     ),
-                  );
+                    announce: _announce,
+                  ));
                 },
           child: const Text('Save'),
         ),

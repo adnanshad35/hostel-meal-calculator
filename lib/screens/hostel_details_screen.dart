@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../widgets/member_name_dialog.dart';
 import 'duty_roster_screen.dart';
 import 'group_settings_screen.dart';
+import 'hostel_activation_screen.dart';
 import 'meal_plan_screen.dart';
 
 class HostelDetailsScreen extends StatefulWidget {
@@ -189,6 +190,42 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
+  Future<void> _deleteShadowMember(GroupMember member) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Member?'),
+          content: Text(
+            'Delete ${member.name} with all their meals and expenses? '
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await _run(
+      () => GroupMemberService.deleteShadowMember(
+        groupId: widget.groupId,
+        member: member,
+      ),
+      successMessage: '${member.name} was deleted.',
+    );
+  }
+
   Future<void> _linkMember(
     GroupMember shadow,
     List<GroupMember> appUsers,
@@ -281,12 +318,12 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit name'),
+                title: const Text('Edit Name'),
                 onTap: () => Navigator.of(sheetContext).pop('rename'),
               ),
               ListTile(
                 leading: const Icon(Icons.link_rounded),
-                title: const Text('Link to app user'),
+                title: const Text('Link to App User'),
                 onTap: () => Navigator.of(sheetContext).pop('link'),
               ),
               ListTile(
@@ -299,6 +336,17 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   style: TextStyle(color: AppTheme.danger),
                 ),
                 onTap: () => Navigator.of(sheetContext).pop('deactivate'),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: AppTheme.danger,
+                ),
+                title: const Text(
+                  'Delete',
+                  style: TextStyle(color: AppTheme.danger),
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('delete'),
               ),
               const SizedBox(height: 8),
             ],
@@ -316,6 +364,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         await _linkMember(member, appUsers);
       case 'deactivate':
         await _deactivateMember(member);
+      case 'delete':
+        await _deleteShadowMember(member);
     }
   }
 
@@ -413,13 +463,13 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               if (isMemberAdmin)
                 ListTile(
                   leading: const Icon(Icons.person_outline),
-                  title: const Text('Change to member'),
+                  title: const Text('Change to Member'),
                   onTap: () => Navigator.of(sheetContext).pop('demote'),
                 )
               else
                 ListTile(
                   leading: const Icon(Icons.admin_panel_settings_outlined),
-                  title: const Text('Make administrator'),
+                  title: const Text('Make Administrator'),
                   onTap: () => Navigator.of(sheetContext).pop('promote'),
                 ),
               if (!isCurrentUser)
@@ -429,7 +479,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                     color: AppTheme.danger,
                   ),
                   title: const Text(
-                    'Remove from hostel',
+                    'Remove from Hostel',
                     style: TextStyle(color: AppTheme.danger),
                   ),
                   onTap: () => Navigator.of(sheetContext).pop('remove'),
@@ -507,6 +557,17 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           groupName: widget.groupName,
           isAdmin: widget.isAdmin,
           membersOnly: true,
+        ),
+      ),
+    );
+  }
+
+  void _openActivation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HostelActivationScreen(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
         ),
       ),
     );
@@ -717,6 +778,41 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   onCopyCode: _copyInviteCode,
                 ),
                 const SizedBox(height: 10),
+                // How long the hostel is active for; an admin also gets
+                // the way to activate or extend it.
+                StreamBuilder<HostelSubscription>(
+                  stream: _subscriptionStream,
+                  builder: (context, snapshot) {
+                    final subscription =
+                        snapshot.data ?? const HostelSubscription.none();
+                    final isLoading = !snapshot.hasData && !snapshot.hasError;
+
+                    return SubscriptionStatusCard(
+                      subscription: subscription,
+                      isLoading: isLoading,
+                      action:
+                          widget.isAdmin &&
+                              !isLoading &&
+                              !subscription.accessDisabled
+                          ? FilledButton(
+                              onPressed: _isBusy ? null : _openActivation,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 40),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                              ),
+                              child: Text(
+                                subscription.isActive(DateTime.now())
+                                    ? 'Extend'
+                                    : 'Activate',
+                              ),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
                 Card(
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
@@ -768,7 +864,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           Icons.assignment_ind_outlined,
                           size: 19,
                         ),
-                        label: const Text('Duty settings'),
+                        label: const Text('Duty Settings'),
                       ),
                   ],
                 ),
@@ -807,11 +903,26 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         leading: _MemberAvatar(member: member),
                         title: Text(member.name),
                         subtitle: const Text('Deactivated'),
-                        trailing: TextButton(
-                          onPressed: _isBusy
-                              ? null
-                              : () => _reactivateMember(member),
-                          child: const Text('Reactivate'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextButton(
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _reactivateMember(member),
+                              child: const Text('Reactivate'),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete',
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _deleteShadowMember(member),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: AppTheme.danger,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -842,42 +953,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    // Said only when it explains why leaving became
-                    // deleting.
-                    subtitle: _isAloneAsAdmin
-                        ? const Text('You are the only member with an account.')
-                        : null,
                   ),
                 ),
-                // Admins have this in their settings, with the button
-                // to extend. A member only needs to know how long is
-                // left.
-                if (!widget.isAdmin)
-                  StreamBuilder<HostelSubscription>(
-                    stream: _subscriptionStream,
-                    builder: (context, snapshot) {
-                      final subscription = snapshot.data;
-                      if (subscription == null) return const SizedBox.shrink();
-
-                      final left = subscription.timeLeftText(DateTime.now());
-
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 18),
-                        child: Text(
-                          subscription.accessDisabled
-                              ? 'This hostel is suspended'
-                              : left.isEmpty
-                              ? 'The subscription has ended'
-                              : '$left to extend the subscription',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
               ],
             ],
           );
@@ -955,7 +1032,7 @@ class _HostelCard extends StatelessWidget {
                         ),
                       ),
                       icon: const Icon(Icons.settings, size: 18),
-                      label: const Text('Admin settings'),
+                      label: const Text('Admin Settings'),
                     ),
                   )
                 else
@@ -997,7 +1074,7 @@ class _HostelCard extends StatelessWidget {
                       color: AppTheme.textSecondary,
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(child: Text('Invitation code')),
+                    const Expanded(child: Text('Invitation Code')),
                     Text(
                       inviteCode,
                       style: const TextStyle(
@@ -1067,15 +1144,29 @@ class _MemberCard extends StatelessWidget {
               _MemberAvatar(member: member),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  isCurrentUser ? '${member.name} (You)' : member.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isCurrentUser ? '${member.name} (You)' : member.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (member.phone.isNotEmpty)
+                      Text(
+                        member.phone,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               if (duty != null) ...[

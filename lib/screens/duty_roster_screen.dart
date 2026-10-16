@@ -122,6 +122,77 @@ class _DutyRosterScreenState extends State<DutyRosterScreen> {
     );
   }
 
+  /// Moves the member of one running or coming turn to another
+  /// place. The days stay where they are; the members trade places, so
+  /// someone with an emergency can swap their period with another.
+  Future<void> _reorder(
+    DutyRoster roster,
+    List<DutyTurn> movable,
+    int oldIndex,
+    int newIndex,
+  ) {
+    if (newIndex == oldIndex) return Future.value();
+
+    final members = [
+      for (final turn in movable) (id: turn.memberId, name: turn.memberName),
+    ];
+    final moved = members.removeAt(oldIndex);
+    members.insert(newIndex, moved);
+
+    final reordered = [
+      for (var index = 0; index < movable.length; index++)
+        DutyTurn(
+          memberId: members[index].id,
+          memberName: members[index].name,
+          fromDate: movable[index].fromDate,
+          toDate: movable[index].toDate,
+        ),
+    ];
+
+    return _save([
+      for (final turn in roster.turns)
+        if (!movable.any((other) => identical(other, turn))) turn,
+      ...reordered,
+    ], 'Duty order updated.');
+  }
+
+  Widget _turnCard(
+    DutyRoster roster,
+    DutyTurn turn, {
+    required bool isToday,
+    required bool isPast,
+    Widget? handle,
+  }) {
+    return Card(
+      // The turn running today stands out.
+      color: isToday ? AppTheme.surfaceSoft : null,
+      child: ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(18, 4, 6, 4),
+        title: Text(
+          turn.memberName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: isPast ? AppTheme.textSecondary : AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(dutyDatesText(turn)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Remove',
+              onPressed: _isSaving ? null : () => _remove(roster, turn),
+              icon: const Icon(Icons.delete_outline),
+            ),
+            ?handle,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildList(DutyRoster roster) {
     final now = DateTime.now();
     final today = MealPlans.dateKey(now);
@@ -132,32 +203,58 @@ class _DutyRosterScreenState extends State<DutyRosterScreen> {
       return const Center(child: Text('Nobody is set yet.'));
     }
 
-    return ListView(
+    final past = [
+      for (final turn in turns)
+        if (turn.toDate.compareTo(today) < 0) turn,
+    ];
+    final movable = [
+      for (final turn in turns)
+        if (turn.toDate.compareTo(today) >= 0) turn,
+    ];
+
+    return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      children: [
-        for (final turn in turns)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Card(
-              // The turn running today stands out.
-              color: turn.covers(today) ? AppTheme.surfaceSoft : null,
-              child: ListTile(
-                title: Text(
-                  turn.memberName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(dutyDatesText(turn)),
-                trailing: IconButton(
-                  tooltip: 'Remove',
-                  onPressed: _isSaving ? null : () => _remove(roster, turn),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ),
+      buildDefaultDragHandles: false,
+      header: Column(
+        children: [
+          for (final turn in past)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _turnCard(roster, turn, isToday: false, isPast: true),
             ),
+        ],
+      ),
+      itemCount: movable.length,
+      onReorderItem: (oldIndex, newIndex) {
+        if (_isSaving) return;
+        _reorder(roster, movable, oldIndex, newIndex);
+      },
+      itemBuilder: (context, index) {
+        final turn = movable[index];
+
+        return Padding(
+          key: ValueKey('${turn.memberId}_${turn.fromDate}'),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _turnCard(
+            roster,
+            turn,
+            isToday: turn.covers(today),
+            isPast: false,
+            handle: movable.length < 2
+                ? null
+                : ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.fromLTRB(4, 8, 8, 8),
+                      child: Icon(
+                        Icons.drag_indicator_rounded,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
           ),
-      ],
+        );
+      },
     );
   }
 }
@@ -302,7 +399,6 @@ class _TurnDialogState extends State<_TurnDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Member',
                   prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
                 ),
                 items: [
                   for (final member in members)

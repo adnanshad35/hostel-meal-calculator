@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/sign_in_limiter.dart';
 import '../theme/app_theme.dart';
 import 'forgot_password_screen.dart';
 
@@ -21,15 +24,54 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _hidePassword = true;
 
+  /// When sign-in opens again after too many wrong passwords.
+  DateTime? _lockedUntil;
+  Timer? _lockTimer;
+
+  bool get _isLocked => _lockedUntil != null;
+
+  @override
+  void initState() {
+    super.initState();
+    SignInLimiter.lockedUntil().then(_lock);
+  }
+
+  /// Stops sign-in until [until], counting down on the button.
+  void _lock(DateTime? until) {
+    if (!mounted) return;
+
+    _lockTimer?.cancel();
+    setState(() => _lockedUntil = until);
+    if (until == null) return;
+
+    _lockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (DateTime.now().isAfter(until)) {
+        timer.cancel();
+        setState(() => _lockedUntil = null);
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
+  String get _lockText {
+    final left = _lockedUntil!.difference(DateTime.now());
+    final minutes = left.inMinutes;
+    final seconds = (left.inSeconds % 60).toString().padLeft(2, '0');
+    return 'Try Again in $minutes:$seconds';
+  }
+
   @override
   void dispose() {
+    _lockTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isLocked || !_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     try {
@@ -37,13 +79,30 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      await SignInLimiter.reset();
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       String message = 'Unable to sign in. Please try again.';
-      if (error.code == 'invalid-credential') {
-        message = 'Incorrect email address or password.';
+      if (error.code == 'invalid-credential' ||
+          error.code == 'wrong-password' ||
+          error.code == 'user-not-found') {
+        final until = await SignInLimiter.recordFailure();
+        if (!mounted) return;
+
+        if (until != null) {
+          _lock(until);
+          message =
+              'Too many wrong attempts. Try again in '
+              '${SignInLimiter.lockDuration.inMinutes} minutes.';
+        } else {
+          final left = await SignInLimiter.attemptsLeft();
+          if (!mounted) return;
+          message =
+              'Incorrect email or password. $left '
+              '${left == 1 ? 'attempt' : 'attempts'} left.';
+        }
       } else if (error.code == 'invalid-email') {
         message = 'Please enter a valid email address.';
       } else if (error.code == 'too-many-requests') {
@@ -103,14 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sign in to continue to HostelMate.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge
-                          ?.copyWith(color: AppTheme.textSecondary),
-                    ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(20),
@@ -123,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.email],
                               decoration: const InputDecoration(
-                                labelText: 'Email address',
+                                labelText: 'Email Address',
                                 prefixIcon: Icon(Icons.email_outlined),
                               ),
                               validator: (value) {
@@ -182,7 +234,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 4),
                             FilledButton(
-                              onPressed: _isLoading ? null : _signIn,
+                              onPressed: _isLoading || _isLocked
+                                  ? null
+                                  : _signIn,
                               child: _isLoading
                                   ? const SizedBox(
                                       width: 22,
@@ -192,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Text('Sign In'),
+                                  : Text(_isLocked ? _lockText : 'Sign In'),
                             ),
                           ],
                         ),

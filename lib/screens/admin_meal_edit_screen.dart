@@ -55,7 +55,7 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
           context: context,
           builder: (context) {
             return AlertDialog(
-              title: const Text('Confirm large quantity'),
+              title: const Text('Confirm Large Quantity'),
               content: Text(
                 'You entered ${_displayQuantity(_lunch)} lunch and '
                 '${_displayQuantity(_dinner)} dinner meals for '
@@ -162,7 +162,7 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(displayedDate),
-                trailing: const Chip(label: Text('Admin edit')),
+                trailing: const Chip(label: Text('Admin Edit')),
               ),
             ),
             const SizedBox(height: 16),

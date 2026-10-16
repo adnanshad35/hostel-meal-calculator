@@ -23,8 +23,8 @@ String formatSubscriptionDate(DateTime date) {
   return '${date.day} ${months[date.month - 1]} ${date.year}';
 }
 
-/// Where a hostel admin activates or extends the hostel: with a
-/// voucher, or by reporting a bKash payment for review.
+/// Where a hostel admin activates or extends the hostel with a
+/// voucher. Paying with bKash is on its way.
 class HostelActivationScreen extends StatefulWidget {
   const HostelActivationScreen({
     super.key,
@@ -41,32 +41,15 @@ class HostelActivationScreen extends StatefulWidget {
 
 class _HostelActivationScreenState extends State<HostelActivationScreen> {
   final _voucherController = TextEditingController();
-  final _paymentFormKey = GlobalKey<FormState>();
-  final _trxController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _senderController = TextEditingController();
 
-  late final Stream<HostelSubscription> _subscription;
-  late final Stream<PaymentInfo> _paymentInfo;
-  late final Stream<List<PaymentRequest>> _payments;
+  late final Stream<HostelSubscription> _subscription =
+      SubscriptionService.watch(widget.groupId);
 
   bool _isRedeeming = false;
-  bool _isSubmitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscription = SubscriptionService.watch(widget.groupId);
-    _paymentInfo = SubscriptionService.watchPaymentInfo();
-    _payments = SubscriptionService.watchGroupPayments(widget.groupId);
-  }
 
   @override
   void dispose() {
     _voucherController.dispose();
-    _trxController.dispose();
-    _amountController.dispose();
-    _senderController.dispose();
     super.dispose();
   }
 
@@ -104,40 +87,8 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
     }
   }
 
-  Future<void> _submitPayment() async {
-    if (!_paymentFormKey.currentState!.validate()) return;
-
-    FocusScope.of(context).unfocus();
-    setState(() => _isSubmitting = true);
-
-    try {
-      await SubscriptionService.submitPayment(
-        groupId: widget.groupId,
-        groupName: widget.groupName,
-        trxId: _trxController.text,
-        amount: double.parse(_amountController.text.trim()),
-        senderNumber: _senderController.text,
-      );
-
-      _trxController.clear();
-      _amountController.clear();
-      _senderController.clear();
-      _showMessage(
-        'Payment submitted. The hostel is activated once it is checked.',
-      );
-    } on SubscriptionException catch (error) {
-      _showMessage(error.message);
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Activate Hostel')),
       body: ListView(
@@ -153,225 +104,132 @@ class _HostelActivationScreenState extends State<HostelActivationScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          // ─── Voucher ───
-          Text('Voucher', style: textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text('Have a voucher code? Enter it to add days.'),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _voucherController,
-                  enabled: !_isRedeeming,
-                  textCapitalization: TextCapitalization.characters,
-                  textInputAction: TextInputAction.done,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                    LengthLimitingTextInputFormatter(20),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Voucher code',
-                    prefixIcon: Icon(Icons.confirmation_number_outlined),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _OptionTitle(
+                    icon: Icons.confirmation_number_outlined,
+                    title: 'Voucher',
                   ),
-                  onSubmitted: (_) => _redeemVoucher(),
-                ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton(
-                onPressed: _isRedeeming ? null : _redeemVoucher,
-                child: _isRedeeming
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Apply'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          // ─── bKash payment ───
-          Text('Pay with bKash', style: textTheme.titleMedium),
-          const SizedBox(height: 8),
-          StreamBuilder<PaymentInfo>(
-            stream: _paymentInfo,
-            builder: (context, snapshot) {
-              final info = snapshot.data ?? const PaymentInfo();
-
-              if (info.isEmpty) {
-                return const Text(
-                  'Payment details have not been published yet. Use a '
-                  'voucher for now.',
-                );
-              }
-
-              return Card(
-                color: AppTheme.surfaceSoft,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (info.bkashNumber.isNotEmpty)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Send money to',
-                                    style: textTheme.bodySmall,
-                                  ),
-                                  Text(
-                                    info.bkashNumber,
-                                    style: textTheme.titleLarge,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Copy number',
-                              onPressed: () async {
-                                await Clipboard.setData(
-                                  ClipboardData(text: info.bkashNumber),
-                                );
-                                _showMessage('Number copied.');
-                              },
-                              icon: const Icon(Icons.copy_outlined),
-                            ),
-                          ],
-                        ),
-                      if (info.bkashNumber.isNotEmpty &&
-                          info.instructions.isNotEmpty)
-                        const SizedBox(height: 10),
-                      if (info.instructions.isNotEmpty) Text(info.instructions),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _voucherController,
+                    enabled: !_isRedeeming,
+                    textCapitalization: TextCapitalization.characters,
+                    textInputAction: TextInputAction.done,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                      LengthLimitingTextInputFormatter(20),
                     ],
+                    decoration: const InputDecoration(
+                      labelText: 'Voucher Code',
+                      prefixIcon: Icon(Icons.key_outlined),
+                    ),
+                    onSubmitted: (_) => _redeemVoucher(),
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'After paying, enter the details below. The hostel is '
-            'activated once the payment has been checked.',
-          ),
-          const SizedBox(height: 12),
-          Form(
-            key: _paymentFormKey,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _trxController,
-                  enabled: !_isSubmitting,
-                  textCapitalization: TextCapitalization.characters,
-                  textInputAction: TextInputAction.next,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                    LengthLimitingTextInputFormatter(20),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Transaction ID',
-                    hintText: 'Example: 9HK3ABC1XY',
-                    prefixIcon: Icon(Icons.receipt_long_outlined),
-                  ),
-                  validator: (value) {
-                    final id = SubscriptionService.normalizeCode(value ?? '');
-                    if (!SubscriptionService.isValidCode(id)) {
-                      return 'Enter the ID exactly as bKash shows it.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _amountController,
-                  enabled: !_isSubmitting,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount paid',
-                    prefixText: '৳ ',
-                    prefixIcon: Icon(Icons.payments_outlined),
-                  ),
-                  validator: (value) {
-                    final amount = double.tryParse(value?.trim() ?? '');
-                    if (amount == null || amount <= 0) {
-                      return 'Enter the amount you paid.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _senderController,
-                  enabled: !_isSubmitting,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    labelText: 'bKash number you paid from',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                  validator: (value) {
-                    final digits = (value ?? '').replaceAll(
-                      RegExp(r'[^0-9]'),
-                      '',
-                    );
-                    if (digits.length < 10) {
-                      return 'Enter the number you paid from.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _isSubmitting ? null : _submitPayment,
-                    child: _isSubmitting
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _isRedeeming ? null : _redeemVoucher,
+                    child: _isRedeeming
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
-                        : const Text('Submit Payment'),
+                        : const Text('Apply Voucher'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-
-          // ─── This hostel's reported payments ───
-          StreamBuilder<List<PaymentRequest>>(
-            stream: _payments,
-            builder: (context, snapshot) {
-              final payments = snapshot.data ?? const <PaymentRequest>[];
-              if (payments.isEmpty) return const SizedBox.shrink();
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          // Not ready yet: shown so admins know it is on the way.
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+              child: Row(
                 children: [
-                  const SizedBox(height: 28),
-                  Text('Your payments', style: textTheme.titleMedium),
-                  const SizedBox(height: 10),
-                  for (final payment in payments) ...[
-                    PaymentCard(payment: payment),
-                    const SizedBox(height: 10),
-                  ],
+                  const Expanded(
+                    child: _OptionTitle(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Pay with bKash',
+                      isMuted: true,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceSoft,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Next Update',
+                      style: TextStyle(
+                        color: AppTheme.accentDeep,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ],
-              );
-            },
+              ),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// An icon in a soft square and the name of a way to activate.
+class _OptionTitle extends StatelessWidget {
+  const _OptionTitle({
+    required this.icon,
+    required this.title,
+    this.isMuted = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool isMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceSoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            size: 21,
+            color: isMuted ? AppTheme.textSecondary : AppTheme.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: TextStyle(
+            color: isMuted ? AppTheme.textSecondary : AppTheme.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -403,18 +261,14 @@ class SubscriptionStatusCard extends StatelessWidget {
     final String subtitle;
 
     if (isLoading) {
-      title = 'Checking status…';
+      title = 'Checking…';
       subtitle = hostelName ?? '';
     } else if (subscription.accessDisabled) {
       title = 'Suspended';
-      subtitle =
-          'This hostel has been suspended by HostelMate. '
-          'Please contact support.';
+      subtitle = 'Contact HostelMate support.';
     } else if (subscription.editingDisabled) {
       title = 'Read-only';
-      subtitle =
-          'Editing has been switched off for this hostel by '
-          'HostelMate. Records can be viewed but not changed.';
+      subtitle = 'Editing is switched off by HostelMate.';
     } else if (isActive) {
       title = until == null
           ? 'Active'
@@ -423,11 +277,10 @@ class SubscriptionStatusCard extends StatelessWidget {
           ? 'Activating…'
           : 'Until ${formatSubscriptionDate(until)}';
     } else {
-      title = 'Read-only';
+      title = until == null ? 'Not Activated' : 'Expired';
       subtitle = until == null
-          ? 'This hostel has not been activated yet.'
-          : 'Ended on ${formatSubscriptionDate(until)}. Records can '
-                'be viewed but not changed.';
+          ? ''
+          : 'Ended on ${formatSubscriptionDate(until)}';
     }
 
     final canEdit = subscription.canEdit(now);

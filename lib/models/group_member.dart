@@ -13,6 +13,7 @@ class GroupMember {
     this.active = true,
     this.addedAt,
     this.linkedTo,
+    this.phone = '',
   });
 
   factory GroupMember.fromDocument(
@@ -29,6 +30,7 @@ class GroupMember {
       active: data['active'] != false,
       addedAt: (data['addedAt'] as Timestamp?)?.toDate(),
       linkedTo: data['linkedTo'] as String?,
+      phone: (data['phone'] as String? ?? '').trim(),
     );
   }
 
@@ -45,6 +47,7 @@ class GroupMember {
       isAppUser: true,
       userId: document.id,
       addedAt: (data['joinedAt'] as Timestamp?)?.toDate(),
+      phone: (data['phoneNumber'] as String? ?? '').trim(),
     );
   }
 
@@ -57,6 +60,9 @@ class GroupMember {
 
   /// Uid of the app user this shadow member was merged into.
   final String? linkedTo;
+
+  /// The phone number on their account; empty when there is none.
+  final String phone;
 
   String get initials {
     final words = name
