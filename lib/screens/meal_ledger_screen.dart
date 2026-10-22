@@ -5,6 +5,7 @@ import '../models/group_member.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_records.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_calendar.dart';
 import 'admin_meal_edit_screen.dart';
@@ -48,10 +49,15 @@ class MealLedgerScreen extends StatefulWidget {
 }
 
 class _MealLedgerScreenState extends State<MealLedgerScreen> {
-  late final DateTime _now = DateTime.now();
+  /// The month on screen: this month, or an earlier one.
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+
+  /// Admins correct meals in the current month only.
+  bool get _canEdit => widget.isAdmin && isCurrentMonth(_month);
 
   @override
   void initState() {
@@ -59,22 +65,15 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
 
     _membersStream = GroupMemberService.watch(widget.groupId);
     _plansStream = MealPlanService.watchAll(widget.groupId);
-    // This month only.
-    _mealsStream = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('meals')
-        .where(
-          'dateKey',
-          isGreaterThanOrEqualTo: MealPlans.dateKey(
-            DateTime(_now.year, _now.month),
-          ),
-        )
-        .where(
-          'dateKey',
-          isLessThan: MealPlans.dateKey(DateTime(_now.year, _now.month + 1)),
-        )
-        .snapshots();
+    // One month at a time.
+    _mealsStream = MonthRecords.meals(widget.groupId, _month).snapshots();
+  }
+
+  void _showMonth(DateTime month) {
+    setState(() {
+      _month = month;
+      _mealsStream = MonthRecords.meals(widget.groupId, month).snapshots();
+    });
   }
 
   /// The space the three-dot mark takes at the end of a line.
@@ -213,7 +212,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
   }
 
   void _openEditor(GroupMember member, int day, _DayMeal? meal) {
-    final date = DateTime(_now.year, _now.month, day);
+    final date = DateTime(_month.year, _month.month, day);
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -273,7 +272,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     List<MemberMealPlan> plans,
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
-    final daysInMonth = DateTime(_now.year, _now.month + 1, 0).day;
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final rulesOf = {for (final plan in plans) plan.memberId: plan.rules};
 
     // day → member → what they have that day.
@@ -295,7 +294,9 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     // A member with no entry gets what their meal plan says, for the
     // days it covers.
     for (var day = 1; day <= daysInMonth; day++) {
-      final dateKey = MealPlans.dateKey(DateTime(_now.year, _now.month, day));
+      final dateKey = MealPlans.dateKey(
+        DateTime(_month.year, _month.month, day),
+      );
 
       for (final member in members) {
         if (byDay[day]?.containsKey(member.id) ?? false) continue;
@@ -315,8 +316,12 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     }
 
     // Up to today everything counts; a later day counts only what was
-    // already saved, since a plan there is still only a plan.
-    bool counts(int day, _DayMeal meal) => !meal.isPlan || day <= _now.day;
+    // already saved, since a plan there is still only a plan. Every day
+    // of an earlier month has passed.
+    final today = DateTime.now();
+    bool counts(int day, _DayMeal meal) =>
+        !meal.isPlan ||
+        !DateTime(_month.year, _month.month, day).isAfter(today);
 
     double monthTotal = 0;
     final markedDays = <int>{};
@@ -351,7 +356,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
         isStrong: true,
         // Leaves the room the members' menu takes, so the total lines
         // up with their figures.
-        action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
+        action: _canEdit ? const SizedBox(width: _menuWidth) : null,
       );
     }
 
@@ -362,12 +367,19 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
         trailing: '',
         values: const ['Lunch', 'Dinner'],
         isHeader: true,
-        action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
+        action: _canEdit ? const SizedBox(width: _menuWidth) : null,
       );
     }
 
+    final previous = shiftMonth(_month, -1);
+    final next = shiftMonth(_month, 1);
+
     return MonthCalendarView(
-      month: _now,
+      // A new month starts on its own selected day and view.
+      key: ValueKey(_month),
+      month: _month,
+      onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+      onNextMonth: next == null ? null : () => _showMonth(next),
       label: 'Total Meals',
       total: _quantity(monthTotal),
       markedDays: markedDays,
@@ -396,11 +408,11 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                       _quantity(meals[member.id]!.lunch),
                       _quantity(meals[member.id]!.dinner),
                     ],
-              onTap: widget.isAdmin
+              onTap: _canEdit
                   ? () => _openEditor(member, day, meals[member.id])
                   : null,
               // Three dots mark a line an admin can open.
-              action: widget.isAdmin
+              action: _canEdit
                   ? const SizedBox(
                       width: _menuWidth,
                       child: Align(

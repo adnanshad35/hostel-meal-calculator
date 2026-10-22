@@ -54,7 +54,14 @@ class MonthCalendarView extends StatefulWidget {
     this.newestFirst = false,
     this.belowCalendar,
     this.onTotalTap,
+    this.onPreviousMonth,
+    this.onNextMonth,
   });
+
+  /// Step to the month before or after. With either given, arrows sit
+  /// beside the month's name; a null one shows its arrow faded.
+  final VoidCallback? onPreviousMonth;
+  final VoidCallback? onNextMonth;
 
   /// Makes the month's figure on top open something, such as each
   /// member's share of it.
@@ -116,6 +123,27 @@ const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 enum _ListMode { selectedDay, thisMonth }
 
+/// How far back the month arrows go.
+const monthsOfHistory = 12;
+
+/// The month [delta] months from [month], or null when that is after
+/// the current month or more than [monthsOfHistory] months back.
+DateTime? shiftMonth(DateTime month, int delta) {
+  final now = DateTime.now();
+  final current = DateTime(now.year, now.month);
+  final target = DateTime(month.year, month.month + delta);
+  final earliest = DateTime(now.year, now.month - monthsOfHistory);
+
+  if (target.isAfter(current) || target.isBefore(earliest)) return null;
+  return target;
+}
+
+/// True when [month] is the month we are in now.
+bool isCurrentMonth(DateTime month) {
+  final now = DateTime.now();
+  return month.year == now.year && month.month == now.month;
+}
+
 class _MonthCalendarViewState extends State<MonthCalendarView> {
   late final DateTime _today = DateTime.now();
   late int _selectedDay;
@@ -130,7 +158,33 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   @override
   void initState() {
     super.initState();
-    _selectedDay = _isCurrentMonth ? _today.day : 1;
+    // Today, or the last day of an earlier month.
+    _selectedDay = _isCurrentMonth
+        ? _today.day
+        : DateTime(widget.month.year, widget.month.month + 1, 0).day;
+  }
+
+  /// A small round arrow for stepping between months.
+  Widget _monthArrow(IconData icon, VoidCallback? onTap) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: Material(
+        color: AppTheme.surfaceSoft,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Icon(
+            icon,
+            size: 21,
+            color: onTap == null
+                ? AppTheme.textSecondary.withValues(alpha: 0.35)
+                : AppTheme.primary,
+          ),
+        ),
+      ),
+    );
   }
 
   /// A date as "14 Oct, Wed".
@@ -184,6 +238,8 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     final days = widget.newestFirst
         ? oldestFirst.reversed.toList()
         : oldestFirst;
+    final hasMonthNav =
+        widget.onPreviousMonth != null || widget.onNextMonth != null;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -201,30 +257,51 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
               ),
               child: Row(
                 children: [
+                  if (hasMonthNav) ...[
+                    _monthArrow(
+                      Icons.chevron_left_rounded,
+                      widget.onPreviousMonth,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${_monthNames[month.month - 1]} ${month.year}',
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
+                        // Shrinks on a narrow phone rather than wrap.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${_monthNames[month.month - 1]} ${month.year}',
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _dateText(_today),
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                        if (_isCurrentMonth) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _dateText(_today),
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
+                  if (hasMonthNav) ...[
+                    const SizedBox(width: 8),
+                    _monthArrow(
+                      Icons.chevron_right_rounded,
+                      widget.onNextMonth,
+                    ),
+                  ],
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,

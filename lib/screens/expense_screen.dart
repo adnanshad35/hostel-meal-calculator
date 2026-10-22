@@ -274,8 +274,10 @@ class _ExpenseCalendar extends StatefulWidget {
 }
 
 class _ExpenseCalendarState extends State<_ExpenseCalendar> {
-  late final DateTime _now = DateTime.now();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
+  /// The month on screen: this month, or an earlier one.
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
 
@@ -283,22 +285,15 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
   void initState() {
     super.initState();
 
-    // This month only.
-    _expenses = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('expenses')
-        .where(
-          'date',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(
-            DateTime(_now.year, _now.month),
-          ),
-        )
-        .where(
-          'date',
-          isLessThan: Timestamp.fromDate(DateTime(_now.year, _now.month + 1)),
-        )
-        .snapshots();
+    // One month at a time.
+    _expenses = MonthRecords.expenses(widget.groupId, _month).snapshots();
+  }
+
+  void _showMonth(DateTime month) {
+    setState(() {
+      _month = month;
+      _expenses = MonthRecords.expenses(widget.groupId, month).snapshots();
+    });
   }
 
   Future<void> _openExpenseForm({
@@ -431,8 +426,15 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
       expenses.sort((a, b) => addedAt(b).compareTo(addedAt(a)));
     }
 
+    final previous = shiftMonth(_month, -1);
+    final next = shiftMonth(_month, 1);
+
     return MonthCalendarView(
-      month: _now,
+      // A new month starts on its own selected day.
+      key: ValueKey(_month),
+      month: _month,
+      onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+      onNextMonth: next == null ? null : () => _showMonth(next),
       label: widget.onlyMine ? 'My Expense' : 'Total Expense',
       total: '৳${_plainAmount(total)}',
       markedDays: byDay.keys.toSet(),
@@ -570,7 +572,9 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final data = expense.data();
     final name = data['name'] as String? ?? 'Expense';
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-    final canEdit = widget.isAdmin || data['paidById'] == _uid;
+    // Earlier months are read-only.
+    final isThisMonth = isCurrentMonth(_month);
+    final canEdit = isThisMonth && (widget.isAdmin || data['paidById'] == _uid);
 
     return CalendarLine(
       title: name,
@@ -581,7 +585,7 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
           : data['paidByName'] as String?,
       trailing: '৳${_plainAmount(amount)}',
       onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
-      action: widget.isAdmin
+      action: widget.isAdmin && isThisMonth
           ? PopupMenuButton<String>(
               tooltip: 'Expense options',
               padding: EdgeInsets.zero,

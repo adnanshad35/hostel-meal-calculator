@@ -938,30 +938,27 @@ class MyMealsScreen extends StatefulWidget {
 }
 
 class _MyMealsScreenState extends State<MyMealsScreen> {
-  late final DateTime _now = DateTime.now();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _meals;
+  /// The month on screen: this month, or an earlier one.
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _meals;
   late final Stream<MemberMealPlan> _plan;
 
   @override
   void initState() {
     super.initState();
 
-    // This month only. Filtered to this member afterwards, which
+    // One month at a time. Filtered to this member afterwards, which
     // avoids needing a composite index.
-    _meals = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('meals')
-        .where(
-          'dateKey',
-          isGreaterThanOrEqualTo: _dateKey(DateTime(_now.year, _now.month)),
-        )
-        .where(
-          'dateKey',
-          isLessThan: _dateKey(DateTime(_now.year, _now.month + 1)),
-        )
-        .snapshots();
+    _meals = MonthRecords.meals(widget.groupId, _month).snapshots();
     _plan = MealPlanService.watch(widget.groupId, widget.currentUserId);
+  }
+
+  void _showMonth(DateTime month) {
+    setState(() {
+      _month = month;
+      _meals = MonthRecords.meals(widget.groupId, month).snapshots();
+    });
   }
 
   @override
@@ -1008,8 +1005,8 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
           plans: [plan],
           meals: saved,
           activeMemberIds: {widget.currentUserId},
-          month: _now,
-          today: _now,
+          month: _month,
+          today: DateTime.now(),
         ),
     ];
 
@@ -1024,8 +1021,16 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
       total += record.lunch + record.dinner;
     }
 
+    final previous = shiftMonth(_month, -1);
+    final next = shiftMonth(_month, 1);
+    final now = DateTime.now();
+
     return MonthCalendarView(
-      month: _now,
+      // A new month starts on its own selected day and view.
+      key: ValueKey(_month),
+      month: _month,
+      onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+      onNextMonth: next == null ? null : () => _showMonth(next),
       label: 'My Meals',
       total: _displayQuantity(total),
       showMonthOption: true,
@@ -1049,15 +1054,17 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
       },
       linesOf: (day) {
         final record = byDay[day];
-        // A day that has not come yet has nothing to enter.
-        final canEdit = day <= _now.day;
+        // Only this month's days so far can be entered: a day that has
+        // not come yet has nothing to enter, and earlier months are
+        // read-only.
+        final canEdit = isCurrentMonth(_month) && day <= now.day;
 
         void edit() {
           showMealForm(
             context,
             groupId: widget.groupId,
             isAdmin: false,
-            date: DateTime(_now.year, _now.month, day),
+            date: DateTime(_month.year, _month.month, day),
           );
         }
 
