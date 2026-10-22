@@ -12,6 +12,7 @@ import '../services/meal_plan_service.dart';
 import '../services/monthly_calculator.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_tiles.dart';
 import '../widgets/notification_bell.dart';
 import 'expense_screen.dart';
 import 'duty_roster_screen.dart';
@@ -210,20 +211,16 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
             ),
           ),
         if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
-        _LinkRow(
+        NavTile(
           icon: Icons.groups_outlined,
           title: 'Total Meals & Expenses',
-          color: AppTheme.primary,
-          backgroundColor: AppTheme.surfaceSoft,
           onTap: () =>
               _open(HostelRecordsScreen(groupId: groupId, isAdmin: isAdmin)),
         ),
         const SizedBox(height: 12),
-        _LinkRow(
+        NavTile(
           icon: Icons.info_outline_rounded,
           title: 'About Hostel',
-          color: AppTheme.primary,
-          backgroundColor: AppTheme.surfaceSoft,
           onTap: () => _open(
             HostelDetailsScreen(
               groupId: groupId,
@@ -353,90 +350,62 @@ class _AddTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onAdd,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                // Shrinks a little on a narrow phone instead of cutting
-                // the word short.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+    // Icon and + on top, the word on its own line under them, so the
+    // word has the tile's whole width on any phone.
+    return Tooltip(
+      message: addTooltip,
+      child: Material(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onAdd,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: color, size: 21),
+                    ),
+                    const Spacer(),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              IconButton.filled(
-                tooltip: addTooltip,
-                onPressed: onAdd,
-                style: IconButton.styleFrom(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  fixedSize: const Size(38, 38),
-                ),
-                icon: const Icon(Icons.add, size: 21),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A full-width row that opens a page.
-class _LinkRow extends StatelessWidget {
-  const _LinkRow({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.backgroundColor,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final Color color;
-  final Color backgroundColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        onTap: onTap,
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: color, size: 23),
-        ),
-        title: Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_rounded,
-          size: 19,
-          color: AppTheme.textSecondary,
         ),
       ),
     );

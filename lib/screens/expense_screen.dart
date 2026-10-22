@@ -420,13 +420,148 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
       total += (data['amount'] as num?)?.toDouble() ?? 0;
     }
 
+    // The latest expense of a day first.
+    DateTime addedAt(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+      final data = expense.data();
+      final time = data['createdAt'] ?? data['date'];
+      return time is Timestamp ? time.toDate() : DateTime(0);
+    }
+
+    for (final expenses in byDay.values) {
+      expenses.sort((a, b) => addedAt(b).compareTo(addedAt(a)));
+    }
+
     return MonthCalendarView(
       month: _now,
       label: widget.onlyMine ? 'My Expense' : 'Total Expense',
       total: '৳${_plainAmount(total)}',
       markedDays: byDay.keys.toSet(),
+      newestFirst: true,
+      // The hostel's figure opens what each member paid.
+      onTotalTap: widget.onlyMine ? null : () => _showMemberTotals(docs),
+      belowCalendar: const Padding(
+        padding: EdgeInsets.fromLTRB(4, 4, 4, 0),
+        child: Text(
+          'Recent Expenses',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
       linesOf: (day) {
         return [for (final expense in byDay[day] ?? const []) _line(expense)];
+      },
+    );
+  }
+
+  /// What each member paid this month, the most first. Members who
+  /// paid nothing are listed at the end with ৳0.
+  void _showMemberTotals(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final paid = <String, double>{};
+    final names = <String, String>{};
+    double total = 0;
+
+    for (final expense in docs) {
+      final data = expense.data();
+      final id = data['paidById'] as String? ?? '';
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+
+      paid[id] = (paid[id] ?? 0) + amount;
+      names[id] = data['paidByName'] as String? ?? 'Member';
+      total += amount;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StreamBuilder<List<GroupMember>>(
+          stream: GroupMemberService.watch(widget.groupId),
+          builder: (context, snapshot) {
+            final everyone = {
+              ...names,
+              for (final member in snapshot.data ?? const <GroupMember>[])
+                member.id: member.name,
+            };
+            final ids = everyone.keys.toList()
+              ..sort((a, b) {
+                final byAmount = (paid[b] ?? 0).compareTo(paid[a] ?? 0);
+                return byAmount != 0
+                    ? byAmount
+                    : everyone[a]!.compareTo(everyone[b]!);
+              });
+
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+                      child: Text(
+                        'Member Totals',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        children: [
+                          for (final id in ids)
+                            ListTile(
+                              title: Text(
+                                everyone[id]!,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              trailing: Text(
+                                '৳${_plainAmount(paid[id] ?? 0)}',
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+                      title: const Text(
+                        'Total',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      trailing: Text(
+                        '৳${_plainAmount(total)}',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
       },
     );
   }

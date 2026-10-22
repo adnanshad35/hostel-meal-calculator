@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
+import '../widgets/app_tiles.dart';
 import '../widgets/member_name_dialog.dart';
+import 'duty_roster_screen.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
   const GroupSettingsScreen({
@@ -349,107 +351,102 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           final isAdmin = admins.contains(_currentUser.uid);
           final settings = HostelSettings.fromGroupData(groupData);
 
+          final inviteCode = groupData['inviteCode'] as String? ?? '';
+
+          const progress = SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          );
+
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
               if (isAdmin) ...[
-                if ((groupData['inviteCode'] as String? ?? '').isNotEmpty) ...[
-                  _InviteSwitchCard(
-                    key: ValueKey(groupData['inviteCode']),
-                    inviteCode: groupData['inviteCode'] as String,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                _SettingSwitch(
-                  icon: Icons.restaurant_outlined,
-                  title: 'Member Can Add Meals',
-                  value: settings.membersCanAddMeals,
-                  onChanged: (isOn) => _saveSettings(
-                    settings.copyWith(membersCanAddMeals: isOn),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _SettingSwitch(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'Member Can Add Expenses',
-                  value: settings.membersCanAddExpenses,
-                  onChanged: (isOn) => _saveSettings(
-                    settings.copyWith(membersCanAddExpenses: isOn),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _SettingSwitch(
-                  icon: Icons.edit_note_outlined,
-                  title: 'Member Can Edit Meals & Expenses',
-                  value: settings.membersCanEdit,
-                  onChanged: (isOn) =>
-                      _saveSettings(settings.copyWith(membersCanEdit: isOn)),
-                ),
-                const SizedBox(height: 8),
-                _SettingSwitch(
-                  icon: Icons.lock_open_outlined,
-                  title: 'Special Permission',
-                  value: settings.specialPermission,
-                  onChanged: (isOn) =>
-                      _saveSettings(settings.copyWith(specialPermission: isOn)),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    leading: const Icon(Icons.person_outline),
-                    title: const Text(
-                      'Member Without App',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    trailing: _isAddingMember
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                    onTap: _isAddingMember ? null : _addShadowMember,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Not ready yet: shown so admins know it is on the way.
-                const Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    enabled: false,
-                    leading: Icon(Icons.home_work_outlined),
-                    title: Text(
-                      'Calculate Other Costs',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    trailing: Text(
-                      'Coming Soon',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                TileGroup(
+                  title: 'Permissions',
+                  children: [
+                    if (inviteCode.isNotEmpty)
+                      _InviteSwitch(
+                        key: ValueKey(inviteCode),
+                        inviteCode: inviteCode,
+                      ),
+                    SwitchTile(
+                      icon: Icons.restaurant_outlined,
+                      title: 'Member Can Add Meals',
+                      value: settings.membersCanAddMeals,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanAddMeals: isOn),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    leading: const Icon(Icons.restart_alt),
-                    title: const Text(
-                      'Reset',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    SwitchTile(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'Member Can Add Expenses',
+                      value: settings.membersCanAddExpenses,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanAddExpenses: isOn),
+                      ),
                     ),
-                    trailing: _isResetting
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: _isResetting ? null : _resetCurrentMonth,
-                  ),
+                    SwitchTile(
+                      icon: Icons.edit_note_outlined,
+                      title: 'Member Can Edit Meals & Expenses',
+                      value: settings.membersCanEdit,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanEdit: isOn),
+                      ),
+                    ),
+                    SwitchTile(
+                      icon: Icons.lock_open_outlined,
+                      title: 'Special Permission',
+                      value: settings.specialPermission,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(specialPermission: isOn),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'Members',
+                  children: [
+                    GroupTile(
+                      icon: Icons.person_add_alt_outlined,
+                      title: 'Add Member Without App',
+                      trailing: _isAddingMember
+                          ? progress
+                          : const Icon(Icons.add, color: AppTheme.primary),
+                      onTap: _isAddingMember ? null : _addShadowMember,
+                    ),
+                    GroupTile(
+                      icon: Icons.assignment_ind_outlined,
+                      title: 'Duty Roster',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              DutyRosterScreen(groupId: widget.groupId),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'This Month',
+                  children: [
+                    // Not ready yet: shown so admins know it is on the way.
+                    const GroupTile(
+                      icon: Icons.home_work_outlined,
+                      title: 'Calculate Other Costs',
+                      enabled: false,
+                      trailing: ComingSoonLabel(),
+                    ),
+                    GroupTile(
+                      icon: Icons.restart_alt,
+                      title: 'Reset This Month',
+                      trailing: _isResetting ? progress : null,
+                      onTap: _isResetting ? null : _resetCurrentMonth,
+                    ),
+                  ],
                 ),
               ],
               if (!isAdmin) ...[
@@ -467,45 +464,17 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 }
 
-/// One on/off setting, in the same card as the other settings.
-class _SettingSwitch extends StatelessWidget {
-  const _SettingSwitch({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final bool value;
-
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: SwitchListTile(
-        secondary: Icon(icon),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        value: value,
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
 /// Lets an admin switch the hostel's invitation code off and on.
-class _InviteSwitchCard extends StatefulWidget {
-  const _InviteSwitchCard({super.key, required this.inviteCode});
+class _InviteSwitch extends StatefulWidget {
+  const _InviteSwitch({super.key, required this.inviteCode});
 
   final String inviteCode;
 
   @override
-  State<_InviteSwitchCard> createState() => _InviteSwitchCardState();
+  State<_InviteSwitch> createState() => _InviteSwitchState();
 }
 
-class _InviteSwitchCardState extends State<_InviteSwitchCard> {
+class _InviteSwitchState extends State<_InviteSwitch> {
   late final DocumentReference<Map<String, dynamic>> _invite;
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _stream;
 
@@ -563,16 +532,11 @@ class _InviteSwitchCardState extends State<_InviteSwitchCard> {
         final data = snapshot.data?.data();
         final isActive = data?['active'] == true;
 
-        return Card(
-          child: SwitchListTile(
-            secondary: const Icon(Icons.group_add_outlined),
-            title: const Text(
-              'Allow New Member',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            value: isActive,
-            onChanged: data == null || _isSaving ? null : _setActive,
-          ),
+        return SwitchTile(
+          icon: Icons.group_add_outlined,
+          title: 'Allow New Members',
+          value: isActive,
+          onChanged: data == null || _isSaving ? null : _setActive,
         );
       },
     );

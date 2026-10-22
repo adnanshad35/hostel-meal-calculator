@@ -10,11 +10,11 @@ import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_tiles.dart';
 import '../widgets/member_name_dialog.dart';
-import 'duty_roster_screen.dart';
+import 'duty_roster_screen.dart' show dutyDatesText;
 import 'group_settings_screen.dart';
 import 'hostel_activation_screen.dart';
-import 'meal_plan_screen.dart';
 
 class HostelDetailsScreen extends StatefulWidget {
   const HostelDetailsScreen({
@@ -511,23 +511,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         .showSnackBar(const SnackBar(content: Text('Invitation code copied.')));
   }
 
-  void _openMealPlan() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            MealPlanScreen(groupId: widget.groupId, isAdmin: widget.isAdmin),
-      ),
-    );
-  }
-
-  void _openDutySettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DutyRosterScreen(groupId: widget.groupId),
-      ),
-    );
-  }
-
   /// Members in the order of their turns on duty, first to last, with
   /// those who have no turn after them, by name.
   List<GroupMember> _byDuty(List<GroupMember> members) {
@@ -768,11 +751,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               if (!widget.membersOnly) ...[
                 _HostelCard(
                   groupName: widget.groupName,
-                  // Only admins get the settings; a member sees what
-                  // they are instead.
-                  onOpenSettings: widget.isAdmin && !_isBusy
-                      ? _openGroupSettings
-                      : null,
                   isAdmin: widget.isAdmin,
                   inviteCode: _inviteCode,
                   onCopyCode: _copyInviteCode,
@@ -812,37 +790,22 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    onTap: _openMealPlan,
-                    leading: const Icon(
-                      Icons.event_repeat_outlined,
-                      color: AppTheme.primary,
+                const SizedBox(height: 12),
+                TileGroup(
+                  children: [
+                    GroupTile(
+                      icon: Icons.groups_outlined,
+                      title: 'Members',
+                      onTap: _openMembers,
                     ),
-                    title: const Text(
-                      'Meal Plan',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    onTap: _openMembers,
-                    leading: const Icon(
-                      Icons.groups_outlined,
-                      color: AppTheme.primary,
-                    ),
-                    title: const Text(
-                      'Members',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                  ),
+                    // Only admins get the settings.
+                    if (widget.isAdmin)
+                      GroupTile(
+                        icon: Icons.settings_outlined,
+                        title: 'Admin Settings',
+                        onTap: _isBusy ? null : _openGroupSettings,
+                      ),
+                  ],
                 ),
               ],
               if (widget.membersOnly) ...[
@@ -851,21 +814,12 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                     Expanded(
                       child: Text(
                         activeMembers.length == 1
-                            ? '1 member'
-                            : '${activeMembers.length} members',
+                            ? '1 Member'
+                            : '${activeMembers.length} Members',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(color: AppTheme.textSecondary),
                       ),
                     ),
-                    if (widget.isAdmin)
-                      TextButton.icon(
-                        onPressed: _isBusy ? null : _openDutySettings,
-                        icon: const Icon(
-                          Icons.assignment_ind_outlined,
-                          size: 19,
-                        ),
-                        label: const Text('Duty Settings'),
-                      ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -964,23 +918,18 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   }
 }
 
-/// The hostel's name with, beside it, the way into the settings for
-/// an admin or the word "Member" for anyone else; and under them the
-/// invitation code new members join with.
+/// The hostel's name and the signed-in member's role, and under them
+/// the invitation code new members join with.
 class _HostelCard extends StatelessWidget {
   const _HostelCard({
     required this.groupName,
     required this.isAdmin,
-    required this.onOpenSettings,
     required this.inviteCode,
     required this.onCopyCode,
   });
 
   final String groupName;
   final bool isAdmin;
-
-  /// Null for a member, and for an admin while something is saving.
-  final VoidCallback? onOpenSettings;
   final String inviteCode;
   final VoidCallback onCopyCode;
 
@@ -992,71 +941,50 @@ class _HostelCard extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+            padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
             child: Row(
               children: [
-                const Icon(
-                  Icons.apartment_outlined,
-                  color: AppTheme.primary,
-                  size: 28,
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.apartment_outlined,
+                    color: AppTheme.primary,
+                    size: 25,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    groupName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (isAdmin)
-                  // A solid button, so an admin does not miss it.
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: FilledButton.icon(
-                      onPressed: onOpenSettings,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 40),
-                        padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 13.5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        groupName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 17.5,
                           fontWeight: FontWeight.w800,
+                          height: 1.2,
                         ),
                       ),
-                      icon: const Icon(Icons.settings, size: 18),
-                      label: const Text('Admin Settings'),
-                    ),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.only(right: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 19,
+                      const SizedBox(height: 2),
+                      Text(
+                        isAdmin ? 'Admin' : 'Member',
+                        style: const TextStyle(
                           color: AppTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Member',
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),

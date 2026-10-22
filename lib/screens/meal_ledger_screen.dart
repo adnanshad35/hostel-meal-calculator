@@ -84,8 +84,132 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
-  static String _meals(double lunch, double dinner) {
-    return 'L ${_quantity(lunch)} · D ${_quantity(dinner)}';
+  /// Each member's lunches and dinners this month, the most first.
+  void _showMemberTotals(
+    List<GroupMember> members,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    Map<String, double> lunchOf,
+    Map<String, double> dinnerOf,
+  ) {
+    // Current members, plus anyone else who has meals this month.
+    final names = <String, String>{
+      for (final document in docs)
+        if (lunchOf.containsKey(document.data()['userId']))
+          document.data()['userId'] as String:
+              document.data()['userName'] as String? ?? 'Member',
+      for (final member in members) member.id: member.name,
+    };
+
+    double totalOf(String id) => (lunchOf[id] ?? 0) + (dinnerOf[id] ?? 0);
+
+    final ids = names.keys.toList()
+      ..sort((a, b) {
+        final byTotal = totalOf(b).compareTo(totalOf(a));
+        return byTotal != 0 ? byTotal : names[a]!.compareTo(names[b]!);
+      });
+
+    final hostelLunch = lunchOf.values.fold<double>(0, (a, b) => a + b);
+    final hostelDinner = dinnerOf.values.fold<double>(0, (a, b) => a + b);
+
+    Widget row(
+      String name,
+      List<String> figures, {
+      bool isHeader = false,
+      bool isStrong = false,
+    }) {
+      final style = isHeader
+          ? const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            )
+          : TextStyle(
+              color: isStrong ? AppTheme.primary : AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: isStrong ? FontWeight.w900 : FontWeight.w700,
+            );
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                style: isHeader
+                    ? style
+                    : TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: isStrong
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+              ),
+            ),
+            for (final figure in figures)
+              SizedBox(
+                width: 60,
+                child: Text(figure, textAlign: TextAlign.end, style: style),
+              ),
+          ],
+        ),
+      );
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+                  child: Text(
+                    'Member Totals',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                row('', const ['Lunch', 'Dinner', 'Total'], isHeader: true),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final id in ids)
+                        row(names[id]!, [
+                          _quantity(lunchOf[id] ?? 0),
+                          _quantity(dinnerOf[id] ?? 0),
+                          _quantity(totalOf(id)),
+                        ]),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                row('Total', [
+                  _quantity(hostelLunch),
+                  _quantity(hostelDinner),
+                  _quantity(hostelLunch + hostelDinner),
+                ], isStrong: true),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _openEditor(GroupMember member, int day, _DayMeal? meal) {
@@ -196,14 +320,19 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
 
     double monthTotal = 0;
     final markedDays = <int>{};
+    // Each member's month, for the totals behind the top card.
+    final lunchOf = <String, double>{};
+    final dinnerOf = <String, double>{};
 
     byDay.forEach((day, meals) {
-      for (final meal in meals.values) {
-        if (!counts(day, meal)) continue;
+      meals.forEach((userId, meal) {
+        if (!counts(day, meal)) return;
 
         monthTotal += meal.total;
         if (meal.total > 0) markedDays.add(day);
-      }
+        lunchOf[userId] = (lunchOf[userId] ?? 0) + meal.lunch;
+        dinnerOf[userId] = (dinnerOf[userId] ?? 0) + meal.dinner;
+      });
     });
 
     CalendarLine totalOf(int day) {
@@ -217,10 +346,22 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
 
       return CalendarLine(
         title: 'Total',
-        trailing: _meals(lunch, dinner),
+        trailing: '',
+        values: [_quantity(lunch), _quantity(dinner)],
         isStrong: true,
         // Leaves the room the members' menu takes, so the total lines
         // up with their figures.
+        action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
+      );
+    }
+
+    // Column titles, above the total and the members' figures.
+    CalendarLine header() {
+      return CalendarLine(
+        title: '',
+        trailing: '',
+        values: const ['Lunch', 'Dinner'],
+        isHeader: true,
         action: widget.isAdmin ? const SizedBox(width: _menuWidth) : null,
       );
     }
@@ -231,20 +372,30 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       total: _quantity(monthTotal),
       markedDays: markedDays,
       emptyText: 'No members',
-      shortLinesOf: (day) => members.isEmpty ? const [] : [totalOf(day)],
+      showMonthOption: true,
+      // The hostel's figure opens each member's share of it.
+      onTotalTap: () => _showMemberTotals(members, docs, lunchOf, dinnerOf),
+      // The month view lists each day's total only.
+      shortLinesOf: (day) =>
+          members.isEmpty ? const [] : [header(), totalOf(day)],
       linesOf: (day) {
         final meals = byDay[day] ?? const <String, _DayMeal>{};
         if (members.isEmpty) return const [];
 
         return [
+          header(),
           totalOf(day),
           for (final member in members)
             CalendarLine(
               title: member.name,
               note: meals[member.id]?.isPlan == true ? 'plan' : null,
-              trailing: meals[member.id] == null
-                  ? '—'
-                  : _meals(meals[member.id]!.lunch, meals[member.id]!.dinner),
+              trailing: '',
+              values: meals[member.id] == null
+                  ? const ['—', '—']
+                  : [
+                      _quantity(meals[member.id]!.lunch),
+                      _quantity(meals[member.id]!.dinner),
+                    ],
               onTap: widget.isAdmin
                   ? () => _openEditor(member, day, meals[member.id])
                   : null,

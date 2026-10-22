@@ -7,8 +7,10 @@ class CalendarLine {
   const CalendarLine({
     required this.title,
     required this.trailing,
+    this.values,
     this.note,
     this.isStrong = false,
+    this.isHeader = false,
     this.onTap,
     this.action,
   });
@@ -19,8 +21,15 @@ class CalendarLine {
   final String? note;
   final String trailing;
 
+  /// Figures in fixed columns at the end of the line, such as lunch and
+  /// dinner. Replaces [trailing] when given, so the columns line up.
+  final List<String>? values;
+
   /// Bold, for a total.
   final bool isStrong;
+
+  /// A column title row, such as Lunch and Dinner.
+  final bool isHeader;
   final VoidCallback? onTap;
 
   /// A small control at the end of the line, such as a menu.
@@ -41,7 +50,27 @@ class MonthCalendarView extends StatefulWidget {
     required this.linesOf,
     this.shortLinesOf,
     this.emptyText = 'No entry',
+    this.showMonthOption = false,
+    this.newestFirst = false,
+    this.belowCalendar,
+    this.onTotalTap,
   });
+
+  /// Makes the month's figure on top open something, such as each
+  /// member's share of it.
+  final VoidCallback? onTotalTap;
+
+  /// When true, a switch under the calendar picks between the details
+  /// of the selected day (the default) and the month, with one short
+  /// line per day. Off, every day's card is listed below the calendar.
+  final bool showMonthOption;
+
+  /// Lists the day cards from the latest day down to the 1st.
+  final bool newestFirst;
+
+  /// Something to show right under the calendar, such as a link to
+  /// another view of the month.
+  final Widget? belowCalendar;
 
   /// Any date in the month to show.
   final DateTime month;
@@ -85,9 +114,12 @@ const _monthNames = [
 
 const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+enum _ListMode { selectedDay, thisMonth }
+
 class _MonthCalendarViewState extends State<MonthCalendarView> {
   late final DateTime _today = DateTime.now();
   late int _selectedDay;
+  _ListMode _mode = _ListMode.selectedDay;
 
   /// One key per day card, to scroll to it.
   final Map<int, GlobalKey> _dayKeys = {};
@@ -130,69 +162,101 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     // Past to present: the 1st up to today, or the whole of an earlier
     // month. A later day appears too once it is picked.
     final lastDay = _isCurrentMonth ? _today.day : daysInMonth;
-    final days = [
+    final monthView = widget.showMonthOption && _mode == _ListMode.thisMonth;
+
+    // Which cards are listed. Off, the days with something to show.
+    // Selected Day, only the picked day. This Month, every day with
+    // something to show, and the picked day even when it is empty.
+    bool listed(int day) {
+      if (!widget.showMonthOption) {
+        return _linesFor(day, false).isNotEmpty;
+      }
+      if (!monthView) return day == _selectedDay;
+
+      return day == _selectedDay || _linesFor(day, true).isNotEmpty;
+    }
+
+    final oldestFirst = [
       for (var day = 1; day <= lastDay; day++)
-        if (widget.linesOf(day).isNotEmpty) day,
-      if (_selectedDay > lastDay && widget.linesOf(_selectedDay).isNotEmpty)
-        _selectedDay,
+        if (listed(day)) day,
+      if (_selectedDay > lastDay && listed(_selectedDay)) _selectedDay,
     ];
+    final days = widget.newestFirst
+        ? oldestFirst.reversed.toList()
+        : oldestFirst;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTotalTap,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                16,
+                widget.onTotalTap == null ? 18 : 10,
+                16,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_monthNames[month.month - 1]} ${month.year}',
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _dateText(_today),
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${_monthNames[month.month - 1]} ${month.year}',
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _dateText(_today),
+                        widget.label,
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        widget.total,
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          height: 1.15,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      widget.label,
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      widget.total,
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        height: 1.15,
-                      ),
+                  if (widget.onTotalTap != null) ...[
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppTheme.textSecondary,
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -203,7 +267,32 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
             child: _grid(),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+        if (widget.belowCalendar != null) ...[
+          widget.belowCalendar!,
+          const SizedBox(height: 12),
+        ],
+        if (widget.showMonthOption) ...[
+          SegmentedButton<_ListMode>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: _ListMode.selectedDay,
+                label: Text('Selected Day'),
+              ),
+              ButtonSegment(
+                value: _ListMode.thisMonth,
+                label: Text('This Month'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (selection) {
+              setState(() => _mode = selection.first);
+            },
+          ),
+          const SizedBox(height: 14),
+        ] else
+          const SizedBox(height: 2),
         if (days.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -219,12 +308,22 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                 lines: day == _selectedDay || widget.shortLinesOf == null
                     ? widget.linesOf(day)
                     : widget.shortLinesOf!(day),
+                emptyText: widget.emptyText,
                 isSelected: day == _selectedDay,
                 onTap: day == _selectedDay ? null : () => _select(day),
               ),
             ),
       ],
     );
+  }
+
+  /// The lines of a day: the short ones for the month view, when given.
+  List<CalendarLine> _linesFor(int day, bool monthView) {
+    if (monthView && widget.shortLinesOf != null) {
+      return widget.shortLinesOf!(day);
+    }
+
+    return widget.linesOf(day);
   }
 
   Widget _grid() {
@@ -328,12 +427,16 @@ class _DayCard extends StatelessWidget {
   const _DayCard({
     required this.date,
     required this.lines,
+    required this.emptyText,
     required this.isSelected,
     this.onTap,
   });
 
   final String date;
   final List<CalendarLine> lines;
+
+  /// Shown when the day has nothing to list.
+  final String emptyText;
   final bool isSelected;
 
   /// Picks the day, for a card that shows only its short details.
@@ -358,15 +461,41 @@ class _DayCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                date,
-                style: TextStyle(
-                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
+              // The date on a tinted label, so each day stands apart
+              // from the lines under it.
+              Container(
+                margin: const EdgeInsets.only(top: 2, bottom: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppTheme.primary
+                      : const Color(0xFFD8F2E5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  date,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : AppTheme.primaryDark,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               for (final line in lines) _LineRow(line: line),
+              if (lines.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    emptyText,
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -417,14 +546,37 @@ class _LineRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Text(
-              line.trailing,
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 15,
-                fontWeight: line.isStrong ? FontWeight.w800 : FontWeight.w700,
+            if (line.values != null)
+              for (final value in line.values!)
+                SizedBox(
+                  width: 64,
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: line.isHeader
+                        ? const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          )
+                        : TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 15,
+                            fontWeight: line.isStrong
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                          ),
+                  ),
+                )
+            else
+              Text(
+                line.trailing,
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: line.isStrong ? FontWeight.w800 : FontWeight.w700,
+                ),
               ),
-            ),
             // A pencil marks a line that opens for editing when tapped.
             if (line.action != null)
               line.action!
