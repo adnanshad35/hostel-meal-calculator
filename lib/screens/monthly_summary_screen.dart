@@ -26,10 +26,14 @@ class MonthlySummaryScreen extends StatefulWidget {
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
+
+  /// True inside another page that has its own app bar.
+  final bool embedded;
 
   @override
   State<MonthlySummaryScreen> createState() => _MonthlySummaryScreenState();
@@ -450,7 +454,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final monthKey = _monthKey(_selectedMonth);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Details')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Balance')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _settingsStream,
         builder: (context, settingsSnapshot) {

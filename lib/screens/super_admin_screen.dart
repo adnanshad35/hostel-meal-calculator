@@ -390,6 +390,8 @@ class _OverviewTab extends StatelessWidget {
           const SizedBox(height: 20),
           AdminMaintenanceCard(config: billing.appConfig, onRefresh: onRefresh),
           const SizedBox(height: 12),
+          const AdminUpdateCard(),
+          const SizedBox(height: 12),
           Card(
             clipBehavior: Clip.antiAlias,
             child: ListTile(

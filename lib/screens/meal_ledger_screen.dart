@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
@@ -9,6 +10,7 @@ import '../services/month_records.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_calendar.dart';
 import 'admin_meal_edit_screen.dart';
+import 'meal_screen.dart';
 
 /// One member's meals on one day, saved or from their meal plan.
 class _DayMeal {
@@ -56,6 +58,9 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
   late final Stream<List<MemberMealPlan>> _plansStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
 
+  /// The signed-in member, whose own meals are picked out.
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+
   /// Admins correct meals in the current month only.
   bool get _canEdit => widget.isAdmin && isEditableMonth(_month);
 
@@ -75,9 +80,6 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       _mealsStream = MonthRecords.meals(widget.groupId, month).snapshots();
     });
   }
-
-  /// The space the three-dot mark takes at the end of a line.
-  static const double _menuWidth = 28;
 
   static String _quantity(double value) {
     return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
@@ -110,6 +112,34 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     final hostelLunch = lunchOf.values.fold<double>(0, (a, b) => a + b);
     final hostelDinner = dinnerOf.values.fold<double>(0, (a, b) => a + b);
 
+    _showTable(
+      title: 'Member Totals',
+      rows: [
+        for (final id in ids)
+          (
+            names[id]!,
+            [
+              _quantity(lunchOf[id] ?? 0),
+              _quantity(dinnerOf[id] ?? 0),
+              _quantity(totalOf(id)),
+            ],
+          ),
+      ],
+      total: [
+        _quantity(hostelLunch),
+        _quantity(hostelDinner),
+        _quantity(hostelLunch + hostelDinner),
+      ],
+    );
+  }
+
+  /// A sheet with a table of lunch, dinner and total, one row each,
+  /// and the total at the foot.
+  void _showTable({
+    required String title,
+    required List<(String, List<String>)> rows,
+    required List<String> total,
+  }) {
     Widget row(
       String name,
       List<String> figures, {
@@ -171,11 +201,11 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
                   child: Text(
-                    'Member Totals',
-                    style: TextStyle(
+                    title,
+                    style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
@@ -187,21 +217,12 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                   child: ListView(
                     shrinkWrap: true,
                     children: [
-                      for (final id in ids)
-                        row(names[id]!, [
-                          _quantity(lunchOf[id] ?? 0),
-                          _quantity(dinnerOf[id] ?? 0),
-                          _quantity(totalOf(id)),
-                        ]),
+                      for (final (name, figures) in rows) row(name, figures),
                     ],
                   ),
                 ),
                 const Divider(height: 1),
-                row('Total', [
-                  _quantity(hostelLunch),
-                  _quantity(hostelDinner),
-                  _quantity(hostelLunch + hostelDinner),
-                ], isStrong: true),
+                row('Total', total, isStrong: true),
                 const SizedBox(height: 8),
               ],
             ),
@@ -340,42 +361,17 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       });
     });
 
-    CalendarLine totalOf(int day) {
-      double lunch = 0;
-      double dinner = 0;
-      for (final meal in (byDay[day] ?? const <String, _DayMeal>{}).values) {
-        if (!counts(day, meal)) continue;
-        lunch += meal.lunch;
-        dinner += meal.dinner;
-      }
-
-      return CalendarLine(
-        title: 'Total',
-        trailing: '',
-        values: [_quantity(lunch), _quantity(dinner)],
-        isStrong: true,
-        // Leaves the room the members' menu takes, so the total lines
-        // up with their figures.
-        action: _canEdit ? const SizedBox(width: _menuWidth) : null,
-      );
-    }
-
-    // Column titles, above the total and the members' figures.
-    CalendarLine header() {
-      return CalendarLine(
-        title: '',
-        trailing: '',
-        values: const ['Lunch', 'Dinner'],
-        isHeader: true,
-        action: _canEdit ? const SizedBox(width: _menuWidth) : null,
-      );
-    }
-
     final previous = shiftMonth(_month, -1);
     final next = shiftMonth(_month, 1);
 
+    // The member's own row comes first, then the others in order.
+    final ordered = [
+      ...members.where((member) => member.id == _uid),
+      ...members.where((member) => member.id != _uid),
+    ];
+
     return MonthCalendarView(
-      // A new month starts on its own selected day and view.
+      // A new month starts on its own selected day.
       key: ValueKey(_month),
       month: _month,
       onPreviousMonth: previous == null ? null : () => _showMonth(previous),
@@ -385,49 +381,293 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       markedDays: markedDays,
       emptyText: 'No members',
       showMonthOption: true,
-      // The hostel's figure opens each member's share of it.
-      onTotalTap: () => _showMemberTotals(members, docs, lunchOf, dinnerOf),
-      // The month view lists each day's total only.
-      shortLinesOf: (day) =>
-          members.isEmpty ? const [] : [header(), totalOf(day)],
-      linesOf: (day) {
-        final meals = byDay[day] ?? const <String, _DayMeal>{};
-        if (members.isEmpty) return const [];
+      calendarOnly: true,
+      figures: [
+        if (_uid != null)
+          CalendarFigure(
+            label: 'My Meals',
+            value: _quantity((lunchOf[_uid] ?? 0) + (dinnerOf[_uid] ?? 0)),
+            onTap: () => _showMyMeals(byDay, counts),
+          ),
+        CalendarFigure(
+          label: 'Total Meals',
+          value: _quantity(monthTotal),
+          // Each member's share of the hostel's meals.
+          onTap: () => _showMemberTotals(members, docs, lunchOf, dinnerOf),
+        ),
+      ],
+      linesOf: (day) => const [],
+      dayDetails: (day) {
+        if (members.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('No members'),
+          );
+        }
 
-        return [
-          header(),
-          totalOf(day),
-          for (final member in members)
-            CalendarLine(
-              title: member.name,
-              note: meals[member.id]?.isPlan == true ? 'plan' : null,
-              trailing: '',
-              values: meals[member.id] == null
-                  ? const ['—', '—']
-                  : [
-                      _quantity(meals[member.id]!.lunch),
-                      _quantity(meals[member.id]!.dinner),
-                    ],
-              onTap: _canEdit
-                  ? () => _openEditor(member, day, meals[member.id])
-                  : null,
-              // Three dots mark a line an admin can open.
-              action: _canEdit
-                  ? const SizedBox(
-                      width: _menuWidth,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Icon(
-                          Icons.more_vert_rounded,
-                          size: 20,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    )
-                  : null,
-            ),
-        ];
+        final meals = byDay[day] ?? const <String, _DayMeal>{};
+        double lunch = 0;
+        double dinner = 0;
+        for (final meal in meals.values) {
+          if (!counts(day, meal)) continue;
+          lunch += meal.lunch;
+          dinner += meal.dinner;
+        }
+
+        return _MealTable(
+          rows: [
+            for (final member in ordered)
+              _MealRow(
+                name: member.name,
+                meal: meals[member.id],
+                isMine: member.id == _uid,
+                onTap: _editorFor(member, day, meals[member.id]),
+              ),
+          ],
+          lunch: lunch,
+          dinner: dinner,
+        );
       },
+    );
+  }
+
+  /// What tapping a member's row does on [day]: an admin corrects
+  /// anyone's meals, and a member enters their own, up to today.
+  VoidCallback? _editorFor(GroupMember member, int day, _DayMeal? meal) {
+    if (_canEdit) return () => _openEditor(member, day, meal);
+
+    final now = DateTime.now();
+    final isPast = !isCurrentMonth(_month) || day <= now.day;
+    if (member.id != _uid || !isEditableMonth(_month) || !isPast) return null;
+
+    return () => showMealForm(
+      context,
+      groupId: widget.groupId,
+      isAdmin: false,
+      date: DateTime(_month.year, _month.month, day),
+    );
+  }
+
+  /// The member's own meals this month, day by day.
+  void _showMyMeals(
+    Map<int, Map<String, _DayMeal>> byDay,
+    bool Function(int day, _DayMeal meal) counts,
+  ) {
+    final days = byDay.keys.toList()..sort();
+    double lunch = 0;
+    double dinner = 0;
+
+    final rows = <(String, List<String>)>[];
+    for (final day in days) {
+      final meal = byDay[day]![_uid];
+      if (meal == null || !counts(day, meal) || meal.total == 0) continue;
+
+      lunch += meal.lunch;
+      dinner += meal.dinner;
+      rows.add((
+        '$day ${_shortMonths[_month.month - 1]}'
+            '${meal.isPlan ? '  Auto' : ''}',
+        [_quantity(meal.lunch), _quantity(meal.dinner), _quantity(meal.total)],
+      ));
+    }
+
+    _showTable(
+      title: 'My Meals',
+      rows: rows,
+      total: [_quantity(lunch), _quantity(dinner), _quantity(lunch + dinner)],
+    );
+  }
+}
+
+const _shortMonths = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// One member's line in a day's table.
+class _MealRow {
+  const _MealRow({
+    required this.name,
+    required this.meal,
+    required this.isMine,
+    required this.onTap,
+  });
+
+  final String name;
+
+  /// Null when the member has nothing that day.
+  final _DayMeal? meal;
+  final bool isMine;
+  final VoidCallback? onTap;
+}
+
+/// A day's meals as a table: each member's lunch, dinner and total,
+/// with the day's total at the foot.
+class _MealTable extends StatelessWidget {
+  const _MealTable({
+    required this.rows,
+    required this.lunch,
+    required this.dinner,
+  });
+
+  final List<_MealRow> rows;
+  final double lunch;
+  final double dinner;
+
+  static const double _column = 50;
+  static const double _editWidth = 24;
+
+  static String _quantity(double value) =>
+      _MealLedgerScreenState._quantity(value);
+
+  Widget _line({
+    required Widget name,
+    required List<String> values,
+    required TextStyle style,
+    required bool hasEdit,
+    Widget? edit,
+  }) {
+    return Row(
+      children: [
+        Expanded(child: name),
+        for (final value in values)
+          SizedBox(
+            width: _column,
+            child: Text(value, textAlign: TextAlign.end, style: style),
+          ),
+        if (hasEdit) SizedBox(width: _editWidth, child: edit),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A column for the pencil, when any row opens for editing.
+    final hasEdit = rows.any((row) => row.onTap != null);
+
+    const headStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+    );
+    const valueStyle = TextStyle(
+      color: AppTheme.textPrimary,
+      fontSize: 14.5,
+      fontWeight: FontWeight.w700,
+    );
+    const totalStyle = TextStyle(
+      color: AppTheme.primary,
+      fontSize: 15,
+      fontWeight: FontWeight.w900,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppTheme.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _line(
+              name: const Text('Member', style: headStyle),
+              values: const ['Lunch', 'Dinner', 'Total'],
+              style: headStyle,
+              hasEdit: hasEdit,
+            ),
+          ),
+          for (final row in rows)
+            Material(
+              color: row.isMine
+                  ? AppTheme.primary.withValues(alpha: 0.07)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: row.onTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  child: _line(
+                    name: Text.rich(
+                      TextSpan(
+                        text: row.name,
+                        children: [
+                          if (row.meal?.isPlan ?? false)
+                            const TextSpan(
+                              text: '  Auto',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14.5,
+                        fontWeight: row.isMine
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+                    ),
+                    values: row.meal == null
+                        ? const ['—', '—', '—']
+                        : [
+                            _quantity(row.meal!.lunch),
+                            _quantity(row.meal!.dinner),
+                            _quantity(row.meal!.total),
+                          ],
+                    style: valueStyle,
+                    hasEdit: hasEdit,
+                    edit: row.onTap == null
+                        ? null
+                        : const Align(
+                            alignment: Alignment.centerRight,
+                            child: Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          const Divider(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: _line(
+              name: const Text('Total', style: totalStyle),
+              values: [
+                _quantity(lunch),
+                _quantity(dinner),
+                _quantity(lunch + dinner),
+              ],
+              style: totalStyle,
+              hasEdit: hasEdit,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

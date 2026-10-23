@@ -430,6 +430,48 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final previous = shiftMonth(_month, -1);
     final next = shiftMonth(_month, 1);
 
+    // The whole hostel's month: the member's own spending and the
+    // hostel's on top, the calendar, then the picked day as a table.
+    if (!widget.onlyMine) {
+      final mine = [
+        for (final expense in docs)
+          if (expense.data()['paidById'] == _uid) expense,
+      ];
+      final myTotal = mine.fold<double>(
+        0,
+        (total, expense) =>
+            total + ((expense.data()['amount'] as num?)?.toDouble() ?? 0),
+      );
+
+      return MonthCalendarView(
+        // A new month starts on its own selected day.
+        key: ValueKey(_month),
+        month: _month,
+        onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+        onNextMonth: next == null ? null : () => _showMonth(next),
+        label: 'Total Expenses',
+        total: '৳${_plainAmount(total)}',
+        markedDays: byDay.keys.toSet(),
+        showMonthOption: true,
+        calendarOnly: true,
+        figures: [
+          CalendarFigure(
+            label: 'My Expenses',
+            value: '৳${_plainAmount(myTotal)}',
+            onTap: () => _showMyExpenses(mine, myTotal),
+          ),
+          CalendarFigure(
+            label: 'Total Expenses',
+            value: '৳${_plainAmount(total)}',
+            // What each member paid this month.
+            onTap: () => _showMemberTotals(docs),
+          ),
+        ],
+        linesOf: (day) => const [],
+        dayDetails: (day) => _dayTable(byDay[day] ?? const []),
+      );
+    }
+
     return MonthCalendarView(
       // A new month starts on its own selected day.
       key: ValueKey(_month),
@@ -566,6 +608,331 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
           },
         );
       },
+    );
+  }
+
+  /// The member's own expenses this month, the latest first.
+  void _showMyExpenses(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> mine,
+    double total,
+  ) {
+    DateTime dateOf(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+      final date = expense.data()['date'];
+      return date is Timestamp ? date.toDate() : DateTime(0);
+    }
+
+    final sorted = [...mine]..sort((a, b) => dateOf(b).compareTo(dateOf(a)));
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    Widget row(
+      String date,
+      String name,
+      String amount, {
+      bool isTotal = false,
+    }) {
+      final style = TextStyle(
+        color: isTotal ? AppTheme.primary : AppTheme.textPrimary,
+        fontSize: 15,
+        fontWeight: isTotal ? FontWeight.w900 : FontWeight.w600,
+      );
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 9),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 56,
+              child: Text(
+                date,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(name, overflow: TextOverflow.ellipsis, style: style),
+            ),
+            const SizedBox(width: 8),
+            Text(amount, style: style.copyWith(fontWeight: FontWeight.w800)),
+          ],
+        ),
+      );
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+                  child: Text(
+                    'My Expenses',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final expense in sorted)
+                        row(
+                          '${dateOf(expense).day} '
+                              '${months[dateOf(expense).month - 1]}',
+                          expense.data()['name'] as String? ?? 'Expense',
+                          '৳${_plainAmount((expense.data()['amount'] as num?)?.toDouble() ?? 0)}',
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                row('', 'Total', '৳${_plainAmount(total)}', isTotal: true),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// A day's expenses as a table: the item, who paid and how much,
+  /// with the day's total at the foot. The member's own are picked out.
+  Widget _dayTable(List<QueryDocumentSnapshot<Map<String, dynamic>>> expenses) {
+    if (expenses.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'No Expense',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+        ),
+      );
+    }
+
+    final isOpen = isEditableMonth(_month);
+    bool canEdit(Map<String, dynamic> data) =>
+        isOpen && (widget.isAdmin || data['paidById'] == _uid);
+    // A column for the pencil or menu, when any row has one.
+    final hasAction = expenses.any((expense) => canEdit(expense.data()));
+    final dayTotal = expenses.fold<double>(
+      0,
+      (total, expense) =>
+          total + ((expense.data()['amount'] as num?)?.toDouble() ?? 0),
+    );
+
+    const payerWidth = 78.0;
+    const amountWidth = 66.0;
+    const actionWidth = 28.0;
+    const headStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+    );
+    const totalStyle = TextStyle(
+      color: AppTheme.primary,
+      fontSize: 15,
+      fontWeight: FontWeight.w900,
+    );
+
+    Widget line({
+      required Widget item,
+      required Widget payer,
+      required Widget amount,
+      Widget? action,
+    }) {
+      return Row(
+        children: [
+          Expanded(child: item),
+          const SizedBox(width: 6),
+          SizedBox(width: payerWidth, child: payer),
+          SizedBox(
+            width: amountWidth,
+            child: Align(alignment: Alignment.centerRight, child: amount),
+          ),
+          if (hasAction) SizedBox(width: actionWidth, child: action),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppTheme.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: line(
+              item: const Text('Item', style: headStyle),
+              payer: const Text('Paid By', style: headStyle),
+              amount: const Text('Amount', style: headStyle),
+            ),
+          ),
+          for (final expense in expenses)
+            _tableRow(expense, line, canEdit(expense.data())),
+          const Divider(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: line(
+              item: const Text('Total', style: totalStyle),
+              payer: const SizedBox.shrink(),
+              amount: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('৳${_plainAmount(dayTotal)}', style: totalStyle),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableRow(
+    QueryDocumentSnapshot<Map<String, dynamic>> expense,
+    Widget Function({
+      required Widget item,
+      required Widget payer,
+      required Widget amount,
+      Widget? action,
+    })
+    line,
+    bool canEdit,
+  ) {
+    final data = expense.data();
+    final name = data['name'] as String? ?? 'Expense';
+    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+    final isMine = data['paidById'] == _uid;
+    final note = _firstLine(data['description']);
+
+    final Widget? action;
+    if (canEdit && widget.isAdmin) {
+      // Admins can also delete.
+      action = PopupMenuButton<String>(
+        tooltip: 'Expense options',
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        icon: const Icon(
+          Icons.more_vert_rounded,
+          color: AppTheme.textSecondary,
+        ),
+        onSelected: (choice) {
+          if (choice == 'edit') {
+            _openExpenseForm(expense: expense);
+          } else {
+            _deleteExpense(expense, name);
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'edit', child: Text('Edit')),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete', style: TextStyle(color: AppTheme.danger)),
+          ),
+        ],
+      );
+    } else if (canEdit) {
+      action = const Align(
+        alignment: Alignment.centerRight,
+        child: Icon(Icons.edit_outlined, size: 16, color: AppTheme.primary),
+      );
+    } else {
+      action = null;
+    }
+
+    return Material(
+      color: isMine
+          ? AppTheme.primary.withValues(alpha: 0.07)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: line(
+            item: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (note != null)
+                  Text(
+                    note,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
+            payer: Text(
+              data['paidByName'] as String? ?? 'Member',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13.5,
+                fontWeight: isMine ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+            amount: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '৳${_plainAmount(amount)}',
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            action: action,
+          ),
+        ),
+      ),
     );
   }
 

@@ -37,6 +37,16 @@ class CalendarLine {
   final Widget? action;
 }
 
+/// A figure for the month on top of the calendar, such as the
+/// member's own meals, which can open more about it.
+class CalendarFigure {
+  const CalendarFigure({required this.label, required this.value, this.onTap});
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+}
+
 /// A month of records as a calendar: one figure for the month on top,
 /// the days that have an entry picked out in colour, and underneath a
 /// small card for each day, from the 1st up to today. Tapping a day in
@@ -52,6 +62,9 @@ class MonthCalendarView extends StatefulWidget {
     this.shortLinesOf,
     this.emptyText = 'No entry',
     this.showMonthOption = false,
+    this.calendarOnly = false,
+    this.figures,
+    this.dayDetails,
     this.newestFirst = false,
     this.belowCalendar,
     this.onTotalTap,
@@ -72,6 +85,18 @@ class MonthCalendarView extends StatefulWidget {
   /// of the selected day (the default) and the month, with one short
   /// line per day. Off, every day's card is listed below the calendar.
   final bool showMonthOption;
+
+  /// Always shows the whole month's calendar, with no strip of days and
+  /// no button to switch between them. A picked day is listed alone.
+  final bool calendarOnly;
+
+  /// Figures side by side under the month's name, in place of [label]
+  /// and [total].
+  final List<CalendarFigure>? figures;
+
+  /// Builds a day's details in place of its [linesOf], such as a
+  /// table.
+  final Widget Function(int day)? dayDetails;
 
   /// Lists the day cards from the latest day down to the 1st.
   final bool newestFirst;
@@ -159,6 +184,15 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   /// One key per day card, to scroll to it.
   final Map<int, GlobalKey> _dayKeys = {};
 
+  /// The strip of days, scrolled to keep the picked one in view.
+  final ScrollController _strip = ScrollController();
+
+  /// True while the whole month's calendar is open in place of the
+  /// strip.
+  bool _showGrid = false;
+
+  bool get _gridOpen => widget.calendarOnly || _showGrid;
+
   bool get _isCurrentMonth =>
       _today.year == widget.month.year && _today.month == widget.month.month;
 
@@ -169,6 +203,15 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     _selectedDay = _isCurrentMonth
         ? _today.day
         : DateTime(widget.month.year, widget.month.month + 1, 0).day;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollStripTo(_selectedDay, animate: false),
+    );
+  }
+
+  @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
   }
 
   /// A small round arrow for stepping between months.
@@ -201,9 +244,13 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   }
 
   void _select(int day) {
-    setState(() => _selectedDay = day);
+    setState(() {
+      _selectedDay = day;
+      _showGrid = false;
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollStripTo(day);
       final target = _dayKeys[day]?.currentContext;
       if (target != null && target.mounted) {
         Scrollable.ensureVisible(
@@ -216,6 +263,33 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     });
   }
 
+  /// The width of one day in the strip, with the gap after it.
+  static const double _chipWidth = 48;
+  static const double _chipGap = 6;
+
+  /// Brings the picked day into view in the strip.
+  void _scrollStripTo(int day, {bool animate = true}) {
+    if (!_strip.hasClients) return;
+
+    final index = day - 1;
+    final viewport = _strip.position.viewportDimension;
+    final target =
+        (index * (_chipWidth + _chipGap) - (viewport - _chipWidth) / 2).clamp(
+          0.0,
+          _strip.position.maxScrollExtent,
+        );
+
+    if (animate) {
+      _strip.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _strip.jumpTo(target);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final month = widget.month;
@@ -223,11 +297,14 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     // Past to present: the 1st up to today, or the whole of an earlier
     // month. A later day appears too once it is picked.
     final lastDay = _isCurrentMonth ? _today.day : daysInMonth;
-    final monthView = widget.showMonthOption && _mode == _ListMode.thisMonth;
+    final monthView =
+        widget.showMonthOption &&
+        !widget.calendarOnly &&
+        _mode == _ListMode.thisMonth;
 
     // Which cards are listed. Off, the days with something to show.
-    // Selected Day, only the picked day. This Month, every day with
-    // something to show, and the picked day even when it is empty.
+    // A single day, only that day. All, every day with something to
+    // show, and the picked day even when it is empty.
     bool listed(int day) {
       if (!widget.showMonthOption) {
         return _linesFor(day, false).isNotEmpty;
@@ -245,138 +322,27 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     final days = widget.newestFirst
         ? oldestFirst.reversed.toList()
         : oldestFirst;
-    final hasMonthNav =
-        widget.onPreviousMonth != null || widget.onNextMonth != null;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      // Room at the bottom for the Add button over the list.
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       children: [
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: widget.onTotalTap,
+        _header(),
+        const SizedBox(height: 10),
+        if (_gridOpen)
+          Card(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                18,
-                16,
-                widget.onTotalTap == null ? 18 : 10,
-                16,
-              ),
-              child: Row(
-                children: [
-                  if (hasMonthNav) ...[
-                    _monthArrow(
-                      Icons.chevron_left_rounded,
-                      widget.onPreviousMonth,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Shrinks on a narrow phone rather than wrap.
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '${_monthNames[month.month - 1]} ${month.year}',
-                            style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 19,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        if (_isCurrentMonth) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            _dateText(_today),
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (hasMonthNav) ...[
-                    const SizedBox(width: 8),
-                    _monthArrow(
-                      Icons.chevron_right_rounded,
-                      widget.onNextMonth,
-                    ),
-                  ],
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        widget.label,
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        widget.total,
-                        style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          height: 1.15,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (widget.onTotalTap != null) ...[
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ],
-                ],
-              ),
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+              child: _grid(),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
-            child: _grid(),
-          ),
-        ),
+          )
+        else
+          _dayStrip(daysInMonth),
         const SizedBox(height: 12),
         if (widget.belowCalendar != null) ...[
           widget.belowCalendar!,
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
-        if (widget.showMonthOption) ...[
-          SegmentedButton<_ListMode>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: _ListMode.selectedDay,
-                label: Text('Selected Day'),
-              ),
-              ButtonSegment(
-                value: _ListMode.thisMonth,
-                label: Text('This Month'),
-              ),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (selection) {
-              setState(() => _mode = selection.first);
-            },
-          ),
-          const SizedBox(height: 14),
-        ] else
-          const SizedBox(height: 2),
         if (days.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -392,12 +358,338 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                 lines: day == _selectedDay || widget.shortLinesOf == null
                     ? widget.linesOf(day)
                     : widget.shortLinesOf!(day),
+                details: widget.dayDetails?.call(day),
                 emptyText: widget.emptyText,
                 isSelected: day == _selectedDay,
                 onTap: day == _selectedDay ? null : () => _select(day),
               ),
             ),
       ],
+    );
+  }
+
+  /// The month's name between its arrows, then the month's figures
+  /// side by side.
+  Widget _figureHeader() {
+    final month = widget.month;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _monthArrow(Icons.chevron_left_rounded, widget.onPreviousMonth),
+            SizedBox(
+              width: 120,
+              child: Text(
+                '${_monthNames[month.month - 1].substring(0, 3)} '
+                '${month.year}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            _monthArrow(Icons.chevron_right_rounded, widget.onNextMonth),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (final (index, figure) in widget.figures!.indexed) ...[
+              if (index > 0) const SizedBox(width: 10),
+              Expanded(child: _figureCard(figure)),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _figureCard(CalendarFigure figure) {
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: figure.onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      figure.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        figure.value,
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (figure.onTap != null)
+                const Icon(
+                  Icons.expand_more_rounded,
+                  size: 22,
+                  color: AppTheme.textSecondary,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One slim card: the month with its arrows, the month's figure, and
+  /// the button that opens the whole calendar.
+  Widget _header() {
+    if (widget.figures != null) return _figureHeader();
+
+    final month = widget.month;
+    final hasMonthNav =
+        widget.onPreviousMonth != null || widget.onNextMonth != null;
+
+    final total = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            widget.total,
+            style: const TextStyle(
+              color: AppTheme.primary,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              height: 1.15,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+        child: Row(
+          children: [
+            if (hasMonthNav) ...[
+              _monthArrow(Icons.chevron_left_rounded, widget.onPreviousMonth),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_monthNames[month.month - 1].substring(0, 3)} '
+                  '${month.year}',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            if (hasMonthNav) ...[
+              const SizedBox(width: 6),
+              _monthArrow(Icons.chevron_right_rounded, widget.onNextMonth),
+            ],
+            const Spacer(),
+            // The figure opens each member's share, when it can.
+            Flexible(
+              flex: 2,
+              child: InkWell(
+                onTap: widget.onTotalTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 2, 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: total),
+                      if (widget.onTotalTap != null)
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: AppTheme.textSecondary,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (!widget.calendarOnly)
+              IconButton(
+                tooltip: _showGrid ? 'Hide Calendar' : 'Show Calendar',
+                onPressed: () => setState(() => _showGrid = !_showGrid),
+                icon: Icon(
+                  _showGrid
+                      ? Icons.view_week_outlined
+                      : Icons.calendar_month_outlined,
+                  color: AppTheme.primary,
+                  size: 22,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The month's days side by side, scrolled to the picked one. "All"
+  /// comes first when the whole month can be listed.
+  Widget _dayStrip(int daysInMonth) {
+    final monthView = widget.showMonthOption && _mode == _ListMode.thisMonth;
+
+    final strip = ListView(
+      controller: _strip,
+      scrollDirection: Axis.horizontal,
+      children: [
+        for (var day = 1; day <= daysInMonth; day++)
+          _chip(
+            top:
+                _dayNames[DateTime(
+                      widget.month.year,
+                      widget.month.month,
+                      day,
+                    ).weekday -
+                    1],
+            day: day,
+            isSelected: !monthView && day == _selectedDay,
+            isOutlined: monthView && day == _selectedDay,
+            isMarked: widget.markedDays.contains(day),
+            isToday: _isCurrentMonth && day == _today.day,
+            onTap: () => _select(day),
+          ),
+      ],
+    );
+
+    return SizedBox(
+      height: 62,
+      child: Row(
+        children: [
+          // "All" stays in place while the days scroll beside it.
+          if (widget.showMonthOption)
+            _chip(
+              top: 'All',
+              bottom: Icons.list_rounded,
+              isSelected: monthView,
+              isMarked: false,
+              isToday: false,
+              // A second tap goes back to the picked day alone.
+              onTap: () => setState(() {
+                _mode = monthView ? _ListMode.selectedDay : _ListMode.thisMonth;
+              }),
+            ),
+          Expanded(child: strip),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip({
+    required String top,
+    int? day,
+    IconData? bottom,
+    required bool isSelected,
+    bool isOutlined = false,
+    required bool isMarked,
+    required bool isToday,
+    required VoidCallback onTap,
+  }) {
+    final background = isSelected
+        ? AppTheme.primary
+        : isMarked
+        ? const Color(0xFFD8F2E5)
+        : AppTheme.surface;
+    final foreground = isSelected
+        ? Colors.white
+        : isMarked
+        ? AppTheme.primaryDark
+        : AppTheme.textSecondary;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: _chipGap),
+      child: Material(
+        color: background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: isOutlined || (isToday && !isSelected)
+              ? const BorderSide(color: AppTheme.primary, width: 1.5)
+              : BorderSide(
+                  color: isSelected || isMarked
+                      ? Colors.transparent
+                      : const Color(0xFFE3E9E5),
+                ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: _chipWidth,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  top,
+                  style: TextStyle(
+                    color: foreground.withValues(alpha: isSelected ? 0.85 : 1),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                if (day != null)
+                  Text(
+                    '$day',
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
+                  )
+                else
+                  Icon(bottom, size: 20, color: foreground),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -456,11 +748,17 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     final isSelected = day == _selectedDay;
     final isMarked = widget.markedDays.contains(day);
     final isToday = _isCurrentMonth && day == _today.day;
+    // A day still to come has nothing to show yet, so it cannot be
+    // picked from the calendar alone.
+    final isLater = widget.calendarOnly && _isCurrentMonth && day > _today.day;
 
     final Color background;
     final Color foreground;
 
-    if (isSelected) {
+    if (isLater) {
+      background = Colors.transparent;
+      foreground = AppTheme.textSecondary.withValues(alpha: 0.35);
+    } else if (isSelected) {
       background = AppTheme.primary;
       foreground = Colors.white;
     } else if (isMarked) {
@@ -477,7 +775,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
       child: Center(
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: () => _select(day),
+          onTap: isLater ? null : () => _select(day),
           child: Container(
             width: 38,
             height: 38,
@@ -513,8 +811,12 @@ class _DayCard extends StatelessWidget {
     required this.lines,
     required this.emptyText,
     required this.isSelected,
+    this.details,
     this.onTap,
   });
+
+  /// Shown in place of [lines], when given.
+  final Widget? details;
 
   final String date;
   final List<CalendarLine> lines;
@@ -546,30 +848,57 @@ class _DayCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // The date on a tinted label, so each day stands apart
-              // from the lines under it.
-              Container(
-                margin: const EdgeInsets.only(top: 2, bottom: 2),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.primary
-                      : const Color(0xFFD8F2E5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  date,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : AppTheme.primaryDark,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
+              // from the lines under it. A table's date sits in the
+              // middle, in brass, apart from its green header.
+              if (details != null)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 2, bottom: 2, right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      date,
+                      style: const TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  margin: const EdgeInsets.only(top: 2, bottom: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primary
+                        : const Color(0xFFD8F2E5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    date,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : AppTheme.primaryDark,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-              for (final line in lines) _LineRow(line: line),
-              if (lines.isEmpty)
+              if (details != null)
+                details!
+              else
+                for (final line in lines) _LineRow(line: line),
+              if (details == null && lines.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Text(

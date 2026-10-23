@@ -1,10 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/profile_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/update_prompt.dart';
 import 'about_screen.dart';
+import 'guide_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -120,6 +124,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _isChecking = false;
+
+  /// Offers the newest version when there is one, such as one put off
+  /// with Later.
+  Future<void> _checkForUpdate() async {
+    if (_isChecking) return;
+    setState(() => _isChecking = true);
+    final update = await UpdateService.check();
+    if (!mounted) return;
+    setState(() => _isChecking = false);
+
+    if (update == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have the latest version.')),
+      );
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !update.isRequired,
+      builder: (_) => UpdateDialog(update: update),
+    );
+  }
+
+  void _openGuide() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const GuideScreen()));
+  }
+
   void _openAbout() {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const AboutScreen()));
@@ -197,6 +231,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: _changePassword,
                     ),
                     const _TileDivider(),
+                    _ProfileTile(
+                      icon: Icons.menu_book_outlined,
+                      title: 'HostelMate Guide',
+                      onTap: _openGuide,
+                    ),
+                    const _TileDivider(),
+                    // The web app is always the newest version.
+                    if (!kIsWeb) ...[
+                      _ProfileTile(
+                        icon: Icons.system_update_outlined,
+                        title: 'Check for Updates',
+                        value: _isChecking ? 'Checking…' : null,
+                        onTap: _checkForUpdate,
+                      ),
+                      const _TileDivider(),
+                    ],
                     _ProfileTile(
                       icon: Icons.info_outline_rounded,
                       title: 'App and Developer',

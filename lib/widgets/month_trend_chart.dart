@@ -144,68 +144,40 @@ class _MonthTrendChartState extends State<MonthTrendChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Title and switch share the width, so neither runs off a
-            // narrow phone.
-            Row(
-              children: [
-                const Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 2),
-                    child: Text(
-                      'Month Trend',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
+            // The title in the middle, with the switch under it.
+            const Text(
+              'Month Trend',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.accentDeep,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SegmentedButton<_Measure>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity(horizontal: -3, vertical: -3),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: WidgetStatePropertyAll(
+                      TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                     ),
                   ),
+                  segments: const [
+                    ButtonSegment(value: _Measure.rate, label: Text('Rate')),
+                    ButtonSegment(value: _Measure.meals, label: Text('Meals')),
+                    ButtonSegment(value: _Measure.cost, label: Text('Cost')),
+                  ],
+                  selected: {_measure},
+                  onSelectionChanged: (selection) {
+                    setState(() => _measure = selection.first);
+                  },
                 ),
-                const SizedBox(width: 8),
-                Flexible(
-                  flex: 2,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: SegmentedButton<_Measure>(
-                      showSelectedIcon: false,
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity(
-                          horizontal: -3,
-                          vertical: -3,
-                        ),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: WidgetStatePropertyAll(
-                          TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      segments: const [
-                        ButtonSegment(
-                          value: _Measure.rate,
-                          label: Text('Rate'),
-                        ),
-                        ButtonSegment(
-                          value: _Measure.meals,
-                          label: Text('Meals'),
-                        ),
-                        ButtonSegment(
-                          value: _Measure.cost,
-                          label: Text('Cost'),
-                        ),
-                      ],
-                      selected: {_measure},
-                      onSelectionChanged: (selection) {
-                        setState(() => _measure = selection.first);
-                      },
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 14),
             // The picked day, with each month's figure beside its key.
