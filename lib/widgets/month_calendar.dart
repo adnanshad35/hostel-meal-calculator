@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/month_archive.dart';
 import '../theme/app_theme.dart';
 
 /// One line in the details of a day: an entry, or a member's meals.
@@ -123,8 +124,9 @@ const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 enum _ListMode { selectedDay, thisMonth }
 
-/// How far back the month arrows go.
-const monthsOfHistory = 12;
+/// How far back the month arrows go: last month is the only earlier
+/// one whose meals and expenses are kept.
+const monthsOfHistory = 1;
 
 /// The month [delta] months from [month], or null when that is after
 /// the current month or more than [monthsOfHistory] months back.
@@ -142,6 +144,11 @@ DateTime? shiftMonth(DateTime month, int delta) {
 bool isCurrentMonth(DateTime month) {
   final now = DateTime.now();
   return month.year == now.year && month.month == now.month;
+}
+
+/// True while [month]'s meals and expenses may still be changed.
+bool isEditableMonth(DateTime month) {
+  return MonthLock.canEdit(month, DateTime.now());
 }
 
 class _MonthCalendarViewState extends State<MonthCalendarView> {

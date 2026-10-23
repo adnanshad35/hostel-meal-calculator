@@ -9,6 +9,7 @@ import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_archive.dart';
 import '../services/month_records.dart';
 import '../services/monthly_calculator.dart';
 import '../services/profile_service.dart';
@@ -525,7 +526,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     final selected = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(now.year, now.month),
+      firstDate: MonthLock.firstEditableDay(now),
       lastDate: DateTime(now.year, now.month + 1, 0),
       helpText: 'Select a meal date',
     );
@@ -1054,10 +1055,11 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
       },
       linesOf: (day) {
         final record = byDay[day];
-        // Only this month's days so far can be entered: a day that has
-        // not come yet has nothing to enter, and earlier months are
-        // read-only.
-        final canEdit = isCurrentMonth(_month) && day <= now.day;
+        // Only days that have come can be entered, while the month is
+        // still open: last month stays open for the first week.
+        final canEdit =
+            isEditableMonth(_month) &&
+            (!isCurrentMonth(_month) || day <= now.day);
 
         void edit() {
           showMealForm(

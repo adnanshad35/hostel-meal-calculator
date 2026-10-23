@@ -3,18 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
-import '../services/daily_totals.dart';
 import '../services/dashboard_summary.dart';
 import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_archive.dart';
 import '../services/monthly_calculator.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_tiles.dart';
-import '../widgets/month_trend_card.dart';
 import '../widgets/notification_bell.dart';
 import 'expense_screen.dart';
 import 'duty_roster_screen.dart';
@@ -516,6 +515,9 @@ class _HostelOverviewState extends State<_HostelOverview> {
         .collection('monthlySettings')
         .doc(MonthlyCalculator.monthKey(_now))
         .snapshots();
+
+    // Saves past months' summaries and clears records no longer kept.
+    if (widget.isAdmin) MonthArchive.runOnce(widget.groupId);
   }
 
   @override
@@ -548,24 +550,14 @@ class _HostelOverviewState extends State<_HostelOverview> {
                             meals.hasError ||
                             expenses.hasError;
 
-                        final loaded = isReady && !hasError;
-
                         return _cards(
-                          loaded
+                          isReady && !hasError
                               ? _summarize(
                                   members.data!,
                                   plans.data ?? const [],
                                   meals.data!,
                                   expenses.data!,
                                   monthSettings.data?.data(),
-                                )
-                              : null,
-                          daily: loaded
-                              ? _daily(
-                                  members.data!,
-                                  plans.data ?? const [],
-                                  meals.data!,
-                                  expenses.data!,
                                 )
                               : null,
                           hasError: hasError,
@@ -615,47 +607,8 @@ class _HostelOverviewState extends State<_HostelOverview> {
     );
   }
 
-  /// The hostel's meals and spending on each day of this month, for the
-  /// chart. Days without an entry count from the meal plans, the same
-  /// way as the figures above it.
-  ({List<double> meals, List<double> expenses}) _daily(
-    List<GroupMember> members,
-    List<MemberMealPlan> plans,
-    QuerySnapshot<Map<String, dynamic>> meals,
-    QuerySnapshot<Map<String, dynamic>> expenses,
-  ) {
-    final saved = [
-      for (final meal in meals.docs) MealRecord.fromData(meal.id, meal.data()),
-    ];
-
-    return (
-      meals: DailyTotals.meals(_now, [
-        ...saved,
-        ...MealPlans.automaticMeals(
-          plans: plans,
-          meals: saved,
-          activeMemberIds: {for (final member in members) member.id},
-          month: _now,
-          today: _now,
-        ),
-      ]),
-      expenses: DailyTotals.expenses(_now, [
-        for (final expense in expenses.docs)
-          ExpenseRecord(
-            date: (expense.data()['date'] as Timestamp?)?.toDate(),
-            amount: (expense.data()['amount'] as num?)?.toDouble() ?? 0,
-          ),
-      ]),
-    );
-  }
-
-  /// [summary] and [daily] are null while loading, or when they could
-  /// not be loaded.
-  Widget _cards(
-    DashboardSummary? summary, {
-    required ({List<double> meals, List<double> expenses})? daily,
-    required bool hasError,
-  }) {
+  /// [summary] is null while loading, or when it could not be loaded.
+  Widget _cards(DashboardSummary? summary, {required bool hasError}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -672,14 +625,6 @@ class _HostelOverviewState extends State<_HostelOverview> {
         ),
         const SizedBox(height: 12),
         _TodayCard(now: _now, summary: summary, onDuty: widget.responsible),
-        if (!hasError) ...[
-          const SizedBox(height: 12),
-          MonthTrendCard(
-            month: _now,
-            meals: daily?.meals,
-            expenses: daily?.expenses,
-          ),
-        ],
       ],
     );
   }

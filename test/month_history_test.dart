@@ -14,7 +14,7 @@ void main() {
     expect(shiftMonth(DateTime(now.year, now.month - 1), 1), thisMonth);
   });
 
-  test('goes back at most a year', () {
+  test('goes back to last month only', () {
     final oldest = DateTime(now.year, now.month - monthsOfHistory);
 
     expect(shiftMonth(thisMonth, -monthsOfHistory), oldest);

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/group_member.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
+import '../services/month_archive.dart';
 import '../services/month_records.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
@@ -572,9 +573,9 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final data = expense.data();
     final name = data['name'] as String? ?? 'Expense';
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-    // Earlier months are read-only.
-    final isThisMonth = isCurrentMonth(_month);
-    final canEdit = isThisMonth && (widget.isAdmin || data['paidById'] == _uid);
+    // A month is read-only once it is locked.
+    final isOpen = isEditableMonth(_month);
+    final canEdit = isOpen && (widget.isAdmin || data['paidById'] == _uid);
 
     return CalendarLine(
       title: name,
@@ -585,7 +586,7 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
           : data['paidByName'] as String?,
       trailing: '৳${_plainAmount(amount)}',
       onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
-      action: widget.isAdmin && isThisMonth
+      action: widget.isAdmin && isOpen
           ? PopupMenuButton<String>(
               tooltip: 'Expense options',
               padding: EdgeInsets.zero,
@@ -842,7 +843,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final selectedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2020),
+      firstDate: MonthLock.firstEditableDay(DateTime.now()),
       lastDate: DateTime.now(),
     );
 

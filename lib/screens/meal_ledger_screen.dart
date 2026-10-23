@@ -57,7 +57,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
 
   /// Admins correct meals in the current month only.
-  bool get _canEdit => widget.isAdmin && isCurrentMonth(_month);
+  bool get _canEdit => widget.isAdmin && isEditableMonth(_month);
 
   @override
   void initState() {
