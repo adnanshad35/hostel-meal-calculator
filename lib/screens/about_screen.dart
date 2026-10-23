@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -21,7 +22,7 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  String _versionLabel = 'Version 1.0.0';
+  String _version = '1.0.0';
 
   @override
   void initState() {
@@ -33,9 +34,7 @@ class _AboutScreenState extends State<AboutScreen> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
-      setState(() {
-        _versionLabel = 'Version ${info.version}+${info.buildNumber}';
-      });
+      setState(() => _version = '${info.version}+${info.buildNumber}');
     } catch (_) {
       // Keep fallback label.
     }
@@ -57,6 +56,31 @@ class _AboutScreenState extends State<AboutScreen> {
 
     if (!opened && mounted) _showMessage(fallbackMessage);
   }
+
+  void _openWebsite() => _open(
+    Uri.parse('https://$_website'),
+    fallbackMessage: 'Unable to open the website.',
+  );
+
+  void _openLinkedIn() => _open(
+    Uri.parse(_linkedInUrl),
+    fallbackMessage: 'Unable to open LinkedIn.',
+  );
+
+  void _email() => _open(
+    Uri(scheme: 'mailto', path: _supportEmail),
+    fallbackMessage:
+        'No email application was found. Please email $_supportEmail.',
+  );
+
+  /// The app itself in the browser, past the landing page.
+  void _openWebVersion() => _open(
+    Uri.parse('https://$_website/app/'),
+    fallbackMessage: 'Unable to open the web version.',
+  );
+
+  /// Not out yet: the links come once the apps are published.
+  void _openOtherApps() => _showMessage('Other apps are coming soon.');
 
   /// Takes the idea in the app and sends it straight to the developer.
   Future<void> _requestFeature() async {
@@ -83,165 +107,287 @@ class _AboutScreenState extends State<AboutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('App and Developer')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          // ─── App ───
           Card(
+            margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.asset(
-                              'assets/icon/icon.png',
-                              width: 46,
-                              height: 46,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('HostelMate', style: textTheme.titleLarge),
-                                Text(_versionLabel),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'HostelMate keeps a hostel\'s meals and shared '
-                        'expenses in one place. Members record what they '
-                        'eat and what they spend, and the app works out '
-                        'the meal rate and what each person pays or gets '
-                        'back at the end of the month.',
-                      ),
-                    ],
+                _AppRow(version: _version),
+                // Both are for the phone app: the web app is already
+                // in the browser, and always the newest version.
+                if (!kIsWeb) ...[
+                  const Divider(height: 1),
+                  _Tile(
+                    icon: Icons.language_rounded,
+                    title: 'Web Version',
+                    trailing: const Icon(Icons.open_in_new, size: 19),
+                    onTap: _openWebVersion,
                   ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  onTap: () => _open(
-                    Uri.parse('https://$_website'),
-                    fallbackMessage: 'Unable to open the website.',
-                  ),
-                  leading: const Icon(Icons.public, color: AppTheme.primary),
-                  title: const Text(
-                    _website,
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                  const Divider(height: 1, indent: 56),
+                ] else
+                  const Divider(height: 1),
+                // The landing page, about the app.
+                _Tile(
+                  icon: Icons.public,
+                  title: 'Website',
                   trailing: const Icon(Icons.open_in_new, size: 19),
+                  onTap: _openWebsite,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-
-          // ─── Developer ───
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                  child: Row(
-                    children: [
-                      const CircleAvatar(
-                        radius: 32,
-                        backgroundColor: AppTheme.surfaceSoft,
-                        backgroundImage: AssetImage(
-                          'assets/images/developer.jpg',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Abu Adnan Shad', style: textTheme.titleLarge),
-                            const Text('Developer'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  onTap: () => _open(
-                    Uri.parse(_linkedInUrl),
-                    fallbackMessage: 'Unable to open LinkedIn.',
-                  ),
-                  leading: const FaIcon(
-                    FontAwesomeIcons.linkedinIn,
-                    color: AppTheme.primary,
-                    size: 21,
-                  ),
-                  title: const Text(
-                    'LinkedIn',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  trailing: const Icon(Icons.open_in_new, size: 19),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  onTap: () => _open(
-                    Uri(scheme: 'mailto', path: _supportEmail),
-                    fallbackMessage:
-                        'No email application was found. '
-                        'Please email $_supportEmail.',
-                  ),
-                  leading: const Icon(
-                    Icons.mail_outline,
-                    color: AppTheme.primary,
-                  ),
-                  title: const Text(
-                    _supportEmail,
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  trailing: const Icon(Icons.open_in_new, size: 19),
-                ),
-              ],
-            ),
+          _DeveloperCard(
+            onLinkedIn: _openLinkedIn,
+            onEmail: _email,
+            onOtherApps: _openOtherApps,
           ),
           const SizedBox(height: 16),
-
-          // ─── Feedback ───
           Card(
+            margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
-            child: ListTile(
+            child: _Tile(
+              icon: Icons.lightbulb_outline_rounded,
+              title: 'Request a Feature',
               onTap: _requestFeature,
-              leading: const Icon(
-                Icons.lightbulb_outline_rounded,
-                color: AppTheme.primary,
-              ),
-              title: const Text(
-                'Request a Feature',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppTheme.textSecondary,
-              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The app's icon, name and version, then what it is for.
+class _AppRow extends StatelessWidget {
+  const _AppRow({required this.version});
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/icon/icon.png',
+                  width: 46,
+                  height: 46,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Text(
+                  'HostelMate',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'v$version',
+                  style: const TextStyle(
+                    color: AppTheme.ink,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'HostelMate keeps a hostel\'s meals, shared expenses and '
+            'monthly balance in one place. It helps members and managers '
+            'settle every month fairly.',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The developer's photo and name, with a button for each way to
+/// reach them.
+class _DeveloperCard extends StatelessWidget {
+  const _DeveloperCard({
+    required this.onLinkedIn,
+    required this.onEmail,
+    required this.onOtherApps,
+  });
+
+  final VoidCallback onLinkedIn;
+  final VoidCallback onEmail;
+  final VoidCallback onOtherApps;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                color: AppTheme.accent,
+                shape: BoxShape.circle,
+              ),
+              child: const CircleAvatar(
+                radius: 42,
+                backgroundColor: AppTheme.surfaceSoft,
+                backgroundImage: AssetImage('assets/images/developer.jpg'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Abu Adnan Shad',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Text(
+              'BSc in CSE, Leading University',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.accentDeep,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ContactButton(
+                  icon: const FaIcon(FontAwesomeIcons.linkedinIn, size: 19),
+                  label: 'LinkedIn',
+                  onTap: onLinkedIn,
+                ),
+                const SizedBox(width: 12),
+                _ContactButton(
+                  icon: const Icon(Icons.mail_outline, size: 21),
+                  label: 'Email',
+                  onTap: onEmail,
+                ),
+                const SizedBox(width: 12),
+                _ContactButton(
+                  icon: const Icon(Icons.apps_rounded, size: 21),
+                  label: 'Other Apps',
+                  onTap: onOtherApps,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactButton extends StatelessWidget {
+  const _ContactButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Flexible(
+      child: Material(
+        color: AppTheme.surfaceSoft,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: 86,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                children: [
+                  IconTheme(
+                    data: const IconThemeData(color: AppTheme.primary),
+                    child: icon,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  const _Tile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: AppTheme.primary),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      trailing:
+          trailing ??
+          const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
     );
   }
 }

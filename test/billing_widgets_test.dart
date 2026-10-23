@@ -200,7 +200,7 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Code'), 'ab');
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Days it adds'),
+      find.widgetWithText(TextFormField, 'Days It Adds'),
       '0',
     );
     await tester.tap(find.text('Create'));
@@ -265,8 +265,8 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('On. Everyone except you'), findsOneWidget);
-    expect(find.textContaining('Off. Turn on to pause'), findsOneWidget);
+    expect(find.text('On'), findsOneWidget);
+    expect(find.text('Off'), findsOneWidget);
 
     // Turning it on asks for confirmation and a message first.
     await tester.tap(find.byType(Switch).last);

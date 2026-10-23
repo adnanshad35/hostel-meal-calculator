@@ -244,9 +244,10 @@ class NotificationService {
     return _groupNotifications(groupId).doc(id).delete();
   }
 
-  /// Tells the other members of a hostel that an expense was added,
-  /// or ([type] 'mealPlan') that a member will be away. Best effort: a
-  /// failure never blocks the action that caused it.
+  /// Tells the other members of a hostel that a member will be away
+  /// ([type] 'mealPlan'). Added expenses are in Accountability
+  /// instead. Best effort: a failure never blocks the action that
+  /// caused it.
   static Future<void> notifyGroup({
     required String groupId,
     required String title,

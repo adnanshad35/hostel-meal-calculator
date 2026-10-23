@@ -5,10 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
+import '../services/edit_mark.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
+import '../services/month_archive.dart';
 import '../services/month_records.dart';
-import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_calendar.dart';
@@ -274,8 +276,10 @@ class _ExpenseCalendar extends StatefulWidget {
 }
 
 class _ExpenseCalendarState extends State<_ExpenseCalendar> {
-  late final DateTime _now = DateTime.now();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
+  /// The month on screen: this month, or an earlier one.
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _expenses;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
 
@@ -283,22 +287,15 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
   void initState() {
     super.initState();
 
-    // This month only.
-    _expenses = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('expenses')
-        .where(
-          'date',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(
-            DateTime(_now.year, _now.month),
-          ),
-        )
-        .where(
-          'date',
-          isLessThan: Timestamp.fromDate(DateTime(_now.year, _now.month + 1)),
-        )
-        .snapshots();
+    // One month at a time.
+    _expenses = MonthRecords.expenses(widget.groupId, _month).snapshots();
+  }
+
+  void _showMonth(DateTime month) {
+    setState(() {
+      _month = month;
+      _expenses = MonthRecords.expenses(widget.groupId, month).snapshots();
+    });
   }
 
   Future<void> _openExpenseForm({
@@ -359,7 +356,23 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await expense.reference.delete();
+      final data = expense.data() ?? const <String, dynamic>{};
+      final date = (data['date'] as Timestamp?)?.toDate();
+      final batch = FirebaseFirestore.instance.batch()
+        ..delete(expense.reference);
+      ActivityLog.addTo(
+        batch,
+        widget.groupId,
+        kind: ActivityKind.expenseDeleted,
+        memberId: data['paidById'] as String? ?? '',
+        memberName: data['paidByName'] as String? ?? '',
+        subject: name,
+        day: date == null ? '' : _dayKey(date),
+        details:
+            '৳${_plainAmount((data['amount'] as num?)?.toDouble() ?? 0)}'
+            ' · Paid by ${data['paidByName'] ?? 'Member'}',
+      );
+      await batch.commit();
       messenger.showSnackBar(SnackBar(content: Text('"$name" was deleted.')));
     } on FirebaseException catch (error) {
       messenger.showSnackBar(
@@ -420,14 +433,539 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
       total += (data['amount'] as num?)?.toDouble() ?? 0;
     }
 
+    // The latest expense of a day first.
+    DateTime addedAt(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+      final data = expense.data();
+      final time = data['createdAt'] ?? data['date'];
+      return time is Timestamp ? time.toDate() : DateTime(0);
+    }
+
+    for (final expenses in byDay.values) {
+      expenses.sort((a, b) => addedAt(b).compareTo(addedAt(a)));
+    }
+
+    final previous = shiftMonth(_month, -1);
+    final next = shiftMonth(_month, 1);
+
+    // The whole hostel's month: the member's own spending and the
+    // hostel's on top, the calendar, then the picked day as a table.
+    if (!widget.onlyMine) {
+      final mine = [
+        for (final expense in docs)
+          if (expense.data()['paidById'] == _uid) expense,
+      ];
+      final myTotal = mine.fold<double>(
+        0,
+        (total, expense) =>
+            total + ((expense.data()['amount'] as num?)?.toDouble() ?? 0),
+      );
+
+      return MonthCalendarView(
+        // A new month starts on its own selected day.
+        key: ValueKey(_month),
+        month: _month,
+        onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+        onNextMonth: next == null ? null : () => _showMonth(next),
+        label: 'Total Expenses',
+        total: '৳${_plainAmount(total)}',
+        markedDays: byDay.keys.toSet(),
+        showMonthOption: true,
+        calendarOnly: true,
+        figures: [
+          CalendarFigure(
+            label: 'My Expenses',
+            value: '৳${_plainAmount(myTotal)}',
+            onTap: () => _showMyExpenses(mine, myTotal),
+          ),
+          CalendarFigure(
+            label: 'Total Expenses',
+            value: '৳${_plainAmount(total)}',
+            // What each member paid this month.
+            onTap: () => _showMemberTotals(docs),
+          ),
+        ],
+        linesOf: (day) => const [],
+        dayDetails: (day) => _dayTable(byDay[day] ?? const []),
+      );
+    }
+
     return MonthCalendarView(
-      month: _now,
+      // A new month starts on its own selected day.
+      key: ValueKey(_month),
+      month: _month,
+      onPreviousMonth: previous == null ? null : () => _showMonth(previous),
+      onNextMonth: next == null ? null : () => _showMonth(next),
       label: widget.onlyMine ? 'My Expense' : 'Total Expense',
       total: '৳${_plainAmount(total)}',
       markedDays: byDay.keys.toSet(),
+      newestFirst: true,
+      // The hostel's figure opens what each member paid.
+      onTotalTap: widget.onlyMine ? null : () => _showMemberTotals(docs),
+      belowCalendar: const Padding(
+        padding: EdgeInsets.fromLTRB(4, 4, 4, 0),
+        child: Text(
+          'Recent Expenses',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
       linesOf: (day) {
         return [for (final expense in byDay[day] ?? const []) _line(expense)];
       },
+    );
+  }
+
+  /// What each member paid this month, the most first. Members who
+  /// paid nothing are listed at the end with ৳0.
+  void _showMemberTotals(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final paid = <String, double>{};
+    final names = <String, String>{};
+    double total = 0;
+
+    for (final expense in docs) {
+      final data = expense.data();
+      final id = data['paidById'] as String? ?? '';
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+
+      paid[id] = (paid[id] ?? 0) + amount;
+      names[id] = data['paidByName'] as String? ?? 'Member';
+      total += amount;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StreamBuilder<List<GroupMember>>(
+          stream: GroupMemberService.watch(widget.groupId),
+          builder: (context, snapshot) {
+            final everyone = {
+              ...names,
+              for (final member in snapshot.data ?? const <GroupMember>[])
+                member.id: member.name,
+            };
+            final ids = everyone.keys.toList()
+              ..sort((a, b) {
+                final byAmount = (paid[b] ?? 0).compareTo(paid[a] ?? 0);
+                return byAmount != 0
+                    ? byAmount
+                    : everyone[a]!.compareTo(everyone[b]!);
+              });
+
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+                      child: Text(
+                        'Member Totals',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        children: [
+                          for (final id in ids)
+                            ListTile(
+                              title: Text(
+                                everyone[id]!,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              trailing: Text(
+                                '৳${_plainAmount(paid[id] ?? 0)}',
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+                      title: const Text(
+                        'Total',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      trailing: Text(
+                        '৳${_plainAmount(total)}',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// The member's own expenses this month, the latest first.
+  void _showMyExpenses(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> mine,
+    double total,
+  ) {
+    DateTime dateOf(QueryDocumentSnapshot<Map<String, dynamic>> expense) {
+      final date = expense.data()['date'];
+      return date is Timestamp ? date.toDate() : DateTime(0);
+    }
+
+    final sorted = [...mine]..sort((a, b) => dateOf(b).compareTo(dateOf(a)));
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    Widget row(
+      String date,
+      String name,
+      String amount, {
+      bool isTotal = false,
+    }) {
+      final style = TextStyle(
+        color: isTotal ? AppTheme.primary : AppTheme.textPrimary,
+        fontSize: 15,
+        fontWeight: isTotal ? FontWeight.w900 : FontWeight.w600,
+      );
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 9),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 56,
+              child: Text(
+                date,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(name, overflow: TextOverflow.ellipsis, style: style),
+            ),
+            const SizedBox(width: 8),
+            Text(amount, style: style.copyWith(fontWeight: FontWeight.w800)),
+          ],
+        ),
+      );
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+                  child: Text(
+                    'My Expenses',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final expense in sorted)
+                        row(
+                          '${dateOf(expense).day} '
+                              '${months[dateOf(expense).month - 1]}',
+                          '${expense.data()['name'] as String? ?? 'Expense'}'
+                              '${isEditedEntry(expense.data()) ? '  · Edited' : ''}',
+                          '৳${_plainAmount((expense.data()['amount'] as num?)?.toDouble() ?? 0)}',
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                row('', 'Total', '৳${_plainAmount(total)}', isTotal: true),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// A day's expenses as a table: the item, who paid and how much,
+  /// with the day's total at the foot. The member's own are picked out.
+  Widget _dayTable(List<QueryDocumentSnapshot<Map<String, dynamic>>> expenses) {
+    if (expenses.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'No Expense',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+        ),
+      );
+    }
+
+    final isOpen = isEditableMonth(_month);
+    bool canEdit(Map<String, dynamic> data) =>
+        isOpen && (widget.isAdmin || data['paidById'] == _uid);
+    // A column for the pencil or menu, when any row has one.
+    final hasAction = expenses.any((expense) => canEdit(expense.data()));
+    final dayTotal = expenses.fold<double>(
+      0,
+      (total, expense) =>
+          total + ((expense.data()['amount'] as num?)?.toDouble() ?? 0),
+    );
+
+    const payerWidth = 78.0;
+    const amountWidth = 66.0;
+    const actionWidth = 28.0;
+    const headStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+    );
+    const totalStyle = TextStyle(
+      color: AppTheme.primary,
+      fontSize: 15,
+      fontWeight: FontWeight.w900,
+    );
+
+    Widget line({
+      required Widget item,
+      required Widget payer,
+      required Widget amount,
+      Widget? action,
+    }) {
+      return Row(
+        children: [
+          Expanded(child: item),
+          const SizedBox(width: 6),
+          SizedBox(width: payerWidth, child: payer),
+          SizedBox(
+            width: amountWidth,
+            child: Align(alignment: Alignment.centerRight, child: amount),
+          ),
+          if (hasAction) SizedBox(width: actionWidth, child: action),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppTheme.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: line(
+              item: const Text('Item', style: headStyle),
+              payer: const Text('Paid By', style: headStyle),
+              amount: const Text('Amount', style: headStyle),
+            ),
+          ),
+          for (final expense in expenses)
+            _tableRow(expense, line, canEdit(expense.data())),
+          const Divider(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: line(
+              item: const Text('Total', style: totalStyle),
+              payer: const SizedBox.shrink(),
+              amount: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('৳${_plainAmount(dayTotal)}', style: totalStyle),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableRow(
+    QueryDocumentSnapshot<Map<String, dynamic>> expense,
+    Widget Function({
+      required Widget item,
+      required Widget payer,
+      required Widget amount,
+      Widget? action,
+    })
+    line,
+    bool canEdit,
+  ) {
+    final data = expense.data();
+    final name = data['name'] as String? ?? 'Expense';
+    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+    final isMine = data['paidById'] == _uid;
+    final note = _firstLine(data['description']);
+    // Changed after it was saved, so everyone can see it was edited.
+    final isEdited = isEditedEntry(data);
+
+    final Widget? action;
+    if (canEdit && widget.isAdmin) {
+      // Admins can also delete.
+      action = PopupMenuButton<String>(
+        tooltip: 'Expense options',
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        icon: const Icon(
+          Icons.more_vert_rounded,
+          color: AppTheme.textSecondary,
+        ),
+        onSelected: (choice) {
+          if (choice == 'edit') {
+            _openExpenseForm(expense: expense);
+          } else {
+            _deleteExpense(expense, name);
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'edit', child: Text('Edit')),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete', style: TextStyle(color: AppTheme.danger)),
+          ),
+        ],
+      );
+    } else if (canEdit) {
+      action = const Align(
+        alignment: Alignment.centerRight,
+        child: Icon(Icons.edit_outlined, size: 16, color: AppTheme.primary),
+      );
+    } else {
+      action = null;
+    }
+
+    return Material(
+      color: isMine
+          ? AppTheme.primary.withValues(alpha: 0.07)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: line(
+            item: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    text: name,
+                    children: [
+                      if (isEdited)
+                        const TextSpan(
+                          text: '  Edited',
+                          style: TextStyle(
+                            color: AppTheme.accentDeep,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (note != null)
+                  Text(
+                    note,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
+            payer: Text(
+              data['paidByName'] as String? ?? 'Member',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13.5,
+                fontWeight: isMine ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+            amount: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '৳${_plainAmount(amount)}',
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            action: action,
+          ),
+        ),
+      ),
     );
   }
 
@@ -435,7 +973,9 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final data = expense.data();
     final name = data['name'] as String? ?? 'Expense';
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-    final canEdit = widget.isAdmin || data['paidById'] == _uid;
+    // A month is read-only once it is locked.
+    final isOpen = isEditableMonth(_month);
+    final canEdit = isOpen && (widget.isAdmin || data['paidById'] == _uid);
 
     return CalendarLine(
       title: name,
@@ -446,7 +986,7 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
           : data['paidByName'] as String?,
       trailing: '৳${_plainAmount(amount)}',
       onTap: canEdit ? () => _openExpenseForm(expense: expense) : null,
-      action: widget.isAdmin
+      action: widget.isAdmin && isOpen
           ? PopupMenuButton<String>(
               tooltip: 'Expense options',
               padding: EdgeInsets.zero,
@@ -479,6 +1019,13 @@ String? _firstLine(Object? description) {
 
   final line = description.trim().split('\n').first.trim();
   return line.isEmpty ? null : line;
+}
+
+/// A day as `YYYY-MM-DD`, for the hostel's history.
+String _dayKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
 
 String _plainAmount(double value) {
@@ -703,7 +1250,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final selectedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2020),
+      firstDate: MonthLock.firstEditableDay(DateTime.now()),
       lastDate: DateTime.now(),
     );
 
@@ -785,46 +1332,80 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       final savedDescription =
           (widget.expense?.data()?['description'] as String? ?? '').trim();
 
+      final name = _nameController.text.trim();
+      final day = _dayKey(_selectedDate);
+
       if (_isEditing) {
-        await expenses.doc(widget.expense!.id).update({
-          'name': _nameController.text.trim(),
-          'amount': amount,
-          'date': Timestamp.fromDate(_selectedDate),
-          // Sent only when it changed.
-          if (description != savedDescription) 'description': description,
-          'updatedBy': _currentUser.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        await expenses.add({
-          'name': _nameController.text.trim(),
-          'description': description,
-          'amount': amount,
-          'date': Timestamp.fromDate(_selectedDate),
-          'paidById': paidById,
-          'paidByName': paidByName,
-          'enteredBy': _currentUser.uid,
-          'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
-              ? _currentUser.displayName!.trim()
-              : _currentUser.email ?? 'Member',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        final amountText = amount % 1 == 0
-            ? amount.toInt().toString()
-            : amount.toStringAsFixed(2);
-
-        // Not awaited: the expense is saved either way.
-        unawaited(
-          NotificationService.notifyGroup(
-            groupId: widget.groupId,
-            title: 'New Expense',
-            message:
-                '${_nameController.text.trim()} · ৳$amountText, '
-                'paid by $paidByName',
+        final saved = widget.expense!.data()!;
+        final savedDate = (saved['date'] as Timestamp?)?.toDate();
+        final changes = ActivityLog.changes({
+          '': (
+            '৳${_plainAmount((saved['amount'] as num?)?.toDouble() ?? 0)}',
+            '৳${_plainAmount(amount)}',
           ),
+          'Item': (saved['name'] as String? ?? '', name),
+          'Day': (savedDate == null ? '' : _dayKey(savedDate), day),
+          'Note': (savedDescription, description),
+        });
+
+        // Nothing changed, so nothing is saved or marked as edited.
+        if (changes.isEmpty) {
+          if (mounted) Navigator.of(context).pop();
+          return;
+        }
+
+        final reference = expenses.doc(widget.expense!.id);
+        final batch = FirebaseFirestore.instance.batch()
+          ..update(reference, {
+            'name': name,
+            'amount': amount,
+            'date': Timestamp.fromDate(_selectedDate),
+            // Sent only when it changed.
+            if (description != savedDescription) 'description': description,
+            'updatedBy': _currentUser.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        ActivityLog.addTo(
+          batch,
+          widget.groupId,
+          kind: ActivityKind.expenseChanged,
+          memberId: saved['paidById'] as String? ?? '',
+          memberName: saved['paidByName'] as String? ?? '',
+          subject: saved['name'] as String? ?? name,
+          day: day,
+          details: changes,
         );
+        await batch.commit();
+      } else {
+        final reference = expenses.doc();
+        final batch = FirebaseFirestore.instance.batch()
+          ..set(reference, {
+            'name': name,
+            'description': description,
+            'amount': amount,
+            'date': Timestamp.fromDate(_selectedDate),
+            'paidById': paidById,
+            'paidByName': paidByName,
+            'enteredBy': _currentUser.uid,
+            'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
+                ? _currentUser.displayName!.trim()
+                : _currentUser.email ?? 'Member',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        ActivityLog.addTo(
+          batch,
+          widget.groupId,
+          kind: ActivityKind.expenseAdded,
+          memberId: paidById,
+          memberName: paidByName,
+          subject: name,
+          day: day,
+          details:
+              '৳${_plainAmount(amount)}'
+              '${paidById == _currentUser.uid ? '' : ' · Paid by $paidByName'}',
+        );
+        await batch.commit();
       }
 
       if (!mounted) return;

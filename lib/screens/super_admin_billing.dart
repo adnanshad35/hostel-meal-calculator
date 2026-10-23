@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/subscription_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import 'hostel_activation_screen.dart';
 
@@ -441,7 +442,7 @@ class _PaymentInfoDialogState extends State<_PaymentInfoDialog> {
               maxLines: 6,
               maxLength: 400,
               decoration: const InputDecoration(
-                labelText: 'Instructions and prices',
+                labelText: 'Instructions and Prices',
                 alignLabelWithHint: true,
               ),
             ),
@@ -694,7 +695,7 @@ class _ApprovalCard extends StatelessWidget {
               if (payment.submittedByName.isNotEmpty)
                 _detail(
                   context,
-                  label: 'Sent by',
+                  label: 'Sent By',
                   value: payment.submittedByName,
                 ),
               if (payment.status == PaymentStatus.rejected &&
@@ -945,7 +946,7 @@ class _VoucherDialogState extends State<_VoucherDialog> {
                 textInputAction: TextInputAction.next,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                  labelText: 'Days it adds',
+                  labelText: 'Days It Adds',
                   prefixIcon: Icon(Icons.event_available_outlined),
                 ),
                 validator: _validateDays,
@@ -956,7 +957,7 @@ class _VoucherDialogState extends State<_VoucherDialog> {
                 textCapitalization: TextCapitalization.sentences,
                 maxLength: 80,
                 decoration: const InputDecoration(
-                  labelText: 'Note for yourself (optional)',
+                  labelText: 'Note for Yourself (Optional)',
                 ),
               ),
             ],
@@ -1026,14 +1027,10 @@ class AdminMaintenanceCard extends StatelessWidget {
           size: 30,
         ),
         title: const Text(
-          'Maintenance mode',
+          'Maintenance Mode',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(
-          config.maintenance
-              ? 'On. Everyone except you sees a maintenance screen.'
-              : 'Off. Turn on to pause the app for every user.',
-        ),
+        subtitle: Text(config.maintenance ? 'On' : 'Off'),
         value: config.maintenance,
         onChanged: (value) => _toggle(context, value),
       ),
@@ -1086,7 +1083,7 @@ class _MaintenanceDialogState extends State<_MaintenanceDialog> {
               maxLines: 4,
               maxLength: 200,
               decoration: const InputDecoration(
-                labelText: 'Message to users (optional)',
+                labelText: 'Message to Users (Optional)',
                 hintText: 'Example: Back at 9 PM tonight.',
                 alignLabelWithHint: true,
               ),
@@ -1103,6 +1100,197 @@ class _MaintenanceDialogState extends State<_MaintenanceDialog> {
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: const Text('Turn On'),
         ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// App update card (Overview tab)
+// ─────────────────────────────────────────────────────────────
+
+/// The newest app version every user is offered, and the oldest one
+/// still allowed.
+class AdminUpdateCard extends StatelessWidget {
+  const AdminUpdateCard({super.key});
+
+  Future<void> _edit(BuildContext context, UpdateConfig? config) async {
+    final entered = await showDialog<UpdateConfig>(
+      context: context,
+      builder: (_) => _UpdateConfigDialog(config: config),
+    );
+    if (entered == null || !context.mounted) return;
+
+    await runAdminAction(
+      context,
+      action: () => UpdateService.saveConfig(entered),
+      successMessage: 'Version ${entered.version} is now offered to users.',
+      onDone: () async {},
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<UpdateConfig?>(
+      stream: UpdateService.watchConfig(),
+      builder: (context, snapshot) {
+        final config = snapshot.data;
+
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            onTap: () => _edit(context, config),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: const Icon(
+              Icons.system_update_outlined,
+              color: AppTheme.primary,
+              size: 30,
+            ),
+            title: const Text(
+              'App Update',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(
+              config == null
+                  ? 'Not set. Users are checked against GitHub.'
+                  : 'Latest ${config.version}'
+                        '${config.minVersion.isEmpty ? '' : ' · Minimum ${config.minVersion}'}',
+            ),
+            trailing: const Icon(Icons.edit_outlined),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _UpdateConfigDialog extends StatefulWidget {
+  const _UpdateConfigDialog({required this.config});
+
+  final UpdateConfig? config;
+
+  @override
+  State<_UpdateConfigDialog> createState() => _UpdateConfigDialogState();
+}
+
+class _UpdateConfigDialogState extends State<_UpdateConfigDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final _version = TextEditingController(text: widget.config?.version);
+  late final _minVersion = TextEditingController(
+    text: widget.config?.minVersion,
+  );
+  late final _notes = TextEditingController(text: widget.config?.notes);
+  late final _downloadUrl = TextEditingController(
+    text: widget.config?.downloadUrl,
+  );
+
+  @override
+  void dispose() {
+    _version.dispose();
+    _minVersion.dispose();
+    _notes.dispose();
+    _downloadUrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    Navigator.of(context).pop(
+      UpdateConfig(
+        version: _version.text.trim(),
+        minVersion: _minVersion.text.trim(),
+        notes: _notes.text.trim(),
+        downloadUrl: _downloadUrl.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      title: const Text('App Update'),
+      content: SizedBox(
+        width: 440,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _version,
+                  decoration: const InputDecoration(
+                    labelText: 'Latest Version',
+                    hintText: '1.7.0',
+                  ),
+                  validator: (value) =>
+                      UpdateService.isValidVersion(value ?? '')
+                      ? null
+                      : 'Use a version such as 1.7.0.',
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _minVersion,
+                  decoration: const InputDecoration(
+                    labelText: 'Minimum Version (Optional)',
+                    hintText: 'Older versions must update',
+                  ),
+                  validator: (value) {
+                    final text = (value ?? '').trim();
+                    if (text.isEmpty) return null;
+                    if (!UpdateService.isValidVersion(text)) {
+                      return 'Use a version such as 1.6.0.';
+                    }
+                    if (UpdateService.isNewer(text, _version.text)) {
+                      return 'It cannot be above the latest version.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notes,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'What\'s New',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextFormField(
+                  controller: _downloadUrl,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(
+                    labelText: 'APK Link (Optional)',
+                    hintText: 'Newest GitHub release',
+                  ),
+                  validator: (value) {
+                    final text = (value ?? '').trim();
+                    if (text.isEmpty || text.startsWith('https://')) {
+                      return null;
+                    }
+                    return 'Use an https:// link.';
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
       ],
     );
   }

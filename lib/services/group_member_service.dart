@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/group_member.dart';
+import 'activity_log.dart';
+import 'month_archive.dart';
 import 'meal_plan_service.dart';
 
 /// Reads and maintains `groups/{groupId}/members`.
@@ -251,8 +253,35 @@ class GroupMemberService {
     });
   }
 
-  /// Deletes a member who does not use the app, with every meal,
-  /// expense, meal plan and duty turn recorded for them. Admins only.
+  /// A meal's month, from its `dateKey`, or null when it has none.
+  static DateTime? _mealMonth(Map<String, dynamic> data) {
+    final parts = (data['dateKey'] as String? ?? '').split('-');
+    if (parts.length < 2) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    return year == null || month == null ? null : DateTime(year, month);
+  }
+
+  /// An expense's month, from its `date`, or null when it has none.
+  static DateTime? _expenseMonth(Map<String, dynamic> data) {
+    final date = data['date'];
+    if (date is! Timestamp) return null;
+    final local = date.toDate();
+    return DateTime(local.year, local.month);
+  }
+
+  /// Whether a record of [month] may be deleted: while the month is
+  /// open, or once only its summary is kept. A record without a month
+  /// belongs to none, so it may go too.
+  static bool _mayClear(DateTime? month, DateTime now) {
+    return month == null ||
+        MonthLock.canEdit(month, now) ||
+        MonthLock.isSummaryOnly(month, now);
+  }
+
+  /// Deletes a member who does not use the app, with their meal plan,
+  /// duty turns, and meals and expenses in open months. Closed months
+  /// keep theirs. Admins only.
   static Future<void> deleteShadowMember({
     required String groupId,
     required GroupMember member,
@@ -271,10 +300,29 @@ class GroupMemberService {
         .where('paidById', isEqualTo: member.id)
         .get();
 
-    final references = [
-      for (final meal in meals.docs) meal.reference,
-      for (final expense in expenses.docs) expense.reference,
+    // A closed month keeps their records, so its totals never change;
+    // they are counted there as a former member.
+    final now = DateTime.now();
+    final mealsToDelete = [
+      for (final meal in meals.docs)
+        if (_mayClear(_mealMonth(meal.data()), now)) meal.reference,
     ];
+    final expensesToDelete = [
+      for (final expense in expenses.docs)
+        if (_mayClear(_expenseMonth(expense.data()), now)) expense.reference,
+    ];
+    final references = [...mealsToDelete, ...expensesToDelete];
+
+    // Recorded first, so their records can never vanish unseen.
+    await ActivityLog.add(
+      groupId,
+      kind: ActivityKind.memberRemoved,
+      memberId: member.id,
+      memberName: member.name,
+      details:
+          '${mealsToDelete.length} meal entries and '
+          '${expensesToDelete.length} expenses deleted',
+    );
 
     const chunkSize = 400;
     for (var start = 0; start < references.length; start += chunkSize) {
@@ -334,6 +382,7 @@ class GroupMemberService {
   static Future<void> setAdminRole({
     required String groupId,
     required String memberId,
+    required String memberName,
     required bool makeAdmin,
   }) async {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
@@ -380,6 +429,14 @@ class GroupMemberService {
         'role': makeAdmin ? 'admin' : 'member',
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      ActivityLog.addToTransaction(
+        transaction,
+        groupId,
+        kind: makeAdmin ? ActivityKind.adminMade : ActivityKind.adminRemoved,
+        memberId: memberId,
+        memberName: memberName,
+      );
     });
   }
 
@@ -556,6 +613,15 @@ class GroupMemberService {
         'previousGroupId': groupId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      ActivityLog.addToTransaction(
+        transaction,
+        groupId,
+        kind: ActivityKind.memberRemoved,
+        memberId: memberId,
+        memberName: member.name,
+        details: 'Their meals and expenses stay',
+      );
     });
 
     // Deactivates the removed user's member entry.
@@ -591,10 +657,16 @@ class GroupMemberService {
     // always land in the same batch.
     final operations = <void Function(WriteBatch)>[];
 
+    // Only open months move: a closed month keeps its records, so its
+    // totals never change.
+    final now = DateTime.now();
+
     for (final meal in shadowMeals.docs) {
       final data = meal.data();
       final dateKey = data['dateKey'] as String?;
       if (dateKey == null) continue;
+      final month = _mealMonth(data);
+      if (month == null || !MonthLock.canEdit(month, now)) continue;
 
       operations.add((batch) {
         if (!takenDates.contains(dateKey)) {
@@ -609,6 +681,9 @@ class GroupMemberService {
     }
 
     for (final expense in shadowExpenses.docs) {
+      final month = _expenseMonth(expense.data());
+      if (month == null || !MonthLock.canEdit(month, now)) continue;
+
       operations.add((batch) {
         batch.set(expenses.doc(), {
           ...expense.data(),

@@ -10,8 +10,8 @@ import '../services/profile_service.dart';
 import '../widgets/web_layout.dart';
 import 'create_group_screen.dart';
 import 'desktop_shell.dart';
-import 'hostel_dashboard_screen.dart';
 import 'join_group_screen.dart';
+import 'phone_shell.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -149,14 +149,13 @@ class HomeScreen extends StatelessWidget {
 
             // A member belongs to one hostel, so the app opens straight
             // into it.
-            return HostelDashboardScreen(
+            return PhoneShell(
               key: ValueKey(groupId),
               groupId: groupId,
               groupName: groupName,
               inviteCode: inviteCode,
               memberName: name,
               role: role,
-              isHome: true,
             );
           },
         );

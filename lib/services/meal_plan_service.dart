@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'activity_log.dart';
 import 'meal_plan.dart';
 
 /// Reads and saves `groups/{groupId}/mealPlans`, one document per
@@ -56,13 +57,29 @@ class MealPlanService {
     required String memberName,
     required List<MealPlanRule> rules,
   }) {
-    return _plans(groupId).doc(memberId).set({
-      'memberId': memberId,
-      'memberName': memberName,
-      'rules': [for (final rule in rules) rule.toMap()],
-      'updatedBy': FirebaseAuth.instance.currentUser!.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // The newest rule is what changed, for the hostel's history.
+    final latest = [...rules]..sort((a, b) => a.fromDate.compareTo(b.fromDate));
+
+    final batch = FirebaseFirestore.instance.batch()
+      ..set(_plans(groupId).doc(memberId), {
+        'memberId': memberId,
+        'memberName': memberName,
+        'rules': [for (final rule in rules) rule.toMap()],
+        'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    ActivityLog.addTo(
+      batch,
+      groupId,
+      kind: ActivityKind.mealPlanChanged,
+      memberId: memberId,
+      memberName: memberName,
+      day: latest.isEmpty ? '' : latest.last.fromDate,
+      details: latest.isEmpty
+          ? 'Plan cleared'
+          : 'From ${latest.last.fromDate} · ${ActivityLog.mealDetails(lunch: latest.last.lunch, dinner: latest.last.dinner)}',
+    );
+    return batch.commit();
   }
 
   /// Stops a member's plan after today, when they leave or are

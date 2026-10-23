@@ -6,15 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
+import '../services/daily_trend.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_archive.dart';
 import '../services/month_records.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
+import '../widgets/month_trend_chart.dart';
 import 'fixed_costs_screen.dart';
 import 'hostel_dashboard_screen.dart';
 
@@ -23,10 +27,14 @@ class MonthlySummaryScreen extends StatefulWidget {
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
+
+  /// True inside another page that has its own app bar.
+  final bool embedded;
 
   @override
   State<MonthlySummaryScreen> createState() => _MonthlySummaryScreenState();
@@ -42,6 +50,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _expensesStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
+
+  /// Last month's running totals, for the chart.
+  late Future<DailyTrend?> _previousTrend;
 
   _CalcTab _tab = _CalcTab.meals;
 
@@ -123,6 +134,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       widget.groupId,
       _selectedMonth,
     ).snapshots();
+    _previousTrend = _loadPreviousTrend(_selectedMonth)
+        .catchError((Object _) => null);
   }
 
   void _previousMonth() {
@@ -322,22 +335,40 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     );
   }
 
+  /// Saves the month's figures, with a record of the one that changed
+  /// in the hostel's history.
   Future<void> _saveMonthlySettings({
     required double minimumMeals,
     required double shopDue,
+    required ActivityKind kind,
+    required String details,
   }) async {
-    await _firestore
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('monthlySettings')
-        .doc(_monthKey(_selectedMonth))
-        .set({
+    final monthKey = _monthKey(_selectedMonth);
+    final batch = _firestore.batch()
+      ..set(
+        _firestore
+            .collection('groups')
+            .doc(widget.groupId)
+            .collection('monthlySettings')
+            .doc(monthKey),
+        {
           'minimumMeals': minimumMeals,
           'shopDue': shopDue,
-          'monthKey': _monthKey(_selectedMonth),
+          'monthKey': monthKey,
           'updatedBy': FirebaseAuth.instance.currentUser!.uid,
           'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        },
+        SetOptions(merge: true),
+      );
+    ActivityLog.addTo(
+      batch,
+      widget.groupId,
+      kind: kind,
+      subject: _monthName(_selectedMonth),
+      day: monthKey,
+      details: details,
+    );
+    await batch.commit();
   }
 
   /// Minimum meals and shop due are settled at the month's end. Says
@@ -360,8 +391,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           content: Text(
             'Minimum meals and shop due for '
             '${_monthName(_selectedMonth)} can be entered from $opens '
-            'to $closes. Wait until then, or turn on Special permission '
-            'in Settings.',
+            'to $closes. Wait until then, or turn on Min Meals & Shop Due Any Day '
+            'in Admin Settings.',
           ),
           actions: [
             FilledButton(
@@ -387,11 +418,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       hint: 'Example: 20',
       currentValue: currentMinimum,
     );
-    if (minimum == null || !mounted) return;
+    if (minimum == null || minimum == currentMinimum || !mounted) return;
     try {
       await _saveMonthlySettings(
         minimumMeals: minimum,
         shopDue: currentShopDue,
+        kind: ActivityKind.minMealsSet,
+        details:
+            '${_monthName(_selectedMonth)} · '
+            '${ActivityLog.number(currentMinimum)} → '
+            '${ActivityLog.number(minimum)}',
       );
     } on FirebaseException catch (error) {
       if (!mounted) return;
@@ -418,9 +454,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       prefixText: '৳ ',
       currentValue: currentDue,
     );
-    if (due == null || !mounted) return;
+    if (due == null || due == currentDue || !mounted) return;
     try {
-      await _saveMonthlySettings(minimumMeals: minimumMeals, shopDue: due);
+      await _saveMonthlySettings(
+        minimumMeals: minimumMeals,
+        shopDue: due,
+        kind: ActivityKind.shopDueSet,
+        details:
+            '${_monthName(_selectedMonth)} · '
+            '৳${ActivityLog.number(currentDue)} → ৳${ActivityLog.number(due)}',
+      );
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -442,7 +485,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final monthKey = _monthKey(_selectedMonth);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Details')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Balance')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _settingsStream,
         builder: (context, settingsSnapshot) {
@@ -470,6 +513,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             settingsByMonth,
             monthKey,
           );
+
+          // A locked month shows the summary saved for it, not one
+          // worked out again from records that may no longer be kept.
+          final saved = MonthSummary.isFinal(settings)
+              ? MonthSummary.fromSettings(settings)
+              : null;
 
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _mealsStream,
@@ -534,18 +583,30 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                             );
                           }
 
-                          final result = _calculate(
-                            members: members,
-                            meals: mealSnapshot.data?.docs ?? [],
-                            plans: planSnapshot.data ?? const [],
-                            expenses: expenseSnapshot.data?.docs ?? [],
-                            minimumMeals: minimumMeals,
-                            shopDue: shopDue,
-                          );
+                          final mealDocs = mealSnapshot.data?.docs ?? [];
+                          final expenseDocs = expenseSnapshot.data?.docs ?? [];
+                          final plans = planSnapshot.data ?? const [];
+                          final result =
+                              saved ??
+                              _calculate(
+                                members: members,
+                                meals: mealDocs,
+                                plans: plans,
+                                expenses: expenseDocs,
+                                minimumMeals: minimumMeals,
+                                shopDue: shopDue,
+                              );
 
                           return _buildContent(
                             context,
                             result: result,
+                            trend: _trendOf(
+                              _selectedMonth,
+                              meals: mealDocs.map(_mealRecord).toList(),
+                              expenses: expenseDocs.map(_expenseRecord),
+                              plans: plans,
+                              members: members,
+                            ),
                             members: members,
                             fixedCosts: fixedCosts,
                             minimumMeals: minimumMeals,
@@ -787,7 +848,13 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required double minimumMeals,
     required double shopDue,
     required bool canGoNext,
+    required DailyTrend? trend,
   }) {
+    final now = DateTime.now();
+    // Locked months can be read, not changed.
+    final canChange = widget.isAdmin && MonthLock.canEdit(_selectedMonth, now);
+    // Older months keep their summary only, not each entry.
+    final hasRecords = !MonthLock.isSummaryOnly(_selectedMonth, now);
     final previousMonth = DateTime(
       _selectedMonth.year,
       _selectedMonth.month - 1,
@@ -899,15 +966,15 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             previousMonthKey: _monthKey(previousMonth),
             groupId: widget.groupId,
             onCopy: () => _copySummaryCard(result: result),
-            onOpenMeals: () => _openRecords(0),
-            onOpenExpenses: () => _openRecords(1),
-            onEditMinimum: widget.isAdmin
+            onOpenMeals: hasRecords ? () => _openRecords(0) : null,
+            onOpenExpenses: hasRecords ? () => _openRecords(1) : null,
+            onEditMinimum: canChange
                 ? () => _setMinimumMeals(
                     currentMinimum: minimumMeals,
                     currentShopDue: shopDue,
                   )
                 : null,
-            onEditShopDue: widget.isAdmin
+            onEditShopDue: canChange
                 ? () => _setShopDue(
                     currentDue: shopDue,
                     minimumMeals: minimumMeals,
@@ -937,6 +1004,10 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               onCopyBalances: () => _copyMealBalances(result: result),
               onCopyTable: () => _copyFullTable(result: result),
             ),
+          if (trend != null) ...[
+            const SizedBox(height: 14),
+            _trendChart(trend),
+          ],
         ],
 
         // ═══ Fixed ═══
@@ -1104,6 +1175,77 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             ),
         ],
       ],
+    );
+  }
+
+  /// The month's running totals day by day, up to today for the
+  /// current month. Null when there is nothing to show, as for a month
+  /// whose records are no longer kept.
+  DailyTrend? _trendOf(
+    DateTime month, {
+    required List<MealRecord> meals,
+    required Iterable<ExpenseRecord> expenses,
+    required List<MemberMealPlan> plans,
+    required List<CalcMember> members,
+  }) {
+    final now = DateTime.now();
+    final isThisMonth = month.year == now.year && month.month == now.month;
+    final trend = DailyTrend.build(
+      month: month,
+      days: isThisMonth
+          ? now.day
+          : DateTime(month.year, month.month + 1, 0).day,
+      meals: _withPlannedMeals(
+        meals,
+        plans: plans,
+        members: members,
+        month: month,
+      ),
+      expenses: expenses,
+    );
+    return trend.isEmpty ? null : trend;
+  }
+
+  /// Last month's running totals, read once for each month shown.
+  /// Null when its records are no longer kept or it had none.
+  Future<DailyTrend?> _loadPreviousTrend(DateTime month) async {
+    final previous = DateTime(month.year, month.month - 1);
+    if (MonthLock.isSummaryOnly(previous, DateTime.now())) return null;
+
+    final meals = await MonthRecords.meals(widget.groupId, previous).get();
+    if (!mounted) return null;
+    final expenses = await MonthRecords.expenses(
+      widget.groupId,
+      previous,
+    ).get();
+    final plans = await MealPlanService.fetchAll(widget.groupId);
+    final members = await GroupMemberService.fetchActive(widget.groupId);
+
+    return _trendOf(
+      previous,
+      meals: meals.docs.map(_mealRecord).toList(),
+      expenses: expenses.docs.map(_expenseRecord),
+      plans: plans,
+      members: [
+        for (final member in members)
+          CalcMember(id: member.id, name: member.name),
+      ],
+    );
+  }
+
+  /// This month against last month, or this month alone when there is
+  /// nothing from last month.
+  Widget _trendChart(DailyTrend trend) {
+    return FutureBuilder<DailyTrend?>(
+      future: _previousTrend,
+      builder: (context, previous) {
+        return MonthTrendChart(
+          key: ValueKey(_selectedMonth),
+          month: _selectedMonth,
+          current: trend,
+          previous: previous.data,
+        );
+      },
     );
   }
 
@@ -1404,8 +1546,10 @@ class _RateHero extends StatelessWidget {
   final String previousMonthKey;
   final String groupId;
   final VoidCallback onCopy;
-  final VoidCallback onOpenMeals;
-  final VoidCallback onOpenExpenses;
+
+  /// Null for a month whose entries are no longer kept.
+  final VoidCallback? onOpenMeals;
+  final VoidCallback? onOpenExpenses;
 
   /// Null for members: only an admin sets these two.
   final VoidCallback? onEditMinimum;
@@ -1961,6 +2105,10 @@ Future<double?> _previousMealRate({
       .doc(previousMonthKey)
       .get();
   final settings = settingsDoc.data();
+  final saved = MonthSummary.fromSettings(settings);
+  if (saved != null) {
+    return saved.totalMealNumber > 0 ? saved.mealRate : null;
+  }
   final minimumMeals = (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
   final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
 

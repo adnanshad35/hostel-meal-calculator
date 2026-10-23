@@ -9,9 +9,11 @@ import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../services/month_archive.dart';
 import '../services/monthly_calculator.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_tiles.dart';
 import '../widgets/notification_bell.dart';
 import 'expense_screen.dart';
 import 'duty_roster_screen.dart';
@@ -19,7 +21,6 @@ import 'hostel_activation_screen.dart';
 import 'hostel_details_screen.dart';
 import 'meal_ledger_screen.dart';
 import 'meal_screen.dart';
-import 'monthly_summary_screen.dart';
 import 'profile_screen.dart';
 
 class HostelDashboardScreen extends StatefulWidget {
@@ -62,10 +63,6 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
 
   void _open(Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-  }
-
-  void _openCalculation() {
-    _open(MonthlySummaryScreen(groupId: groupId, isAdmin: isAdmin));
   }
 
   void _openActivation() {
@@ -118,12 +115,13 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
                           responsible: roster.data?.responsibleOn(
                             DateTime.now(),
                           ),
-                          onOpenCalculation: _openCalculation,
-                          onOpenExpenses: () => _open(
-                            MyRecordsScreen(groupId: groupId, initialTab: 1),
+                          onOpenHostel: () => _open(
+                            HostelDetailsScreen(
+                              groupId: groupId,
+                              groupName: widget.groupName,
+                              isAdmin: isAdmin,
+                            ),
                           ),
-                          onOpenMeals: () =>
-                              _open(MyRecordsScreen(groupId: groupId)),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -209,76 +207,29 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
               ),
             ),
           ),
-        if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
-        _LinkRow(
-          icon: Icons.groups_outlined,
-          title: 'Total Meals & Expenses',
-          color: AppTheme.primary,
-          backgroundColor: AppTheme.surfaceSoft,
-          onTap: () =>
-              _open(HostelRecordsScreen(groupId: groupId, isAdmin: isAdmin)),
-        ),
-        const SizedBox(height: 12),
-        _LinkRow(
-          icon: Icons.info_outline_rounded,
-          title: 'About Hostel',
-          color: AppTheme.primary,
-          backgroundColor: AppTheme.surfaceSoft,
-          onTap: () => _open(
-            HostelDetailsScreen(
-              groupId: groupId,
-              groupName: widget.groupName,
-              isAdmin: isAdmin,
+        // On the phone these have their own tabs.
+        if (!widget.isHome) ...[
+          if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
+          NavTile(
+            icon: Icons.groups_outlined,
+            title: 'Total Meals & Expenses',
+            onTap: () =>
+                _open(HostelRecordsScreen(groupId: groupId, isAdmin: isAdmin)),
+          ),
+          const SizedBox(height: 12),
+          NavTile(
+            icon: Icons.info_outline_rounded,
+            title: 'Hostel Details',
+            onTap: () => _open(
+              HostelDetailsScreen(
+                groupId: groupId,
+                groupName: widget.groupName,
+                isAdmin: isAdmin,
+              ),
             ),
           ),
-        ),
+        ],
       ],
-    );
-  }
-}
-
-/// The signed-in member's own meals and expenses this month, on two
-/// tabs.
-class MyRecordsScreen extends StatelessWidget {
-  const MyRecordsScreen({
-    super.key,
-    required this.groupId,
-    this.initialTab = 0,
-  });
-
-  final String groupId;
-
-  /// 0 opens on Meals, 1 on Expenses.
-  final int initialTab;
-
-  @override
-  Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    return DefaultTabController(
-      length: 2,
-      initialIndex: initialTab,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Meals & Expenses'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Meals'),
-              Tab(text: 'Expenses'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            MyMealsScreen(groupId: groupId, currentUserId: uid, embedded: true),
-            MyExpensesScreen(
-              groupId: groupId,
-              currentUserId: uid,
-              embedded: true,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -353,106 +304,66 @@ class _AddTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onAdd,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                // Shrinks a little on a narrow phone instead of cutting
-                // the word short.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+    // Icon and + on top, the word on its own line under them, so the
+    // word has the tile's whole width on any phone.
+    return Tooltip(
+      message: addTooltip,
+      child: Material(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onAdd,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: color, size: 21),
+                    ),
+                    const Spacer(),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              IconButton.filled(
-                tooltip: addTooltip,
-                onPressed: onAdd,
-                style: IconButton.styleFrom(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  fixedSize: const Size(38, 38),
-                ),
-                icon: const Icon(Icons.add, size: 21),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-/// A full-width row that opens a page.
-class _LinkRow extends StatelessWidget {
-  const _LinkRow({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.backgroundColor,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final Color color;
-  final Color backgroundColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        onTap: onTap,
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: color, size: 23),
-        ),
-        title: Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_rounded,
-          size: 19,
-          color: AppTheme.textSecondary,
-        ),
-      ),
-    );
-  }
-}
-
-String _money(double value) {
-  final whole = value.round().abs().toString();
-  final grouped = StringBuffer();
-
-  for (var index = 0; index < whole.length; index++) {
-    if (index > 0 && (whole.length - index) % 3 == 0) grouped.write(',');
-    grouped.write(whole[index]);
-  }
-
-  return '${value < 0 ? '−' : ''}৳$grouped';
 }
 
 String _count(double value) {
@@ -487,9 +398,7 @@ class _HostelOverview extends StatefulWidget {
     required this.subscription,
     required this.onOpenActivation,
     required this.responsible,
-    required this.onOpenCalculation,
-    required this.onOpenExpenses,
-    required this.onOpenMeals,
+    required this.onOpenHostel,
   });
 
   final String groupId;
@@ -502,9 +411,7 @@ class _HostelOverview extends StatefulWidget {
 
   /// The member's turn on duty today, if one is set.
   final DutyTurn? responsible;
-  final VoidCallback onOpenCalculation;
-  final VoidCallback onOpenExpenses;
-  final VoidCallback onOpenMeals;
+  final VoidCallback onOpenHostel;
 
   @override
   State<_HostelOverview> createState() => _HostelOverviewState();
@@ -545,6 +452,9 @@ class _HostelOverviewState extends State<_HostelOverview> {
         .collection('monthlySettings')
         .doc(MonthlyCalculator.monthKey(_now))
         .snapshots();
+
+    // Saves past months' summaries and clears records no longer kept.
+    if (widget.isAdmin) MonthArchive.runOnce(widget.groupId);
   }
 
   @override
@@ -646,9 +556,7 @@ class _HostelOverviewState extends State<_HostelOverview> {
           onOpenActivation: widget.onOpenActivation,
           summary: summary,
           hasError: hasError,
-          onOpenCalculation: widget.onOpenCalculation,
-          onOpenExpenses: widget.onOpenExpenses,
-          onOpenMeals: widget.onOpenMeals,
+          onOpenHostel: widget.onOpenHostel,
         ),
         const SizedBox(height: 12),
         _TodayCard(now: _now, summary: summary, onDuty: widget.responsible),
@@ -671,9 +579,7 @@ class _SummaryCard extends StatelessWidget {
     required this.onOpenActivation,
     required this.summary,
     required this.hasError,
-    required this.onOpenCalculation,
-    required this.onOpenExpenses,
-    required this.onOpenMeals,
+    required this.onOpenHostel,
   });
 
   final String groupName;
@@ -740,79 +646,8 @@ class _SummaryCard extends StatelessWidget {
     );
   }
 
-  final VoidCallback onOpenCalculation;
-  final VoidCallback onOpenExpenses;
-  final VoidCallback onOpenMeals;
-
-  /// One figure in its own box. Tapping it opens the list behind it.
-  Widget _figure(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
-    return Expanded(
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.13),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: _isLocked ? () => _showActivation(context) : onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.74),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          value,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// Opens the hostel's details: members, activation and settings.
+  final VoidCallback onOpenHostel;
 
   @override
   Widget build(BuildContext context) {
@@ -902,16 +737,14 @@ class _SummaryCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(22),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(22),
-                        onTap: isLocked
-                            ? () => _showActivation(context)
-                            : onOpenCalculation,
+                        onTap: onOpenHostel,
                         child: const Padding(
                           padding: EdgeInsets.fromLTRB(14, 7, 8, 7),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Details',
+                                'Hostel Details',
                                 style: TextStyle(
                                   color: AppTheme.ink,
                                   fontSize: 13.5,
@@ -942,26 +775,6 @@ class _SummaryCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _figure(
-                      context,
-                      'My Expense',
-                      summary == null ? '—' : _money(summary.myExpense),
-                      Icons.payments_outlined,
-                      onOpenExpenses,
-                    ),
-                    const SizedBox(width: 10),
-                    _figure(
-                      context,
-                      'My Meals',
-                      summary == null ? '—' : _count(summary.myMeals),
-                      Icons.restaurant_outlined,
-                      onOpenMeals,
-                    ),
-                  ],
-                ),
               ],
             ),
           ),

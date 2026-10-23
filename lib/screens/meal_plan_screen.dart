@@ -18,10 +18,14 @@ class MealPlanScreen extends StatefulWidget {
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
+
+  /// True when shown inside another page, which has the title.
+  final bool embedded;
 
   @override
   State<MealPlanScreen> createState() => _MealPlanScreenState();
@@ -190,37 +194,43 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = StreamBuilder<List<GroupMember>>(
+      stream: _membersStream,
+      builder: (context, membersSnapshot) {
+        final members = membersSnapshot.data ?? const <GroupMember>[];
+        _memberNames = {for (final member in members) member.id: member.name};
+
+        return StreamBuilder<MemberMealPlan>(
+          stream: _planStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: Text('Unable to load the meal plan.')),
+              );
+            }
+
+            final plan = snapshot.data;
+            if (plan == null) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            return _buildPlan(context, plan, members);
+          },
+        );
+      },
+    );
+
+    // Inside another page, only the content: it takes the height it
+    // needs and scrolls with that page.
+    if (widget.embedded) return content;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Meal Plan')),
-      body: SafeArea(
-        child: StreamBuilder<List<GroupMember>>(
-          stream: _membersStream,
-          builder: (context, membersSnapshot) {
-            final members = membersSnapshot.data ?? const <GroupMember>[];
-            _memberNames = {
-              for (final member in members) member.id: member.name,
-            };
-
-            return StreamBuilder<MemberMealPlan>(
-              stream: _planStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text('Unable to load the meal plan.'),
-                  );
-                }
-
-                final plan = snapshot.data;
-                if (plan == null) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                return _buildPlan(context, plan, members);
-              },
-            );
-          },
-        ),
-      ),
+      body: SafeArea(child: content),
     );
   }
 
@@ -251,128 +261,136 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               0;
     }).toList()..sort((a, b) => a.fromDate.compareTo(b.fromDate));
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        if (widget.isAdmin && members.isNotEmpty) ...[
-          DropdownButtonFormField<String>(
-            key: ValueKey(members.map((member) => member.id).join(',')),
-            initialValue: members.any((member) => member.id == _memberId)
-                ? _memberId
-                : null,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Member',
-              prefixIcon: Icon(Icons.person_outline),
-            ),
-            items: [
-              for (final member in members)
-                DropdownMenuItem<String>(
-                  value: member.id,
-                  child: Text(
-                    member.id == _user.uid
-                        ? '${member.name} (You)'
-                        : member.name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-            ],
-            onChanged: _isSaving ? null : _selectMember,
+    final children = <Widget>[
+      if (widget.isAdmin && members.isNotEmpty) ...[
+        DropdownButtonFormField<String>(
+          key: ValueKey(members.map((member) => member.id).join(',')),
+          initialValue: members.any((member) => member.id == _memberId)
+              ? _memberId
+              : null,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Member',
+            prefixIcon: Icon(Icons.person_outline),
           ),
-          const SizedBox(height: 12),
-        ],
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(
-                  icon: Icons.event_repeat_outlined,
-                  text: 'Every Day',
+          items: [
+            for (final member in members)
+              DropdownMenuItem<String>(
+                value: member.id,
+                child: Text(
+                  member.id == _user.uid ? '${member.name} (You)' : member.name,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  current == null
-                      ? 'Not set'
-                      : _describeMeals(current.lunch, current.dinner),
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (current != null) ...[
-                  const SizedBox(height: 2),
-                  Text('Since ${_dateLabel(current.fromDate)}'),
-                ],
-                if (upcoming != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'From ${_dateLabel(upcoming.fromDate)}: '
-                    '${_describeMeals(upcoming.lunch, upcoming.dinner)}',
-                    style: const TextStyle(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.tonal(
-                    onPressed: _isSaving ? null : () => _changeEveryday(plan),
-                    child: Text(current == null ? 'Set' : 'Change'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+          ],
+          onChanged: _isSaving ? null : _selectMember,
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(
-                  icon: Icons.luggage_outlined,
-                  text: 'Away or Different Days',
+      ],
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _CardTitle(
+                icon: Icons.event_repeat_outlined,
+                text: 'Every Day',
+              ),
+              const SizedBox(height: 10),
+              Text(
+                current == null
+                    ? 'Not set'
+                    : _describeMeals(current.lunch, current.dinner),
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                 ),
+              ),
+              if (current != null) ...[
+                const SizedBox(height: 2),
+                Text('Since ${_dateLabel(current.fromDate)}'),
+              ],
+              if (upcoming != null) ...[
                 const SizedBox(height: 6),
-                if (periods.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text('Nothing planned.'),
-                  )
-                else
-                  for (final period in periods)
-                    _PeriodRow(
-                      rule: period,
-                      hasStarted: period.fromDate.compareTo(today) < 0,
-                      canRemoveOutright: widget.isAdmin,
-                      onRemove: _isSaving
-                          ? null
-                          : () => _removePeriod(plan, period),
-                    ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilledButton.tonalIcon(
-                      onPressed: _isSaving ? null : () => _addPeriod(plan),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Period'),
-                    ),
+                Text(
+                  'From ${_dateLabel(upcoming.fromDate)}: '
+                  '${_describeMeals(upcoming.lunch, upcoming.dinner)}',
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
-            ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.tonal(
+                  onPressed: _isSaving ? null : () => _changeEveryday(plan),
+                  child: Text(current == null ? 'Set' : 'Change'),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
+      const SizedBox(height: 12),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 8, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _CardTitle(
+                icon: Icons.luggage_outlined,
+                text: 'Away or Different Days',
+              ),
+              const SizedBox(height: 6),
+              if (periods.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Text('Nothing planned.'),
+                )
+              else
+                for (final period in periods)
+                  _PeriodRow(
+                    rule: period,
+                    hasStarted: period.fromDate.compareTo(today) < 0,
+                    canRemoveOutright: widget.isAdmin,
+                    onRemove: _isSaving
+                        ? null
+                        : () => _removePeriod(plan, period),
+                  ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.tonalIcon(
+                    onPressed: _isSaving ? null : () => _addPeriod(plan),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Period'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+
+    if (widget.embedded) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: children,
     );
   }
 }

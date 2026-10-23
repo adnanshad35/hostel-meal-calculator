@@ -119,4 +119,106 @@ void main() {
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  group('updateFromConfig', () {
+    const config = UpdateConfig(
+      version: '1.7.0',
+      minVersion: '1.6.0',
+      notes: 'Guide page',
+    );
+
+    test('below the minimum, the update is required', () {
+      final update = UpdateService.updateFromConfig(
+        config,
+        installedVersion: '1.5.2',
+      );
+
+      expect(update!.isRequired, isTrue);
+      expect(update.version, '1.7.0');
+      expect(update.notes, 'Guide page');
+      expect(update.downloadUrl, endsWith('/download/HostelMate.apk'));
+    });
+
+    test('between the minimum and the latest, it is optional', () {
+      final update = UpdateService.updateFromConfig(
+        config,
+        installedVersion: '1.6.0',
+      );
+
+      expect(update!.isRequired, isFalse);
+    });
+
+    test('without a minimum, no version must update', () {
+      final update = UpdateService.updateFromConfig(
+        const UpdateConfig(version: '2.0.0'),
+        installedVersion: '1.0.0',
+      );
+
+      expect(update!.isRequired, isFalse);
+    });
+
+    test('nothing once the app is up to date', () {
+      expect(
+        UpdateService.updateFromConfig(config, installedVersion: '1.7.0'),
+        isNull,
+      );
+    });
+
+    test('a saved APK link is used in place of GitHub', () {
+      final update = UpdateService.updateFromConfig(
+        const UpdateConfig(
+          version: '1.7.0',
+          downloadUrl: 'https://example.com/HostelMate.apk',
+        ),
+        installedVersion: '1.6.0',
+      );
+
+      expect(update!.downloadUrl, 'https://example.com/HostelMate.apk');
+    });
+  });
+
+  test('a saved config needs a version', () {
+    expect(UpdateConfig.fromData(null), isNull);
+    expect(UpdateConfig.fromData({'version': ' '}), isNull);
+    expect(UpdateConfig.fromData({'version': '1.7.0'})!.minVersion, '');
+  });
+
+  test('What\'s New shows only on the first open after an update', () {
+    expect(UpdateService.isFirstOpenAfterUpdate(null, '1.7.0'), isFalse);
+    expect(UpdateService.isFirstOpenAfterUpdate('1.6.0', '1.7.0'), isTrue);
+    expect(UpdateService.isFirstOpenAfterUpdate('1.7.0', '1.7.0'), isFalse);
+  });
+
+  test('versions are checked before they are saved', () {
+    expect(UpdateService.isValidVersion('1.7.0'), isTrue);
+    expect(UpdateService.isValidVersion('v2'), isTrue);
+    expect(UpdateService.isValidVersion('1.7.0 beta'), isFalse);
+    expect(UpdateService.isValidVersion(''), isFalse);
+  });
+
+  testWidgets('an optional update can be put off', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const Scaffold(
+          body: UpdateDialog(
+            update: AppUpdate(
+              version: '1.7.0',
+              downloadUrl: 'https://example.com/app.apk',
+              isRequired: false,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Update Available'), findsOneWidget);
+    expect(find.text('Later'), findsOneWidget);
+    expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }

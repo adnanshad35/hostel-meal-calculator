@@ -161,6 +161,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Hostel or Mess Name',
                     hintText: 'Example: Green View Hostel',
+                    // There is no rename later, so it is said up front.
+                    helperText: 'The name cannot be changed later.',
                     prefixIcon: Icon(Icons.home_outlined),
                   ),
                   validator: (value) {
