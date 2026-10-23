@@ -49,4 +49,18 @@ void main() {
       expect(section.points, isNotEmpty, reason: section.title);
     }
   });
+
+  test('every coloured word is marked correctly', () {
+    final mark = RegExp(r'\{[bgr]:[^}]*\}');
+    for (final section in guideSections) {
+      for (final (title, text) in section.points) {
+        final left = text.replaceAll(mark, '');
+        expect(
+          left.contains('{') || left.contains('}'),
+          isFalse,
+          reason: '${section.title}: $title',
+        );
+      }
+    }
+  });
 }

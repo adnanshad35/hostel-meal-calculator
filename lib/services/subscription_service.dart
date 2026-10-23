@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'activity_log.dart';
+
 /// How long a hostel may be used. A hostel whose period has ended is
 /// read-only: its records stay visible but nothing can be added.
 ///
@@ -345,6 +347,13 @@ class SubscriptionService {
         'redeemedBy': user.uid,
         'redeemedAt': FieldValue.serverTimestamp(),
       });
+      ActivityLog.addTo(
+        batch,
+        groupId,
+        kind: ActivityKind.hostelActivated,
+        subject: voucherCode,
+        details: 'Voucher $voucherCode · ${voucher.days} days added',
+      );
 
       await batch.commit();
       return voucher.days;
@@ -381,17 +390,26 @@ class SubscriptionService {
     try {
       // The transaction ID is the document id, so the same payment can
       // never be reported twice.
-      await _payments.doc(id).set({
-        'trxId': id,
-        'groupId': groupId,
-        'groupName': groupName,
-        'amount': amount,
-        'senderNumber': senderNumber.trim(),
-        'submittedBy': user.uid,
-        'submittedByName': user.displayName ?? '',
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final batch = _firestore.batch()
+        ..set(_payments.doc(id), {
+          'trxId': id,
+          'groupId': groupId,
+          'groupName': groupName,
+          'amount': amount,
+          'senderNumber': senderNumber.trim(),
+          'submittedBy': user.uid,
+          'submittedByName': user.displayName ?? '',
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      ActivityLog.addTo(
+        batch,
+        groupId,
+        kind: ActivityKind.paymentSent,
+        subject: id,
+        details: '৳${ActivityLog.number(amount)} · TrxID $id',
+      );
+      await batch.commit();
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') {
         throw const SubscriptionException(
@@ -436,6 +454,15 @@ class SubscriptionService {
       });
     }
 
+    ActivityLog.addTo(
+      batch,
+      groupId,
+      kind: ActivityKind.hostelActivated,
+      details: payment == null
+          ? '$days days added'
+          : 'bKash payment ${payment.trxId} approved · $days days added',
+    );
+
     await batch.commit();
   }
 
@@ -445,13 +472,21 @@ class SubscriptionService {
     required String groupId,
     required int days,
   }) {
-    return _subscription(groupId).set({
-      'periodStart': FieldValue.serverTimestamp(),
-      'days': days,
-      'lastSource': 'admin',
-      'updatedBy': FirebaseAuth.instance.currentUser!.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final batch = _firestore.batch()
+      ..set(_subscription(groupId), {
+        'periodStart': FieldValue.serverTimestamp(),
+        'days': days,
+        'lastSource': 'admin',
+        'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    ActivityLog.addTo(
+      batch,
+      groupId,
+      kind: ActivityKind.activationSet,
+      details: days == 0 ? 'Activation ended' : '$days days left',
+    );
+    return batch.commit();
   }
 
   /// Switches editing or access for a hostel off or on, whatever its

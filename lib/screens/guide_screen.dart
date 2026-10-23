@@ -22,6 +22,10 @@ class GuideSection {
 }
 
 /// Everything the guide covers, in the order a new member meets it.
+///
+/// In the text, `{b:…}` is a button or a name in the app, shown in
+/// green; `{g:…}` is a change, in gold; `{r:…}` is a deletion, in red.
+/// The same colours mean the same things on the app's own pages.
 const guideSections = [
   GuideSection(
     icon: Icons.rocket_launch_outlined,
@@ -34,18 +38,19 @@ const guideSections = [
       ),
       (
         'Create a Hostel',
-        'Enter your hostel or mess name. You become its admin and get a '
-            'Hostel Code to share with your members.',
+        'Tap {b:Create Hostel} and enter its name. The name cannot be '
+            'changed later. You become its admin and get a {b:Hostel Code} '
+            'for your members.',
       ),
       (
         'Join a Hostel',
-        'Ask your admin for the Hostel Code and enter it under Join '
-            'Hostel. The admin must keep Allow New Members on.',
+        'Ask your admin for the {b:Hostel Code} and enter it under '
+            '{b:Join Hostel}. The admin must keep {b:Allow New Members} on.',
       ),
       (
         'Activate the Hostel',
-        'An admin activates the hostel from Hostel Details → Activation, '
-            'with a voucher or bKash.',
+        'An admin activates it from {b:Hostel Details → Activation}, with '
+            'a voucher or bKash.',
       ),
     ],
   ),
@@ -55,14 +60,19 @@ const guideSections = [
     points: [
       (
         'Top Card',
-        'Shows your hostel, who is on duty today, and the Hostel Details '
+        'Your hostel, who is on duty today, and the {b:Hostel Details} '
             'button.',
       ),
-      ('Update', 'Tap + on Meals or Expenses to add one in a few seconds.'),
-      ('Bell', 'Opens the announcements from your hostel\'s admins.'),
+      ('Update', 'Tap {b:+} on Meals or Expenses to add one in a few seconds.'),
+      (
+        'Bell',
+        'Announcements from your admins, notices from HostelMate, and when '
+            'a member will be away.',
+      ),
       (
         'Bottom Bar',
-        'Home, Meals, Expenses and Balance are always one tap away.',
+        '{b:Home}, {b:Meals}, {b:Expenses} and {b:Balance}, always one tap '
+            'away.',
       ),
     ],
   ),
@@ -72,17 +82,17 @@ const guideSections = [
     points: [
       (
         'Meal Entry',
-        'Tap + on Meals in Home, pick the day, and set how many lunches '
+        'Tap {b:+} on Meals in Home, pick the day, and set how many lunches '
             'and dinners you had, guests included.',
       ),
       (
         'Meal Plan',
-        'In the same form, open Meal Plan and set what you usually eat '
+        'In the same form, open {b:Meal Plan} and set what you usually eat '
             'from a date. Days you leave empty are counted from it.',
       ),
       (
         'Auto',
-        'A day counted from your meal plan is marked Auto. Saving an '
+        'A day counted from your meal plan is marked {b:Auto}. Saving an '
             'entry for that day replaces it.',
       ),
     ],
@@ -94,18 +104,19 @@ const guideSections = [
       ('Month', 'Use the arrows to move between this month and last month.'),
       (
         'My Meals and Total Meals',
-        'Tap My Meals for your month day by day, or Total Meals for each '
-            'member\'s total.',
+        'Tap {b:My Meals} for your month day by day, or {b:Total Meals} for '
+            'each member\'s total.',
       ),
       (
         'Calendar',
         'Days with meals are shaded green. Tap a day to see its table. '
-            'Days still to come are faded.',
+            'Days still to come are faded and cannot be picked.',
       ),
       (
         'Table',
-        'Your row comes first. Tap a row with a pencil to change it: '
-            'your own, or anyone\'s if you are an admin.',
+        'Your row comes first. Tap a row with a pencil to change it: your '
+            'own, or anyone\'s if you are an admin. A changed entry is '
+            'marked {g:Edited}.',
       ),
     ],
   ),
@@ -115,8 +126,8 @@ const guideSections = [
     points: [
       (
         'Add an Expense',
-        'Tap + on Expenses in Home and enter the item, the amount and the '
-            'day. The calculator helps add up a long bazar list.',
+        'Tap {b:+} on Expenses in Home and enter the item, the amount and '
+            'the day. The calculator helps add up a long bazar list.',
       ),
       (
         'Paid By',
@@ -125,13 +136,13 @@ const guideSections = [
       ),
       (
         'Expenses Page',
-        'Tap My Expenses for what you paid, or Total Expenses for each '
-            'member. Tap a day to see its items.',
+        'Tap {b:My Expenses} for what you paid, or {b:Total Expenses} for '
+            'each member. Tap a day to see its items.',
       ),
       (
         'Change or Delete',
-        'Tap your own expense to change it. Admins can change any expense '
-            'and delete it from the ⋮ menu.',
+        'Tap your own expense to change it; it is then marked {g:Edited}. '
+            'Only admins can {r:delete} one, from the ⋮ menu.',
       ),
     ],
   ),
@@ -161,7 +172,7 @@ const guideSections = [
       (
         'Month Trend',
         'Compares this month with last month day by day. Switch between '
-            'Rate, Meals and Cost, and tap or drag to pick a day.',
+            '{b:Rate}, {b:Meals} and {b:Cost}, and tap or drag to pick a day.',
       ),
     ],
   ),
@@ -172,17 +183,52 @@ const guideSections = [
       (
         'Until the 7th',
         'A month\'s meals and expenses can be added or changed until the '
-            '7th of the next month.',
+            '7th of the next month, by everyone, admins included.',
       ),
       (
         'Last Month',
-        'After that, last month is read-only, but every detail stays '
-            'visible.',
+        'After that, last month is closed: every detail stays visible, but '
+            'nothing can be changed.',
       ),
       (
         'Older Months',
         'Only the summary is kept: meal rate, total meals, total expense '
             'and each member\'s figures.',
+      ),
+      (
+        'Edited',
+        'A meal or expense changed more than a minute after it was saved is '
+            'marked {g:Edited}, whoever changed it.',
+      ),
+    ],
+  ),
+  GuideSection(
+    icon: Icons.verified_user_outlined,
+    title: 'Accountability',
+    points: [
+      (
+        'Where',
+        'Open {b:Hostel Details → Accountability}. A red dot shows when '
+            'someone else changed something since you last looked.',
+      ),
+      (
+        'What It Records',
+        'Who did what and when, with the old and new figures, such as '
+            '{g:Lunch 1 → 2}.',
+      ),
+      (
+        'Colours',
+        '{b:Added} is green, {g:changed} is gold, and {r:deleted} or '
+            '{r:removed} is red.',
+      ),
+      (
+        'Filters',
+        '{b:Meals}, {b:Expenses}, {b:Admin} and {b:All}. Admin holds Min '
+            'Meals, Shop Due, resets, members and activation.',
+      ),
+      (
+        'Cannot Be Hidden',
+        'No one, not even an admin, can change or delete a record.',
       ),
     ],
   ),
@@ -192,13 +238,14 @@ const guideSections = [
     points: [
       (
         'Activation',
-        'Shows whether the hostel is active and for how long. Admins tap '
-            'it to renew.',
+        'Shows whether the hostel is active and for how long. Admins tap it '
+            'to renew.',
       ),
       ('Hostel Code', 'Tap it to copy, then send it to a new member.'),
       (
         'Members',
-        'Everyone in the hostel. Admin and No App tags show who is who.',
+        'Everyone in the hostel. {b:Admin} and {b:No App} tags show who is '
+            'who.',
       ),
       (
         'Leave Hostel',
@@ -213,29 +260,25 @@ const guideSections = [
     isAdminOnly: true,
     points: [
       (
-        'Permissions',
-        'Choose whether members can add meals, add expenses, and change '
-            'them afterwards, and whether new members can join.',
+        'Members',
+        '{b:Members} to make an admin or remove someone, {b:Allow New '
+            'Members}, {b:Add Member Without App}, {b:Duty Roster} and '
+            '{b:Send Announcement}.',
       ),
       (
-        'Special Permission',
-        'Lets you set Min Meals and Shop Due on any day. Otherwise they '
-            'open from the 25th to the 5th of the next month.',
+        'Member Permissions',
+        'Whether members can {b:Add Meals}, {b:Add Expenses}, and {b:Edit '
+            'Their Entries} afterwards.',
       ),
       (
-        'Add Member Without App',
-        'For someone without a phone: their meals and expenses are '
-            'entered by an admin.',
+        'Month End',
+        'Min Meals and Shop Due open from the 25th to the 5th of the next '
+            'month. {b:Min Meals & Shop Due Any Day} opens them always.',
       ),
       (
-        'Duty Roster',
-        'Set whose turn it is to look after the hostel. Home shows who is '
-            'on duty.',
-      ),
-      (
-        'Reset This Month',
-        'Deletes every meal and expense of the month. It cannot be '
-            'undone.',
+        'Danger Zone',
+        '{r:Reset This Month} deletes every meal and expense of the month. '
+            'It cannot be undone, and it is recorded in Accountability.',
       ),
     ],
   ),
@@ -243,11 +286,15 @@ const guideSections = [
     icon: Icons.campaign_outlined,
     title: 'Announcements',
     points: [
-      ('For Everyone', 'The bell on Home lists your hostel\'s announcements.'),
+      (
+        'For Everyone',
+        'The bell on Home lists announcements, notices from HostelMate, and '
+            'who will be away.',
+      ),
       (
         'For Admins',
-        'Tap Announce in the bell\'s page to send a message to every '
-            'member.',
+        '{b:Send Announcement} in Admin Settings, or {b:Announce} in the '
+            'bell\'s page, sends a message to every member.',
       ),
     ],
   ),
@@ -258,9 +305,14 @@ const guideSections = [
       ('Nickname', 'The name your hostel sees for you.'),
       ('Change Password', 'We email you a link to set a new password.'),
       (
+        'Check for Updates',
+        'Shows a new version when there is one and installs it inside the '
+            'app.',
+      ),
+      (
         'App and Developer',
-        'The version you have, how to reach the developer, and a place to '
-            'request a feature.',
+        'What HostelMate is, the {b:Web Version}, the {b:Website}, the '
+            'developer\'s contacts, and {b:Request a Feature}.',
       ),
     ],
   ),
@@ -531,6 +583,35 @@ class _QuickStart extends StatelessWidget {
 }
 
 /// One part of the guide: its number and title, then each point.
+/// [text] with its marked words coloured: `{b:…}` green for a button
+/// or a name in the app, `{g:…}` gold for a change, `{r:…}` red for a
+/// deletion.
+List<TextSpan> _marked(String text) {
+  final spans = <TextSpan>[];
+  var start = 0;
+
+  for (final match in RegExp(r'\{([bgr]):([^}]*)\}').allMatches(text)) {
+    if (match.start > start) {
+      spans.add(TextSpan(text: text.substring(start, match.start)));
+    }
+    final color = switch (match.group(1)) {
+      'g' => AppTheme.accentDeep,
+      'r' => AppTheme.danger,
+      _ => AppTheme.primary,
+    };
+    spans.add(
+      TextSpan(
+        text: match.group(2),
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+    start = match.end;
+  }
+
+  if (start < text.length) spans.add(TextSpan(text: text.substring(start)));
+  return spans;
+}
+
 class _SectionCard extends StatelessWidget {
   const _SectionCard({super.key, required this.number, required this.section});
 
@@ -551,11 +632,19 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   width: 42,
                   height: 42,
+                  // Brass for the part only admins need.
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceSoft,
+                    color: section.isAdminOnly
+                        ? AppTheme.accent.withValues(alpha: 0.22)
+                        : AppTheme.surfaceSoft,
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(section.icon, color: AppTheme.primary),
+                  child: Icon(
+                    section.icon,
+                    color: section.isAdminOnly
+                        ? AppTheme.accentDeep
+                        : AppTheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -607,13 +696,13 @@ class _SectionCard extends StatelessWidget {
                             TextSpan(
                               text: '$title\n',
                               style: const TextStyle(
-                                color: AppTheme.primary,
+                                color: AppTheme.primaryDark,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 height: 1.5,
                               ),
                             ),
-                            TextSpan(text: text),
+                            ..._marked(text),
                           ],
                         ),
                         style: const TextStyle(

@@ -6,6 +6,7 @@ import '../services/super_admin_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/desktop_scaffold.dart';
 import '../widgets/web_layout.dart';
+import 'activity_screen.dart';
 import 'hostel_activation_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
@@ -55,6 +56,9 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
   late final ValueNotifier<Future<_AdminData>> _snapshot;
 
   bool _isDesktop = false;
+
+  /// The phone's tab bar, once it is built.
+  TabController? _tabController;
   int _section = 0;
 
   /// Increased to rebuild a section from its first screen when its
@@ -109,6 +113,16 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     );
   }
 
+  /// Shows another tab: in the sidebar on a wide window, or the tab
+  /// bar on a phone.
+  void _openTab(int index) {
+    if (_isDesktop) {
+      _select(index);
+    } else {
+      _tabController?.animateTo(index);
+    }
+  }
+
   void _select(int index) {
     setState(() {
       _section = index;
@@ -126,6 +140,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
         billing: billing,
         onRefresh: _refresh,
         onOpenNotices: _openNotices,
+        onOpenPayments: () => _openTab(3),
       ),
       1 => _UsersTab(data: data, onRefresh: _refresh),
       2 => _HostelsTab(data: data, billing: billing, onRefresh: _refresh),
@@ -244,7 +259,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
               icon: const Icon(Icons.refresh),
             ),
             IconButton(
-              tooltip: 'Profile and settings',
+              tooltip: 'Profile and Settings',
               onPressed: _openProfile,
               icon: const Icon(Icons.account_circle_outlined, size: 28),
             ),
@@ -256,14 +271,20 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
             tabs: [for (final tab in _tabs) Tab(text: tab.label)],
           ),
         ),
-        body: _whenLoaded((loaded) {
-          return TabBarView(
-            children: [
-              for (var index = 0; index < _tabs.length; index++)
-                _tab(index, loaded),
-            ],
-          );
-        }),
+        // Read below the tab bar's controller, so Overview can switch tabs.
+        body: Builder(
+          builder: (tabContext) {
+            _tabController = DefaultTabController.of(tabContext);
+            return _whenLoaded((loaded) {
+              return TabBarView(
+                children: [
+                  for (var index = 0; index < _tabs.length; index++)
+                    _tab(index, loaded),
+                ],
+              );
+            });
+          },
+        ),
       ),
     );
   }
@@ -299,99 +320,117 @@ class _OverviewTab extends StatelessWidget {
     required this.billing,
     required this.onRefresh,
     required this.onOpenNotices,
+    required this.onOpenPayments,
   });
 
   final AdminSnapshot data;
   final AdminBilling billing;
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenNotices;
+  final VoidCallback onOpenPayments;
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    // Counted over existing hostels, so a deleted hostel's leftover
+    // period is not included.
+    final activeHostels = data.hostels
+        .where((hostel) => billing.subscriptionOf(hostel.id).canEdit(now))
+        .length;
+    final waiting = billing.pendingPayments;
+
+    Widget pair(Widget left, Widget right) {
+      return Row(
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 10),
+          Expanded(child: right),
+        ],
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.people_outline,
-                  label: 'Total users',
-                  value: '${data.users.length}',
-                  color: AppTheme.primary,
-                  background: const Color(0xFFE4F3EB),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.how_to_reg_outlined,
-                  label: 'Users in hostels',
-                  value: '${data.usersInHostels}',
-                  color: const Color(0xFF7956A8),
-                  background: const Color(0xFFF0E9F8),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.apartment_outlined,
-                  label: 'Hostels',
-                  value: '${data.hostels.length}',
-                  color: const Color(0xFF4869A4),
-                  background: const Color(0xFFE8EEF8),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.verified_outlined,
-                  label: 'Active hostels',
-                  // Counted over existing hostels, so a deleted hostel's
-                  // leftover period is not included.
-                  value:
-                      '${data.hostels.where((hostel) => billing.subscriptionOf(hostel.id).canEdit(DateTime.now())).length}',
-                  color: AppTheme.success,
-                  background: const Color(0xFFE4F3EB),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.payments_outlined,
-                  label: 'Payments waiting',
-                  value: '${billing.pendingPayments}',
+          // Payments waiting come first, since they hold up a hostel.
+          if (waiting > 0) ...[
+            Card(
+              color: AppTheme.danger.withValues(alpha: 0.08),
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                onTap: onOpenPayments,
+                leading: const Icon(
+                  Icons.payments_outlined,
                   color: AppTheme.danger,
-                  background: const Color(0xFFFCE8E8),
+                  size: 28,
+                ),
+                title: Text(
+                  waiting == 1
+                      ? '1 Payment Waiting'
+                      : '$waiting Payments Waiting',
+                  style: const TextStyle(
+                    color: AppTheme.danger,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.danger,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.person_add_alt_1_outlined,
-                  label: 'New this week',
-                  value: '${data.newUsers(DateTime.now())}',
-                  color: const Color(0xFFD78116),
-                  background: const Color(0xFFFFF1DB),
-                ),
-              ),
-            ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          const _Heading('Hostels'),
+          pair(
+            _StatTile(
+              icon: Icons.apartment_outlined,
+              label: 'Hostels',
+              value: '${data.hostels.length}',
+            ),
+            _StatTile(
+              icon: Icons.verified_outlined,
+              label: 'Active Hostels',
+              value: '$activeHostels',
+            ),
+          ),
+          const SizedBox(height: 16),
+          const _Heading('Users'),
+          pair(
+            _StatTile(
+              icon: Icons.people_outline,
+              label: 'Total Users',
+              value: '${data.users.length}',
+            ),
+            _StatTile(
+              icon: Icons.how_to_reg_outlined,
+              label: 'In Hostels',
+              value: '${data.usersInHostels}',
+            ),
+          ),
+          const SizedBox(height: 10),
+          pair(
+            _StatTile(
+              icon: Icons.person_add_alt_1_outlined,
+              label: 'New This Week',
+              value: '${data.newUsers(now)}',
+              isBrass: true,
+            ),
+            _StatTile(
+              icon: Icons.payments_outlined,
+              label: 'Payments Waiting',
+              value: '$waiting',
+              isBrass: true,
+            ),
           ),
           const SizedBox(height: 20),
+          const _Heading('App Controls'),
           AdminMaintenanceCard(config: billing.appConfig, onRefresh: onRefresh),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           const AdminUpdateCard(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Card(
             clipBehavior: Clip.antiAlias,
             child: ListTile(
@@ -402,23 +441,40 @@ class _OverviewTab extends StatelessWidget {
               ),
               leading: const Icon(
                 Icons.campaign_outlined,
-                color: AppTheme.warning,
+                color: AppTheme.primary,
                 size: 30,
               ),
               title: const Text(
                 'App Notices',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
-              subtitle: const Text('Send a notice to every user of the app'),
               trailing: const Icon(Icons.chevron_right),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Pull down or tap refresh to load the latest data.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
         ],
+      ),
+    );
+  }
+}
+
+/// A short title over a group of tiles.
+class _Heading extends StatelessWidget {
+  const _Heading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppTheme.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
@@ -429,19 +485,22 @@ class _StatTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    required this.color,
-    required this.background,
+    this.isBrass = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
-  final Color color;
-  final Color background;
+
+  /// Brass instead of green, for figures that change week to week.
+  final bool isBrass;
 
   @override
   Widget build(BuildContext context) {
+    final color = isBrass ? AppTheme.accentDeep : AppTheme.primary;
+
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -450,7 +509,7 @@ class _StatTile extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: background,
+                color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 21),
@@ -473,7 +532,11 @@ class _StatTile extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -510,7 +573,7 @@ class _SearchField extends StatelessWidget {
         suffixIcon: controller.text.isEmpty
             ? null
             : IconButton(
-                tooltip: 'Clear search',
+                tooltip: 'Clear Search',
                 onPressed: () {
                   controller.clear();
                   onChanged('');
@@ -848,7 +911,7 @@ class _HostelsTabState extends State<_HostelsTab>
           '${hostel.name} has $current days left. Enter the new '
           'number, counted from today. Use 0 to end its period now.',
       initialDays: current,
-      label: 'Days left',
+      label: 'Days Left',
       confirmLabel: 'Save',
       allowZero: true,
     );
@@ -1002,7 +1065,7 @@ class _HostelsTabState extends State<_HostelsTab>
                 ),
                 const SizedBox(height: 4),
                 _SwitchLine(
-                  label: 'Allow editing',
+                  label: 'Allow Editing',
                   value: !subscription.editingDisabled,
                   onChanged: (allow) {
                     close();
@@ -1010,7 +1073,7 @@ class _HostelsTabState extends State<_HostelsTab>
                   },
                 ),
                 _SwitchLine(
-                  label: 'Allow access',
+                  label: 'Allow Access',
                   value: !subscription.accessDisabled,
                   onChanged: (allow) {
                     close();
@@ -1019,7 +1082,7 @@ class _HostelsTabState extends State<_HostelsTab>
                 ),
                 const Divider(height: 16),
                 _InfoLine(
-                  label: 'Invitation code',
+                  label: 'Hostel Code',
                   value: hostel.inviteCode,
                   canCopy: true,
                 ),
@@ -1027,7 +1090,7 @@ class _HostelsTabState extends State<_HostelsTab>
                   label: 'Created',
                   value: _formatDate(hostel.createdAt),
                 ),
-                _InfoLine(label: 'App users', value: '${members.length}'),
+                _InfoLine(label: 'App Users', value: '${members.length}'),
                 const Divider(height: 16),
                 for (final member in members)
                   _MemberLine(
@@ -1037,6 +1100,20 @@ class _HostelsTabState extends State<_HostelsTab>
                   ),
                 if (members.isEmpty) const Text('No app users in this hostel.'),
                 const Divider(height: 24),
+                // Its history, for settling a dispute.
+                OutlinedButton.icon(
+                  onPressed: () {
+                    close();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ActivityScreen(groupId: hostel.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('Accountability'),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.danger,

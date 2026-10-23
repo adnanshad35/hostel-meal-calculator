@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
@@ -334,22 +335,40 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     );
   }
 
+  /// Saves the month's figures, with a record of the one that changed
+  /// in the hostel's history.
   Future<void> _saveMonthlySettings({
     required double minimumMeals,
     required double shopDue,
+    required ActivityKind kind,
+    required String details,
   }) async {
-    await _firestore
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('monthlySettings')
-        .doc(_monthKey(_selectedMonth))
-        .set({
+    final monthKey = _monthKey(_selectedMonth);
+    final batch = _firestore.batch()
+      ..set(
+        _firestore
+            .collection('groups')
+            .doc(widget.groupId)
+            .collection('monthlySettings')
+            .doc(monthKey),
+        {
           'minimumMeals': minimumMeals,
           'shopDue': shopDue,
-          'monthKey': _monthKey(_selectedMonth),
+          'monthKey': monthKey,
           'updatedBy': FirebaseAuth.instance.currentUser!.uid,
           'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        },
+        SetOptions(merge: true),
+      );
+    ActivityLog.addTo(
+      batch,
+      widget.groupId,
+      kind: kind,
+      subject: _monthName(_selectedMonth),
+      day: monthKey,
+      details: details,
+    );
+    await batch.commit();
   }
 
   /// Minimum meals and shop due are settled at the month's end. Says
@@ -372,8 +391,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           content: Text(
             'Minimum meals and shop due for '
             '${_monthName(_selectedMonth)} can be entered from $opens '
-            'to $closes. Wait until then, or turn on Special permission '
-            'in Settings.',
+            'to $closes. Wait until then, or turn on Min Meals & Shop Due Any Day '
+            'in Admin Settings.',
           ),
           actions: [
             FilledButton(
@@ -399,11 +418,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       hint: 'Example: 20',
       currentValue: currentMinimum,
     );
-    if (minimum == null || !mounted) return;
+    if (minimum == null || minimum == currentMinimum || !mounted) return;
     try {
       await _saveMonthlySettings(
         minimumMeals: minimum,
         shopDue: currentShopDue,
+        kind: ActivityKind.minMealsSet,
+        details:
+            '${_monthName(_selectedMonth)} · '
+            '${ActivityLog.number(currentMinimum)} → '
+            '${ActivityLog.number(minimum)}',
       );
     } on FirebaseException catch (error) {
       if (!mounted) return;
@@ -430,9 +454,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       prefixText: '৳ ',
       currentValue: currentDue,
     );
-    if (due == null || !mounted) return;
+    if (due == null || due == currentDue || !mounted) return;
     try {
-      await _saveMonthlySettings(minimumMeals: minimumMeals, shopDue: due);
+      await _saveMonthlySettings(
+        minimumMeals: minimumMeals,
+        shopDue: due,
+        kind: ActivityKind.shopDueSet,
+        details:
+            '${_monthName(_selectedMonth)} · '
+            '৳${ActivityLog.number(currentDue)} → ৳${ActivityLog.number(due)}',
+      );
     } on FirebaseException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -5,11 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
+import '../services/edit_mark.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/month_archive.dart';
 import '../services/month_records.dart';
-import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_calendar.dart';
@@ -355,7 +356,23 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await expense.reference.delete();
+      final data = expense.data() ?? const <String, dynamic>{};
+      final date = (data['date'] as Timestamp?)?.toDate();
+      final batch = FirebaseFirestore.instance.batch()
+        ..delete(expense.reference);
+      ActivityLog.addTo(
+        batch,
+        widget.groupId,
+        kind: ActivityKind.expenseDeleted,
+        memberId: data['paidById'] as String? ?? '',
+        memberName: data['paidByName'] as String? ?? '',
+        subject: name,
+        day: date == null ? '' : _dayKey(date),
+        details:
+            '৳${_plainAmount((data['amount'] as num?)?.toDouble() ?? 0)}'
+            ' · Paid by ${data['paidByName'] ?? 'Member'}',
+      );
+      await batch.commit();
       messenger.showSnackBar(SnackBar(content: Text('"$name" was deleted.')));
     } on FirebaseException catch (error) {
       messenger.showSnackBar(
@@ -707,7 +724,8 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
                         row(
                           '${dateOf(expense).day} '
                               '${months[dateOf(expense).month - 1]}',
-                          expense.data()['name'] as String? ?? 'Expense',
+                          '${expense.data()['name'] as String? ?? 'Expense'}'
+                              '${isEditedEntry(expense.data()) ? '  · Edited' : ''}',
                           '৳${_plainAmount((expense.data()['amount'] as num?)?.toDouble() ?? 0)}',
                         ),
                     ],
@@ -834,6 +852,8 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
     final isMine = data['paidById'] == _uid;
     final note = _firstLine(data['description']);
+    // Changed after it was saved, so everyone can see it was edited.
+    final isEdited = isEditedEntry(data);
 
     final Widget? action;
     if (canEdit && widget.isAdmin) {
@@ -885,8 +905,21 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  name,
+                Text.rich(
+                  TextSpan(
+                    text: name,
+                    children: [
+                      if (isEdited)
+                        const TextSpan(
+                          text: '  Edited',
+                          style: TextStyle(
+                            color: AppTheme.accentDeep,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    ],
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -986,6 +1019,13 @@ String? _firstLine(Object? description) {
 
   final line = description.trim().split('\n').first.trim();
   return line.isEmpty ? null : line;
+}
+
+/// A day as `YYYY-MM-DD`, for the hostel's history.
+String _dayKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
 
 String _plainAmount(double value) {
@@ -1292,46 +1332,80 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       final savedDescription =
           (widget.expense?.data()?['description'] as String? ?? '').trim();
 
+      final name = _nameController.text.trim();
+      final day = _dayKey(_selectedDate);
+
       if (_isEditing) {
-        await expenses.doc(widget.expense!.id).update({
-          'name': _nameController.text.trim(),
-          'amount': amount,
-          'date': Timestamp.fromDate(_selectedDate),
-          // Sent only when it changed.
-          if (description != savedDescription) 'description': description,
-          'updatedBy': _currentUser.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        await expenses.add({
-          'name': _nameController.text.trim(),
-          'description': description,
-          'amount': amount,
-          'date': Timestamp.fromDate(_selectedDate),
-          'paidById': paidById,
-          'paidByName': paidByName,
-          'enteredBy': _currentUser.uid,
-          'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
-              ? _currentUser.displayName!.trim()
-              : _currentUser.email ?? 'Member',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        final amountText = amount % 1 == 0
-            ? amount.toInt().toString()
-            : amount.toStringAsFixed(2);
-
-        // Not awaited: the expense is saved either way.
-        unawaited(
-          NotificationService.notifyGroup(
-            groupId: widget.groupId,
-            title: 'New Expense',
-            message:
-                '${_nameController.text.trim()} · ৳$amountText, '
-                'paid by $paidByName',
+        final saved = widget.expense!.data()!;
+        final savedDate = (saved['date'] as Timestamp?)?.toDate();
+        final changes = ActivityLog.changes({
+          '': (
+            '৳${_plainAmount((saved['amount'] as num?)?.toDouble() ?? 0)}',
+            '৳${_plainAmount(amount)}',
           ),
+          'Item': (saved['name'] as String? ?? '', name),
+          'Day': (savedDate == null ? '' : _dayKey(savedDate), day),
+          'Note': (savedDescription, description),
+        });
+
+        // Nothing changed, so nothing is saved or marked as edited.
+        if (changes.isEmpty) {
+          if (mounted) Navigator.of(context).pop();
+          return;
+        }
+
+        final reference = expenses.doc(widget.expense!.id);
+        final batch = FirebaseFirestore.instance.batch()
+          ..update(reference, {
+            'name': name,
+            'amount': amount,
+            'date': Timestamp.fromDate(_selectedDate),
+            // Sent only when it changed.
+            if (description != savedDescription) 'description': description,
+            'updatedBy': _currentUser.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        ActivityLog.addTo(
+          batch,
+          widget.groupId,
+          kind: ActivityKind.expenseChanged,
+          memberId: saved['paidById'] as String? ?? '',
+          memberName: saved['paidByName'] as String? ?? '',
+          subject: saved['name'] as String? ?? name,
+          day: day,
+          details: changes,
         );
+        await batch.commit();
+      } else {
+        final reference = expenses.doc();
+        final batch = FirebaseFirestore.instance.batch()
+          ..set(reference, {
+            'name': name,
+            'description': description,
+            'amount': amount,
+            'date': Timestamp.fromDate(_selectedDate),
+            'paidById': paidById,
+            'paidByName': paidByName,
+            'enteredBy': _currentUser.uid,
+            'enteredByName': _currentUser.displayName?.trim().isNotEmpty == true
+                ? _currentUser.displayName!.trim()
+                : _currentUser.email ?? 'Member',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        ActivityLog.addTo(
+          batch,
+          widget.groupId,
+          kind: ActivityKind.expenseAdded,
+          memberId: paidById,
+          memberName: paidByName,
+          subject: name,
+          day: day,
+          details:
+              '৳${_plainAmount(amount)}'
+              '${paidById == _currentUser.uid ? '' : ' · Paid by $paidByName'}',
+        );
+        await batch.commit();
       }
 
       if (!mounted) return;

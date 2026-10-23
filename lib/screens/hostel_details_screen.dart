@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
 import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_tiles.dart';
 import '../widgets/member_name_dialog.dart';
+import 'activity_screen.dart';
 import 'duty_roster_screen.dart' show dutyDatesText;
 import 'group_settings_screen.dart';
 import 'hostel_activation_screen.dart';
@@ -52,7 +54,26 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   Set<String> _appUserIds = {};
   bool _isBusy = false;
 
+  /// The latest history records, and when this member last opened
+  /// the history, for the dot on Accountability.
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _recentActivity;
+  DateTime? _activitySeen;
+
   String get _currentUserId => FirebaseAuth.instance.currentUser!.uid;
+
+  Future<void> _loadActivitySeen() async {
+    final seen = await ActivityLog.lastSeen(widget.groupId);
+    if (mounted) setState(() => _activitySeen = seen);
+  }
+
+  Future<void> _openActivity() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ActivityScreen(groupId: widget.groupId),
+      ),
+    );
+    await _loadActivitySeen();
+  }
 
   @override
   void initState() {
@@ -62,6 +83,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       activeOnly: false,
     );
     _subscriptionStream = SubscriptionService.watch(widget.groupId);
+    _recentActivity = ActivityLog.newest(widget.groupId, limit: 20).snapshots();
+    _loadActivitySeen();
     _groupSubscription = FirebaseFirestore.instance
         .collection('groups')
         .doc(widget.groupId)
@@ -197,8 +220,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         return AlertDialog(
           title: const Text('Delete Member?'),
           content: Text(
-            'Delete ${member.name} with all their meals and expenses? '
-            'This cannot be undone.',
+            'Delete ${member.name} with their meals and expenses in '
+            'open months? Closed months keep theirs. This cannot be '
+            'undone.',
           ),
           actions: [
             TextButton(
@@ -272,8 +296,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         return AlertDialog(
           title: const Text('Link to App User?'),
           content: Text(
-            'All meals and expenses recorded for ${shadow.name} '
-            'will be moved to ${appUser.name}, and ${shadow.name} '
+            'Meals and expenses of ${shadow.name} in open months will '
+            'be moved to ${appUser.name}; closed months keep theirs. '
+            '${shadow.name} '
             'will be removed from the member list.\n\n'
             'If both have a meal entry on the same day, the entry '
             'of ${appUser.name} is kept. This cannot be undone.',
@@ -403,6 +428,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       () => GroupMemberService.setAdminRole(
         groupId: widget.groupId,
         memberId: member.id,
+        memberName: member.name,
         makeAdmin: makeAdmin,
       ),
       successMessage: makeAdmin
@@ -794,6 +820,46 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         ],
                       ),
                     ),
+                    // Everyone sees who changed what.
+                    GroupTile(
+                      icon: Icons.history_rounded,
+                      title: 'Accountability',
+                      onTap: _openActivity,
+                      // A dot while someone else changed something
+                      // since this member last looked.
+                      trailing:
+                          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                            stream: _recentActivity,
+                            builder: (context, snapshot) {
+                              final isNew = ActivityLog.hasUnseen(
+                                [
+                                  for (final doc
+                                      in snapshot.data?.docs ?? const [])
+                                    ?Activity.fromData(doc.data()),
+                                ],
+                                seen: _activitySeen,
+                                userId: _currentUserId,
+                              );
+
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isNew)
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: const BoxDecoration(
+                                        color: AppTheme.danger,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  const TileArrow(),
+                                ],
+                              );
+                            },
+                          ),
+                    ),
                     // Only admins get the settings.
                     if (widget.isAdmin)
                       GroupTile(
@@ -881,30 +947,25 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 ],
               ],
               if (!widget.membersOnly) ...[
-                const SizedBox(height: 28),
-                // Kept apart from everything else, and quiet, so it is
+                const SizedBox(height: 22),
+                // On its own card, apart from everything else, so it is
                 // not tapped by mistake.
-                Center(
-                  child: TextButton.icon(
-                    onPressed: _isBusy
-                        ? null
-                        : _isAloneAsAdmin
-                        ? _deleteHostel
-                        : _leaveHostel,
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.danger,
-                    ),
-                    icon: Icon(
-                      _isAloneAsAdmin
+                TileGroup(
+                  children: [
+                    GroupTile(
+                      icon: _isAloneAsAdmin
                           ? Icons.delete_outline
                           : Icons.exit_to_app,
-                      size: 20,
+                      title: _isAloneAsAdmin ? 'Delete Hostel' : 'Leave Hostel',
+                      isDanger: true,
+                      trailing: const SizedBox.shrink(),
+                      onTap: _isBusy
+                          ? null
+                          : _isAloneAsAdmin
+                          ? _deleteHostel
+                          : _leaveHostel,
                     ),
-                    label: Text(
-                      _isAloneAsAdmin ? 'Delete Hostel' : 'Leave Hostel',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ],

@@ -4,9 +4,12 @@ import '../theme/app_theme.dart';
 
 /// A green icon on a soft square, the way every row of the app starts.
 class IconBadge extends StatelessWidget {
-  const IconBadge(this.icon, {super.key});
+  const IconBadge(this.icon, {super.key, this.isDanger = false});
 
   final IconData icon;
+
+  /// Red, for a row that deletes something.
+  final bool isDanger;
 
   @override
   Widget build(BuildContext context) {
@@ -14,10 +17,16 @@ class IconBadge extends StatelessWidget {
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: AppTheme.surfaceSoft,
+        color: isDanger
+            ? AppTheme.danger.withValues(alpha: 0.1)
+            : AppTheme.surfaceSoft,
         borderRadius: BorderRadius.circular(13),
       ),
-      child: Icon(icon, color: AppTheme.primary, size: 22),
+      child: Icon(
+        icon,
+        color: isDanger ? AppTheme.danger : AppTheme.primary,
+        size: 22,
+      ),
     );
   }
 }
@@ -140,6 +149,7 @@ class GroupTile extends StatelessWidget {
     this.onTap,
     this.trailing,
     this.enabled = true,
+    this.isDanger = false,
   });
 
   final IconData icon;
@@ -150,14 +160,27 @@ class GroupTile extends StatelessWidget {
   final Widget? trailing;
   final bool enabled;
 
+  /// Red, for a row that deletes something.
+  final bool isDanger;
+
   @override
   Widget build(BuildContext context) {
     return ListTile(
       enabled: enabled,
       onTap: onTap,
       contentPadding: const EdgeInsets.fromLTRB(14, 4, 16, 4),
-      leading: Opacity(opacity: enabled ? 1 : 0.5, child: IconBadge(icon)),
-      title: TileTitle(title, color: enabled ? null : AppTheme.textSecondary),
+      leading: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: IconBadge(icon, isDanger: isDanger),
+      ),
+      title: TileTitle(
+        title,
+        color: !enabled
+            ? AppTheme.textSecondary
+            : isDanger
+            ? AppTheme.danger
+            : null,
+      ),
       trailing: trailing ?? const TileArrow(),
     );
   }
@@ -182,12 +205,17 @@ class SwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      contentPadding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
-      secondary: IconBadge(icon),
+    // A smaller switch than the default, so it sits evenly with the
+    // arrows and icons of the rows around it.
+    return ListTile(
+      contentPadding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+      leading: IconBadge(icon),
       title: TileTitle(title),
-      value: value,
-      onChanged: onChanged,
+      onTap: onChanged == null ? null : () => onChanged!(!value),
+      trailing: Transform.scale(
+        scale: 0.78,
+        child: Switch(value: value, onChanged: onChanged),
+      ),
     );
   }
 }

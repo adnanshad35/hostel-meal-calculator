@@ -65,6 +65,45 @@ service cloud.firestore {
           .data.get('settings', {}).get(what, true) != false;
     }
 
+    // ─── Month lock ───
+    // A month's meals and expenses can be entered and changed until
+    // the 7th of the next month, by everyone, admins included. Months
+    // are counted as year * 12 + month, in Bangladesh time (UTC+6),
+    // the time the app's dates are entered in.
+    function localNow() {
+      return request.time + duration.value(6, 'h');
+    }
+
+    function currentMonthIndex() {
+      return localNow().year() * 12 + localNow().month();
+    }
+
+    // The earliest month still open: last month until the 7th, then
+    // only this month.
+    function isOpenMonth(index) {
+      return index >= (
+        localNow().day() <= 7 ? currentMonthIndex() - 1 : currentMonthIndex()
+      );
+    }
+
+    // Months before last month keep only their summary; their records
+    // are cleared once it is saved, so an admin may delete them.
+    function isSummaryOnlyMonth(index) {
+      return index < currentMonthIndex() - 1;
+    }
+
+    // A meal's month, from its `dateKey` (YYYY-MM-DD).
+    function mealMonth(data) {
+      let parts = data.dateKey.split('-');
+      return int(parts[0]) * 12 + int(parts[1]);
+    }
+
+    // An expense's month, from its `date`, saved as the local day.
+    function expenseMonth(data) {
+      let local = data.date + duration.value(6, 'h');
+      return local.year() * 12 + local.month();
+    }
+
     // True for anyone in the group's member list, including members
     // who do not use the app.
     function isRegisteredMember(groupId, memberId) {
@@ -273,7 +312,8 @@ service cloud.firestore {
           && (
             request.resource.data.userId == request.auth.uid
             || isGroupAdmin(groupId)
-          );
+          )
+          && isOpenMonth(mealMonth(request.resource.data));
 
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
@@ -281,18 +321,32 @@ service cloud.firestore {
           && membersMay(groupId, 'membersCanEdit')
           && request.resource.data.userId
             == resource.data.userId
+          && request.resource.data.dateKey
+            == resource.data.dateKey
           && (
             resource.data.userId == request.auth.uid
             || isGroupAdmin(groupId)
-          );
+          )
+          && isOpenMonth(mealMonth(resource.data));
 
         allow delete: if isHostelActive(groupId) && (
-          isGroupAdmin(groupId)
+          (
+            isOpenMonth(mealMonth(resource.data))
+            && (
+              isGroupAdmin(groupId)
+              || (
+                isGroupMember(groupId)
+                && membersMay(groupId, 'membersCanAddMeals')
+                && membersMay(groupId, 'membersCanEdit')
+                && resource.data.userId == request.auth.uid
+              )
+            )
+          )
           || (
-            isGroupMember(groupId)
-            && membersMay(groupId, 'membersCanAddMeals')
-            && membersMay(groupId, 'membersCanEdit')
-            && resource.data.userId == request.auth.uid
+            isGroupAdmin(groupId)
+            && (
+              isSummaryOnlyMonth(mealMonth(resource.data))
+            )
           )
         );
       }
@@ -349,7 +403,8 @@ service cloud.firestore {
           && request.resource.data.paidByName is string
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
-          && request.resource.data.date is timestamp;
+          && request.resource.data.date is timestamp
+          && isOpenMonth(expenseMonth(request.resource.data));
 
         allow update: if isGroupMember(groupId)
           && isHostelActive(groupId)
@@ -377,10 +432,20 @@ service cloud.firestore {
               'updatedAt'
             ])
           && request.resource.data.get('description', '') is string
-          && request.resource.data.get('description', '').size() <= 600;
+          && request.resource.data.get('description', '').size() <= 600
+          // Neither the month it was in nor the one it moves to may
+          // be closed.
+          && isOpenMonth(expenseMonth(resource.data))
+          && isOpenMonth(expenseMonth(request.resource.data));
 
         allow delete: if isGroupAdmin(groupId)
-          && isHostelActive(groupId);
+          && isHostelActive(groupId)
+          && (
+            // An expense without a date belongs to no month.
+            !(resource.data.get('date', null) is timestamp)
+            || isOpenMonth(expenseMonth(resource.data))
+            || isSummaryOnlyMonth(expenseMonth(resource.data))
+          );
       }
 
       match /monthlySettings/{monthKey} {
@@ -442,6 +507,37 @@ service cloud.firestore {
         // a member who does not use the app.
         allow delete: if isGroupAdmin(groupId)
           && resource.data.get('isAppUser', false) != true;
+      }
+
+      // The hostel's history: who changed which meal, expense, month
+      // figure or member. Any member may add a record of their own
+      // change, stamped with the server's time, and every member may
+      // read them all. No one, not even an admin, may change or delete
+      // one; only the super admin removes them, with the whole hostel.
+      match /activity/{activityId} {
+        allow read: if canReadHostel(groupId);
+
+        // The super admin records activation they add or change.
+        allow create: if (isGroupMember(groupId) || isSuperAdmin())
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.kind is string
+          && request.resource.data.actorName is string
+          && request.resource.data.details is string
+          && request.resource.data.details.size() <= 400
+          && request.resource.data.keys().hasOnly([
+            'kind',
+            'actorId',
+            'actorName',
+            'memberId',
+            'memberName',
+            'subject',
+            'day',
+            'details',
+            'createdAt'
+          ]);
+
+        allow update, delete: if false;
       }
 
       // In-app notifications inside the hostel: activity recorded by

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/activity_log.dart';
 import '../services/error_messages.dart';
 import '../widgets/meal_counter.dart';
 
@@ -82,6 +83,15 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
 
     if (administrator == null) return;
 
+    // Saving what is already there changes nothing, so it is not
+    // recorded, nor marked as edited.
+    if (widget.hasEntry &&
+        _lunch == widget.initialLunch &&
+        _dinner == widget.initialDinner) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+
     final confirmed = await _confirmLargeQuantity();
 
     if (!confirmed) return;
@@ -117,7 +127,25 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      await reference.set(data, SetOptions(merge: true));
+      final batch = FirebaseFirestore.instance.batch()
+        ..set(reference, data, SetOptions(merge: true));
+      ActivityLog.addTo(
+        batch,
+        widget.groupId,
+        kind: widget.hasEntry
+            ? ActivityKind.mealChanged
+            : ActivityKind.mealAdded,
+        memberId: widget.memberId,
+        memberName: widget.memberName,
+        day: widget.dateKey,
+        details: ActivityLog.mealDetails(
+          lunch: _lunch,
+          dinner: _dinner,
+          oldLunch: widget.hasEntry ? widget.initialLunch : null,
+          oldDinner: widget.hasEntry ? widget.initialDinner : null,
+        ),
+      );
+      await batch.commit();
 
       if (!mounted) return;
 

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/activity_log.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
@@ -376,6 +377,10 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   bool _isSaving = false;
   bool _hasEntry = false;
 
+  /// What the entry held when it was opened, for the hostel's history.
+  double? _savedLunch;
+  double? _savedDinner;
+
   /// What a new entry starts with, since most days are one lunch and
   /// one dinner. Nothing is recorded until the member taps Save.
   static const double _defaultMeals = 1;
@@ -506,6 +511,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
           _lunch = (data?['lunch'] as num?)?.toDouble() ?? 0;
           _dinner = (data?['dinner'] as num?)?.toDouble() ?? 0;
         }
+        _savedLunch = snapshot.exists ? _lunch : null;
+        _savedDinner = snapshot.exists ? _dinner : null;
       });
     } on FirebaseException {
       if (!mounted || request != _loadRequest) return;
@@ -582,6 +589,13 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   }
 
   Future<void> _save() async {
+    // Saving what is already there changes nothing, so it is not
+    // recorded, nor marked as edited.
+    if (_hasEntry && _lunch == _savedLunch && _dinner == _savedDinner) {
+      Navigator.of(context).pop();
+      return;
+    }
+
     // A saved entry may be changed only while the admins allow it.
     if (_hasEntry && !await ensureMemberMayEdit(context, widget.groupId)) {
       return;
@@ -625,7 +639,23 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      await _mealCollection.doc(_entryId).set(data, SetOptions(merge: true));
+      final batch = FirebaseFirestore.instance.batch()
+        ..set(_mealCollection.doc(_entryId), data, SetOptions(merge: true));
+      ActivityLog.addTo(
+        batch,
+        widget.groupId,
+        kind: _hasEntry ? ActivityKind.mealChanged : ActivityKind.mealAdded,
+        memberId: _selectedMemberId,
+        memberName: data['userName'] as String,
+        day: _dateKey(_selectedDate),
+        details: ActivityLog.mealDetails(
+          lunch: _lunch,
+          dinner: _dinner,
+          oldLunch: _savedLunch,
+          oldDinner: _savedDinner,
+        ),
+      );
+      await batch.commit();
 
       if (!mounted) return;
 

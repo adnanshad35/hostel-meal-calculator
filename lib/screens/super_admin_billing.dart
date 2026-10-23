@@ -442,7 +442,7 @@ class _PaymentInfoDialogState extends State<_PaymentInfoDialog> {
               maxLines: 6,
               maxLength: 400,
               decoration: const InputDecoration(
-                labelText: 'Instructions and prices',
+                labelText: 'Instructions and Prices',
                 alignLabelWithHint: true,
               ),
             ),
@@ -695,7 +695,7 @@ class _ApprovalCard extends StatelessWidget {
               if (payment.submittedByName.isNotEmpty)
                 _detail(
                   context,
-                  label: 'Sent by',
+                  label: 'Sent By',
                   value: payment.submittedByName,
                 ),
               if (payment.status == PaymentStatus.rejected &&
@@ -946,7 +946,7 @@ class _VoucherDialogState extends State<_VoucherDialog> {
                 textInputAction: TextInputAction.next,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                  labelText: 'Days it adds',
+                  labelText: 'Days It Adds',
                   prefixIcon: Icon(Icons.event_available_outlined),
                 ),
                 validator: _validateDays,
@@ -957,7 +957,7 @@ class _VoucherDialogState extends State<_VoucherDialog> {
                 textCapitalization: TextCapitalization.sentences,
                 maxLength: 80,
                 decoration: const InputDecoration(
-                  labelText: 'Note for yourself (optional)',
+                  labelText: 'Note for Yourself (Optional)',
                 ),
               ),
             ],
@@ -1027,14 +1027,10 @@ class AdminMaintenanceCard extends StatelessWidget {
           size: 30,
         ),
         title: const Text(
-          'Maintenance mode',
+          'Maintenance Mode',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(
-          config.maintenance
-              ? 'On. Everyone except you sees a maintenance screen.'
-              : 'Off. Turn on to pause the app for every user.',
-        ),
+        subtitle: Text(config.maintenance ? 'On' : 'Off'),
         value: config.maintenance,
         onChanged: (value) => _toggle(context, value),
       ),
@@ -1087,7 +1083,7 @@ class _MaintenanceDialogState extends State<_MaintenanceDialog> {
               maxLines: 4,
               maxLength: 200,
               decoration: const InputDecoration(
-                labelText: 'Message to users (optional)',
+                labelText: 'Message to Users (Optional)',
                 hintText: 'Example: Back at 9 PM tonight.',
                 alignLabelWithHint: true,
               ),
@@ -1241,7 +1237,7 @@ class _UpdateConfigDialogState extends State<_UpdateConfigDialog> {
                 TextFormField(
                   controller: _minVersion,
                   decoration: const InputDecoration(
-                    labelText: 'Minimum Version (optional)',
+                    labelText: 'Minimum Version (Optional)',
                     hintText: 'Older versions must update',
                   ),
                   validator: (value) {
@@ -1273,7 +1269,7 @@ class _UpdateConfigDialogState extends State<_UpdateConfigDialog> {
                   controller: _downloadUrl,
                   keyboardType: TextInputType.url,
                   decoration: const InputDecoration(
-                    labelText: 'APK Link (optional)',
+                    labelText: 'APK Link (Optional)',
                     hintText: 'Newest GitHub release',
                   ),
                   validator: (value) {

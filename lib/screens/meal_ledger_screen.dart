@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/edit_mark.dart';
 import '../services/group_member_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
@@ -18,6 +19,7 @@ class _DayMeal {
     required this.lunch,
     required this.dinner,
     this.isPlan = false,
+    this.isEdited = false,
   });
 
   final double lunch;
@@ -25,6 +27,10 @@ class _DayMeal {
 
   /// True when it comes from the meal plan, not a saved entry.
   final bool isPlan;
+
+  /// True when it was changed after it was first saved, so everyone
+  /// can see it was edited.
+  final bool isEdited;
 
   double get total => lunch + dinner;
 }
@@ -309,6 +315,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       byDay.putIfAbsent(day, () => {})[userId] = _DayMeal(
         lunch: (data['lunch'] as num?)?.toDouble() ?? 0,
         dinner: (data['dinner'] as num?)?.toDouble() ?? 0,
+        isEdited: isEditedEntry(data),
       );
     }
 
@@ -466,7 +473,8 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       dinner += meal.dinner;
       rows.add((
         '$day ${_shortMonths[_month.month - 1]}'
-            '${meal.isPlan ? '  Auto' : ''}',
+            '${meal.isPlan ? '  Auto' : ''}'
+            '${meal.isEdited ? '  Edited' : ''}',
         [_quantity(meal.lunch), _quantity(meal.dinner), _quantity(meal.total)],
       ));
     }
@@ -615,6 +623,15 @@ class _MealTable extends StatelessWidget {
                                 color: AppTheme.textSecondary,
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (row.meal?.isEdited ?? false)
+                            const TextSpan(
+                              text: '  Edited',
+                              style: TextStyle(
+                                color: AppTheme.accentDeep,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                         ],

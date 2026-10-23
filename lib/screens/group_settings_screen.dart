@@ -3,11 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../services/activity_log.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
 import '../widgets/app_tiles.dart';
 import '../widgets/member_name_dialog.dart';
 import 'duty_roster_screen.dart';
+import 'hostel_details_screen.dart';
+import 'notifications_screen.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
   const GroupSettingsScreen({
@@ -98,6 +101,11 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         );
       }
     }
+  }
+
+
+  void _open(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _resetCurrentMonth() async {
@@ -221,6 +229,17 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           expenseReferences.add(expense.reference);
         }
       }
+
+      // Recorded first, so a reset can never happen unseen.
+      await ActivityLog.add(
+        widget.groupId,
+        kind: ActivityKind.monthReset,
+        subject: selectedMonthName,
+        day: selectedMonthKey,
+        details:
+            '${mealReferences.length} meal entries and '
+            '${expenseReferences.length} expenses deleted',
+      );
 
       await _deleteDocuments(mealReferences);
       await _deleteDocuments(expenseReferences);
@@ -359,56 +378,32 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             child: CircularProgressIndicator(strokeWidth: 2),
           );
 
+          final hostelName = groupData['name'] as String? ?? widget.groupName;
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
               if (isAdmin) ...[
                 TileGroup(
-                  title: 'Permissions',
+                  title: 'Members',
                   children: [
+                    GroupTile(
+                      icon: Icons.groups_outlined,
+                      title: 'Members',
+                      onTap: () => _open(
+                        HostelDetailsScreen(
+                          groupId: widget.groupId,
+                          groupName: hostelName,
+                          isAdmin: true,
+                          membersOnly: true,
+                        ),
+                      ),
+                    ),
                     if (inviteCode.isNotEmpty)
                       _InviteSwitch(
                         key: ValueKey(inviteCode),
                         inviteCode: inviteCode,
                       ),
-                    SwitchTile(
-                      icon: Icons.restaurant_outlined,
-                      title: 'Member Can Add Meals',
-                      value: settings.membersCanAddMeals,
-                      onChanged: (isOn) => _saveSettings(
-                        settings.copyWith(membersCanAddMeals: isOn),
-                      ),
-                    ),
-                    SwitchTile(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'Member Can Add Expenses',
-                      value: settings.membersCanAddExpenses,
-                      onChanged: (isOn) => _saveSettings(
-                        settings.copyWith(membersCanAddExpenses: isOn),
-                      ),
-                    ),
-                    SwitchTile(
-                      icon: Icons.edit_note_outlined,
-                      title: 'Member Can Edit Meals & Expenses',
-                      value: settings.membersCanEdit,
-                      onChanged: (isOn) => _saveSettings(
-                        settings.copyWith(membersCanEdit: isOn),
-                      ),
-                    ),
-                    SwitchTile(
-                      icon: Icons.lock_open_outlined,
-                      title: 'Special Permission',
-                      value: settings.specialPermission,
-                      onChanged: (isOn) => _saveSettings(
-                        settings.copyWith(specialPermission: isOn),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                TileGroup(
-                  title: 'Members',
-                  children: [
                     GroupTile(
                       icon: Icons.person_add_alt_outlined,
                       title: 'Add Member Without App',
@@ -420,10 +415,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     GroupTile(
                       icon: Icons.assignment_ind_outlined,
                       title: 'Duty Roster',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              DutyRosterScreen(groupId: widget.groupId),
+                      onTap: () =>
+                          _open(DutyRosterScreen(groupId: widget.groupId)),
+                    ),
+                    GroupTile(
+                      icon: Icons.campaign_outlined,
+                      title: 'Send Announcement',
+                      onTap: () => _open(
+                        NotificationsScreen(
+                          groupId: widget.groupId,
+                          isAdmin: true,
                         ),
                       ),
                     ),
@@ -431,8 +432,48 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                 ),
                 const SizedBox(height: 22),
                 TileGroup(
-                  title: 'This Month',
+                  title: 'Member Permissions',
                   children: [
+                    SwitchTile(
+                      icon: Icons.restaurant_outlined,
+                      title: 'Add Meals',
+                      value: settings.membersCanAddMeals,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanAddMeals: isOn),
+                      ),
+                    ),
+                    SwitchTile(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'Add Expenses',
+                      value: settings.membersCanAddExpenses,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanAddExpenses: isOn),
+                      ),
+                    ),
+                    SwitchTile(
+                      icon: Icons.edit_note_outlined,
+                      title: 'Edit Their Entries',
+                      value: settings.membersCanEdit,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(membersCanEdit: isOn),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'Month End',
+                  children: [
+                    // Min Meals and Shop Due open from the 25th to the
+                    // 5th, unless this is on.
+                    SwitchTile(
+                      icon: Icons.lock_open_outlined,
+                      title: 'Min Meals & Shop Due Any Day',
+                      value: settings.specialPermission,
+                      onChanged: (isOn) => _saveSettings(
+                        settings.copyWith(specialPermission: isOn),
+                      ),
+                    ),
                     // Not ready yet: shown so admins know it is on the way.
                     const GroupTile(
                       icon: Icons.home_work_outlined,
@@ -440,9 +481,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       enabled: false,
                       trailing: ComingSoonLabel(),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'Danger Zone',
+                  children: [
                     GroupTile(
                       icon: Icons.restart_alt,
                       title: 'Reset This Month',
+                      isDanger: true,
                       trailing: _isResetting ? progress : null,
                       onTap: _isResetting ? null : _resetCurrentMonth,
                     ),

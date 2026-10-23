@@ -181,7 +181,7 @@ class _AdminRequestsTabState extends State<AdminRequestsTab>
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Delete request',
+                          tooltip: 'Delete Request',
                           onPressed: () => _delete(request),
                           icon: const Icon(Icons.delete_outline),
                         ),
