@@ -60,7 +60,6 @@
     a { color: inherit; }
     img { max-width: 100%; }
     .wrap { width: min(1160px, 100% - 40px); margin-inline: auto; }
-    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
     :focus-visible { outline: 3px solid var(--brass); outline-offset: 3px; border-radius: 6px; }
 
@@ -410,7 +409,6 @@
 
     /* ───────── Sections ───────── */
     section { padding: 104px 0; }
-    section.tight { padding-top: 0; }
 
     .head { max-width: 680px; margin-bottom: 48px; }
     .head.center { margin-inline: auto; text-align: center; }
@@ -508,15 +506,6 @@
     .feat.key .ic { background: rgba(205, 170, 99, .16); color: var(--brass); }
     .feat.key p { color: rgba(255, 255, 255, .76); }
 
-    /* Roles */
-    .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .role { padding: 32px; }
-    .role .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .role p { color: var(--ink-soft); margin: 0 0 20px; }
-    .role ul { list-style: none; margin: 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: grid; gap: 12px; }
-    .role li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; }
-    .role li svg { width: 20px; height: 20px; color: var(--green); margin-top: 3px; }
-
     /* Install */
     .install { background: var(--paper); }
     .install-grid { display: grid; grid-template-columns: 1.3fr .7fr; gap: 18px; align-items: stretch; }
@@ -548,17 +537,9 @@
       place-items: center;
     }
 
-    .install li:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      left: 18px;
-      top: 38px;
-      bottom: 4px;
-      width: 2px;
-      background: var(--line);
-    }
 
     .install li strong { color: var(--green-deep); }
+    .install li a { color: var(--green); font-weight: 700; }
 
     .tip {
       margin-top: 24px;
@@ -783,7 +764,7 @@
       .hero .wrap { grid-template-columns: 1fr; gap: 56px; text-align: center; }
       .hero p.sub { margin-inline: auto; }
       .actions, .meta { justify-content: center; }
-      .compare, .roles, .install-grid, .faq-grid { grid-template-columns: 1fr; }
+      .compare, .install-grid, .faq-grid { grid-template-columns: 1fr; }
       .feat-grid { grid-template-columns: 1fr 1fr; }
       .faq-grid { gap: 8px; }
       .faq-grid .head { position: static; margin-bottom: 28px; }
@@ -806,9 +787,10 @@
     @media (max-width: 560px) {
       body { font-size: 16.5px; }
       .wrap { width: calc(100% - 32px); }
-      .compare .card, .role, .install-card { padding: 24px 22px; }
+      .compare .card, .install-card { padding: 24px 22px; }
       .feat-grid { grid-template-columns: 1fr; }
       .btn-primary, .btn-ghost { width: 100%; }
+      .qr { display: none; }
       .chip { padding: 9px 12px; }
       .chip strong { font-size: 15px; }
     }
@@ -821,8 +803,8 @@
       <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
       <div class="nav-links">
         <a href="#features">Features</a>
-        <a href="#install">Install</a>
         <a href="#guide">Guide</a>
+        <a href="#install">Install</a>
         <a href="#faq">FAQ</a>
       </div>
       <div class="nav-cta">
@@ -836,8 +818,8 @@
     <div class="menu" id="menu">
       <div class="wrap">
         <a href="#features">Features</a>
-        <a href="#install">Install</a>
         <a href="#guide">Guide</a>
+        <a href="#install">Install</a>
         <a href="#faq">FAQ</a>
         <a href="/app/">Open the Web App</a>
       </div>
@@ -921,7 +903,7 @@
       <div class="wrap">
         <div class="head reveal">
           <span class="kicker">Why HostelMate</span>
-          <h2>The notebook worked. Until the month ended.</h2>
+          <h2>The Notebook Worked. Until the Month Ended.</h2>
           <p class="lead">Most hostels keep one register and trust one person to add it up. HostelMate keeps the same records, but shares the work and shows everyone the same answer.</p>
         </div>
 
@@ -953,26 +935,26 @@
       <div class="wrap">
         <div class="head center reveal">
           <span class="kicker">Features</span>
-          <h2>Everything a shared kitchen needs</h2>
-          <p class="lead">Four tabs: Home, Meals, Expenses and Balance. Here is what is inside.</p>
+          <h2>Everything a Shared Kitchen Needs</h2>
+          <p class="lead">All in four tabs: Home, Meals, Expenses and Balance.</p>
         </div>
 
         <div class="feat-grid">
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 002 2v8M11 3v6M7 3v6"/><path d="M17 21V3c-2 1-3 4-3 7s1 3 3 3"/></svg></span>
-            <div><h3>Meals in seconds</h3><p>Lunch and dinner for the day, entered by each member.</p></div>
+            <div><h3>Meals in Seconds</h3><p>Lunch and dinner for the day, entered by each member.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.500" y="5" width="17" height="15" rx="2.500"/><path d="M3.500 10h17M8 3v4M16 3v4"/></svg></span>
-            <div><h3>Meal plans</h3><p>Set your usual meals once; forgotten days still count.</p></div>
+            <div><h3>Meal Plans</h3><p>Set your usual meals once; forgotten days still count.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
-            <div><h3>Shared expenses</h3><p>Item, amount and who paid, on every phone at once.</p></div>
+            <div><h3>Shared Expenses</h3><p>Item, amount and who paid, on every phone at once.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.500"/><path d="M8 8h8M8 12h2M12 12h2M8 16h2M12 16h2"/></svg></span>
-            <div><h3>Automatic balance</h3><p>The meal rate and each member's Pay or Collect, ready to copy.</p></div>
+            <div><h3>Automatic Balance</h3><p>The meal rate and each member's Pay or Collect, ready to copy.</p></div>
           </div>
           <div class="feat key reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.500 12a8.500 8.500 0 102.500-6"/><path d="M3.500 4v4h4"/><path d="M12 7.500V12l3 2"/></svg></span>
@@ -980,7 +962,7 @@
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg></span>
-            <div><h3>Month lock</h3><p>A month closes on the 7th of the next, for admins too.</p></div>
+            <div><h3>Month Lock</h3><p>Entries can change until the 7th of the next month, then lock for everyone.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16h16"/><path d="M7.500 15l4-4.500 3 3L20 7"/></svg></span>
@@ -988,11 +970,11 @@
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.6-3.400 3.200-5.500 6.500-5.500s5.900 2.100 6.500 5.500"/><path d="M17 8v6M14 11h6"/></svg></span>
-            <div><h3>Members without the app</h3><p>Admins add them by name and record for them.</p></div>
+            <div><h3>Members Without the App</h3><p>Admins add them by name and record for them.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
-            <div><h3>Admin controls</h3><p>Permissions, duty roster, announcements and month end.</p></div>
+            <div><h3>Admin Controls</h3><p>Permissions, duty roster, announcements and month end.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 6 2.500 7 2.500 7h-17S6 15 6 9z"/><path d="M10 20a2 2 0 004 0"/></svg></span>
@@ -1000,89 +982,11 @@
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6l8-3z"/><path d="M8.500 12l2.500 2.500 4.500-5"/></svg></span>
-            <div><h3>Private to your hostel</h3><p>Only members see its records; joining needs your code.</p></div>
+            <div><h3>Private to Your Hostel</h3><p>Only members see its records; joining needs your invitation code.</p></div>
           </div>
           <div class="feat reveal">
             <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.500" y="2.500" width="11" height="19" rx="2.500"/><path d="M11 18.500h2"/></svg></span>
-            <div><h3>Android and web</h3><p>One account on any device; the app updates itself.</p></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="roles">
-      <div class="wrap">
-        <div class="head center reveal">
-          <span class="kicker">Who Does What</span>
-          <h2>Members and admins</h2>
-          <p class="lead">One person creates the hostel and becomes its admin. Everyone else joins with the invitation code.</p>
-        </div>
-
-        <div class="roles">
-          <div class="card role reveal">
-            <div class="top"><h3>Member</h3><span class="tag">Everyone</span></div>
-            <p>Anyone living in the hostel.</p>
-            <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Records their own meals and expenses, if the admins allow it</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sets a meal plan and announces days away</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sees every record, the balance and Accountability</li>
-            </ul>
-          </div>
-
-          <div class="card role reveal d1">
-            <div class="top"><h3>Admin</h3><span class="tag brass">One or More</span></div>
-            <p>Everything a member can do, plus:</p>
-            <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Manages members, admins and the duty roster</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Records entries for anyone, including members without the app</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sets minimum meals and shop due, sends announcements, activates the hostel</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="install" id="install">
-      <div class="wrap">
-        <div class="head reveal">
-          <span class="kicker">Install</span>
-          <h2>Up and running in two minutes</h2>
-          <p class="lead">On Android, HostelMate installs straight from this page. On an iPhone or a laptop, use the web version with the same account.</p>
-        </div>
-
-        <div class="install-grid">
-          <div class="install-card reveal">
-            <h3>On Android</h3>
-            <ol>
-              <li>Tap <strong>Download for Android</strong> on your phone.</li>
-              <li>When the download finishes, open <strong>HostelMate.apk</strong>.</li>
-              <li>If your phone says it can't install from this source, tap <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, and go back.</li>
-              <li>Tap <strong>Install</strong>, then <strong>Open</strong>.</li>
-              <li>Create an account, verify your email, then create a hostel or join one with its invitation code.</li>
-            </ol>
-
-            <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
-              Download for Android
-            </a>
-
-            <div class="tip">
-              <strong>Download looks stuck?</strong> Open your browser's Downloads list. If HostelMate.apk shows a warning, choose <strong>Keep</strong> or <strong>Download anyway</strong>. If Play Protect asks, choose <strong>Install anyway</strong>.
-            </div>
-          </div>
-
-          <div class="side">
-            <div class="install-card reveal d1">
-              <h3>iPhone and Laptop</h3>
-              <p>The web version runs in any modern browser, with the same account and the same hostel.</p>
-              <a class="btn btn-soft" href="/app/">Open the Web App</a>
-            </div>
-
-            <div class="install-card qr reveal d2">
-              <img src="qr.png" alt="QR code for hostelmate.web.app" width="160" height="160">
-              <b>On a computer?</b>
-              <span>Scan with your phone's camera to open this page there.</span>
-            </div>
+            <div><h3>Android and Web</h3><p>One account on any device; the app updates itself.</p></div>
           </div>
         </div>
       </div>
@@ -1092,7 +996,7 @@
       <div class="wrap">
         <div class="head center reveal">
           <span class="kicker">User Guide</span>
-          <h2>From sign-up to settings</h2>
+          <h2>From Sign-Up to Settings</h2>
           <p class="lead">Follow the path that fits you: start a new hostel as its admin, or join one with a code. The green labels are the buttons you tap.</p>
         </div>
 
@@ -1100,7 +1004,7 @@
           <div class="card rm-step reveal">
             <span class="rm-n">1</span>
             <div>
-              <h3>Sign up</h3>
+              <h3>Sign Up</h3>
               <p>Create your account, then open the link HostelMate emails you.</p>
               <div class="tapline"><span class="tap">Create Account</span><i>→</i><span class="tap">I Have Verified My Email</span></div>
             </div>
@@ -1116,8 +1020,8 @@
               <div class="card rm-step">
                 <span class="rm-n">2</span>
                 <div>
-                  <h3>Start a hostel</h3>
-                  <span class="sub">You become the admin</span>
+                  <h3>Start a Hostel</h3>
+                  <span class="sub">You Become the Admin</span>
                   <div class="tapline"><small>Create</small><span class="tap">Create Hostel</span><i>→</i><span class="tap">Create Group</span></div>
                   <div class="tapline"><small>Activate</small><span class="tap">Hostel Details</span><i>→</i><span class="tap">Activation</span><i>→</i><span class="tap">Apply Voucher</span></div>
                   <div class="tapline"><small>Invite</small><span class="tap">Hostel Details</span><i>→</i><span class="tap">Hostel Code</span></div>
@@ -1132,9 +1036,9 @@
               <div class="card rm-step">
                 <span class="rm-n">2</span>
                 <div>
-                  <h3>Join a hostel</h3>
-                  <span class="sub">You join as a member</span>
-                  <p>Ask your admin for the Hostel Code, then enter it.</p>
+                  <h3>Join a Hostel</h3>
+                  <span class="sub">You Join as a Member</span>
+                  <p>Ask your admin for the invitation code, then enter it.</p>
                   <div class="tapline"><span class="tap">Join Hostel</span><i>→</i><span class="tap">Join Group</span></div>
                 </div>
               </div>
@@ -1148,7 +1052,7 @@
           <div class="card rm-step reveal">
             <span class="rm-n">3</span>
             <div>
-              <h3>Use it every day</h3>
+              <h3>Use It Every Day</h3>
               <p>Add your meals and anything you buy. Set a meal plan once, and forgotten days still count.</p>
               <div class="tapline"><small>Meals</small><span class="tap">Home</span><i>→</i><span class="tap">Meals +</span></div>
               <div class="tapline"><small>Expenses</small><span class="tap">Home</span><i>→</i><span class="tap">Expenses +</span></div>
@@ -1163,7 +1067,7 @@
               <div class="card rm-step">
                 <span class="rm-n">4</span>
                 <div>
-                  <h3>At month end</h3>
+                  <h3>At Month End</h3>
                   <p>See who pays or collects, and share it with the hostel.</p>
                   <div class="tapline"><span class="tap">Balance</span><i>→</i><span class="tap">Copy</span></div>
                 </div>
@@ -1174,7 +1078,7 @@
                 <span class="rm-n">5</span>
                 <div>
                   <h3>Settings</h3>
-                  <div class="tapline"><small>Everyone</small><span class="tap">Home</span><i>→</i><span class="tap">Profile icon</span></div>
+                  <div class="tapline"><small>Everyone</small><span class="tap">Home</span><i>→</i><span class="tap">Profile Icon</span></div>
                   <div class="tapline"><small>Admins</small><span class="tap">Hostel Details</span><i>→</i><span class="tap">Admin Settings</span></div>
                 </div>
               </div>
@@ -1185,7 +1089,7 @@
         <div class="guide-card reveal">
           <div>
             <span class="kicker">Need More Detail?</span>
-            <h2>The full guide is in the app</h2>
+            <h2>The Full Guide Is in the App</h2>
             <p>Every part of HostelMate on one page, from setting up a hostel to reading the Balance tab, with a menu that jumps to each section.</p>
           </div>
           <div class="path">Profile <span>→</span> HostelMate Guide</div>
@@ -1193,11 +1097,57 @@
       </div>
     </section>
 
-    <section id="faq" class="tight">
+    <section class="install" id="install">
+      <div class="wrap">
+        <div class="head reveal">
+          <span class="kicker">Install</span>
+          <h2>Up and Running in Two Minutes</h2>
+          <p class="lead">On Android, HostelMate installs straight from this page. On an iPhone or a laptop, use the web version with the same account.</p>
+        </div>
+
+        <div class="install-grid">
+          <div class="install-card reveal">
+            <h3>On Android</h3>
+            <ol>
+              <li>Tap <strong>Download for Android</strong> on your phone.</li>
+              <li>When the download finishes, open <strong>HostelMate.apk</strong>.</li>
+              <li>If your phone says it can't install from this source, tap <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, and go back.</li>
+              <li>Tap <strong>Install</strong>, then <strong>Open</strong>.</li>
+              <li>Sign up and follow the <a href="#guide">guide above</a>.</li>
+            </ol>
+
+            <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+              Download for Android
+            </a>
+
+            <div class="tip">
+              <strong>Download Looks Stuck?</strong> Open your browser's Downloads list. If HostelMate.apk shows a warning, choose <strong>Keep</strong> or <strong>Download anyway</strong>. If Play Protect asks, choose <strong>Install anyway</strong>.
+            </div>
+          </div>
+
+          <div class="side">
+            <div class="install-card reveal d1">
+              <h3>iPhone and Laptop</h3>
+              <p>The web version runs in any modern browser, with the same account and the same hostel.</p>
+              <a class="btn btn-soft" href="/app/">Open the Web App</a>
+            </div>
+
+            <div class="install-card qr reveal d2">
+              <img src="qr.png" alt="QR code for hostelmate.web.app" width="160" height="160">
+              <b>On a Computer?</b>
+              <span>Scan with your phone's camera to open this page there.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
       <div class="wrap faq-grid">
         <div class="head reveal">
           <span class="kicker">Questions</span>
-          <h2>Good to know</h2>
+          <h2>Good to Know</h2>
           <p class="lead">Something else on your mind? Send it from the app with Request a Feature.</p>
         </div>
 
@@ -1207,28 +1157,16 @@
             <p>No. An admin can add anyone by name and record their meals and expenses for them. They are included in the calculation like everyone else, and can be linked to an account later if they join.</p>
           </details>
           <details>
-            <summary>How do I start using it with my hostel?</summary>
-            <p>One person creates the hostel and becomes its admin. The app gives an invitation code to share; everyone else joins with that code. A new hostel is activated by its admin with a voucher code.</p>
-          </details>
-          <details>
             <summary>Can an admin quietly change old records?</summary>
-            <p>No. Every change, by a member or an admin, appears in Accountability with the old and new figures, and nobody can delete those records. A month's meals and expenses lock on the 8th of the next month for everyone, admins included.</p>
+            <p>No. Every change, by a member or an admin, appears in Accountability with the old and new figures, and nobody can delete those records. A month's meals and expenses can be changed until the 7th of the next month, then they lock for everyone, admins included.</p>
           </details>
           <details>
             <summary>What happens when the hostel's activation ends?</summary>
             <p>The hostel becomes read-only: every record stays visible, but nothing new can be added until an admin activates it again from Hostel Details.</p>
           </details>
           <details>
-            <summary>Who can see our meals and expenses?</summary>
-            <p>Only the members of your hostel. Other hostels cannot see your records, and nobody can join without your invitation code.</p>
-          </details>
-          <details>
             <summary>How do I get updates?</summary>
             <p>The Android app tells you when a new version is ready and installs it from inside the app. You can also check any time from Profile → Check for Updates. The web version is always up to date.</p>
-          </details>
-          <details>
-            <summary>Can I use it on an iPhone or a laptop?</summary>
-            <p>Yes, through the <a href="/app/">web version</a>, which runs in any modern browser with the same account and the same hostel. There is no iPhone app to install; Android users can install the app or use the web version.</p>
           </details>
         </div>
       </div>
@@ -1244,17 +1182,19 @@
           <p>Hostel meals and expenses, settled without the arguments.</p>
         </div>
         <div>
-          <h4>Product</h4>
+          <h4>Explore</h4>
           <ul>
             <li><a href="#features">Features</a></li>
+            <li><a href="#guide">Guide</a></li>
+            <li><a href="#install">Install</a></li>
+            <li><a href="#faq">FAQ</a></li>
           </ul>
         </div>
         <div>
-          <h4>Help</h4>
+          <h4>Get It</h4>
           <ul>
-            <li><a href="#install">Install</a></li>
-            <li><a href="#guide">Guide</a></li>
-            <li><a href="#faq">FAQ</a></li>
+            <li><a href="/app/">Web App</a></li>
+            <li><a href="https://github.com/adnanshad35/hostel-meal-calculator">GitHub</a></li>
           </ul>
         </div>
       </div>
