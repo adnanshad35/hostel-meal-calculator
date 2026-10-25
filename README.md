@@ -54,7 +54,7 @@ Hostels often include people who will never install an app. An admin can add the
 
 ## Features
 
-The phone app has four tabs along the bottom: **Home**, **Meals**, **Expenses** and **Balance**.
+The phone app has four tabs along the bottom: **Home**, **Meals**, **Expenses** and **Balance**. The website's [Guide](https://hostelmate.web.app/#guide) walks a new user from sign-up to settings.
 
 ### Home
 
@@ -91,8 +91,10 @@ The phone app has four tabs along the bottom: **Home**, **Meals**, **Expenses** 
 ### Hostel Details
 
 - **Activation**: whether the hostel is active and for how long; admins tap it to renew
+- **Hostel Code**: tap it to copy, then send it to new members, who enter it as the **Invitation Code** under **Join Hostel**
 - **Accountability**: the hostel's change history (see [below](#accountability-and-the-month-lock)), with a red dot when someone else changed something since you last looked
 - **Members**, with **Admin** and **No App** tags and each member's phone number
+- **Admin Settings** (admins only): see below
 - **Leave Hostel**: your past records stay; the only admin must first make another member admin
 
 ### Admin Settings
@@ -321,11 +323,12 @@ lib/
 │                                     Meals, Expenses, Balance, Accountability,
 │                                     Admin Settings, Guide, super admin…
 ├── widgets/                          Month calendar, Month Trend chart, tiles,
-│                                     desktop layout, update prompt…
+│                                     super admin desktop layout, update prompt…
 └── theme/app_theme.dart              Colours, font and component styles
 assets/fonts/                         Manrope
 test/                                 Unit and widget tests
-website/                              The landing page at hostelmate.web.app
+website/                              The landing page at hostelmate.web.app and its
+                                      link preview image (og-image.png)
 tool/build_site.py                    Builds the website and web app for hosting
 firestore.rules                       Security rules
 ```
