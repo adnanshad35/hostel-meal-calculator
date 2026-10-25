@@ -4,13 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HostelMate — hostel meals and expenses, settled fairly</title>
-  <meta name="description" content="HostelMate keeps a hostel's meals and expenses in one place and works out exactly what each member pays or collects. Android app and web version.">
+  <meta name="description" content="HostelMate keeps a hostel's meals and expenses in one place, works out exactly what each member pays or collects, and keeps every change on record. Android app and web version.">
   <meta name="theme-color" content="#0A241C">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="HostelMate">
-  <meta property="og:description" content="Hostel meals and expenses, settled without the arguments.">
-  <meta property="og:url" content="https://hostelmate.web.app">
-  <meta property="og:image" content="https://hostelmate.web.app/icon.png">
+  <meta property="og:site_name" content="HostelMate">
+  <meta property="og:title" content="HostelMate — hostel meals and expenses, settled without the arguments">
+  <meta property="og:description" content="Shared meals, expenses and monthly balances for hostels and messes, with every change on record. Android app and web version.">
+  <meta property="og:url" content="https://hostelmate.web.app/">
+  <meta property="og:image" content="https://hostelmate.web.app/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="627">
+  <meta property="og:image:alt" content="HostelMate: hostel meals and expenses, settled without the arguments">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,49 +23,70 @@
   <style>
     :root {
       --ink: #111C17;
-      --ink-soft: #5B6660;
+      --ink-soft: #55615A;
+      --ink-faint: #8A948E;
       --green: #176B4D;
       --green-deep: #0A241C;
+      --green-mid: #0F3A2C;
       --hero-end: #12503B;
       --brass: #CDAA63;
-      --brass-deep: #A5803A;
+      --brass-deep: #9C7832;
       --brass-soft: #F6EEDC;
       --mint: #EEF3EF;
       --line: #E3E8E4;
       --paper: #FFFFFF;
-      --canvas: #F3F5F2;
-      --radius: 22px;
-      --card-shadow: 0 10px 30px -14px rgba(10, 36, 28, .22);
-      --shadow: 0 26px 60px -24px rgba(10, 36, 28, .38);
+      --canvas: #F5F7F4;
+      --radius: 24px;
+      --card-shadow: 0 1px 2px rgba(10, 36, 28, .05), 0 12px 32px -16px rgba(10, 36, 28, .2);
+      --shadow: 0 30px 70px -28px rgba(10, 36, 28, .45);
+      --nav-h: 68px;
     }
 
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 12px); }
 
     body {
       margin: 0;
       font-family: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 17px;
       color: var(--ink);
       background: var(--canvas);
-      line-height: 1.55;
+      line-height: 1.65;
       -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
 
     a { color: inherit; }
-    .wrap { width: min(1120px, 100% - 40px); margin-inline: auto; }
+    img { max-width: 100%; }
+    .wrap { width: min(1160px, 100% - 40px); margin-inline: auto; }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    :focus-visible { outline: 3px solid var(--brass); outline-offset: 3px; border-radius: 6px; }
 
     /* ───────── Navigation ───────── */
     .nav {
       position: sticky;
       top: 0;
-      z-index: 20;
-      background: rgba(10, 36, 28, .86);
-      backdrop-filter: saturate(160%) blur(14px);
-      -webkit-backdrop-filter: saturate(160%) blur(14px);
-      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      z-index: 30;
+      background: rgba(10, 36, 28, .82);
+      backdrop-filter: saturate(170%) blur(16px);
+      -webkit-backdrop-filter: saturate(170%) blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
     }
 
-    .nav .wrap { display: flex; align-items: center; height: 64px; gap: 28px; }
+    .nav .wrap { display: flex; align-items: center; height: var(--nav-h); gap: 28px; }
+
+    .progress {
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      height: 2px;
+      width: 100%;
+      background: linear-gradient(90deg, var(--brass), #E6CC92);
+      transform-origin: left;
+      transform: scaleX(0);
+    }
 
     .brand {
       display: flex;
@@ -73,60 +99,109 @@
       letter-spacing: -.3px;
     }
 
-    .brand img { width: 30px; height: 30px; border-radius: 8px; }
+    .brand img { width: 32px; height: 32px; border-radius: 9px; }
 
-    .nav-links { display: flex; gap: 26px; margin-left: auto; }
+    .nav-links { display: flex; gap: 4px; margin-left: auto; }
 
     .nav-links a {
-      color: rgba(255, 255, 255, .78);
+      color: rgba(255, 255, 255, .74);
       text-decoration: none;
       font-size: 14.5px;
-      font-weight: 500;
-      transition: color .15s;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 10px;
+      transition: color .15s, background .15s;
     }
 
-    .nav-links a:hover { color: #fff; }
+    .nav-links a:hover, .nav-links a.on { color: #fff; background: rgba(255, 255, 255, .07); }
 
+    .nav-cta { display: flex; gap: 10px; align-items: center; }
+
+    .menu-btn {
+      display: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      background: transparent;
+      color: #fff;
+      cursor: pointer;
+      place-items: center;
+    }
+
+    .menu-btn svg { width: 20px; height: 20px; }
+
+    .menu {
+      display: none;
+      border-top: 1px solid rgba(255, 255, 255, .08);
+      padding: 10px 0 18px;
+    }
+
+    .menu a {
+      display: block;
+      color: rgba(255, 255, 255, .86);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 17px;
+      padding: 12px 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    .nav.open .menu { display: block; }
+
+    /* ───────── Buttons ───────── */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 9px;
+      gap: 10px;
       font-weight: 700;
       text-decoration: none;
       border-radius: 14px;
-      transition: transform .15s, box-shadow .15s, background .15s;
+      transition: transform .15s, box-shadow .15s, background .15s, border-color .15s;
       white-space: nowrap;
+      border: 1px solid transparent;
     }
 
     .btn:hover { transform: translateY(-2px); }
     .btn svg { width: 19px; height: 19px; flex: none; }
 
     .btn-small { padding: 9px 16px; font-size: 14px; background: var(--brass); color: var(--green-deep); }
+    .btn-line { padding: 9px 14px; font-size: 14px; color: #fff; border-color: rgba(255, 255, 255, .22); }
+    .btn-line:hover { background: rgba(255, 255, 255, .08); }
 
     .btn-primary {
       padding: 16px 28px;
       font-size: 17px;
-      background: var(--brass);
+      background: linear-gradient(180deg, #D8B873, var(--brass));
       color: var(--green-deep);
-      box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .5);
+      box-shadow: 0 16px 36px -14px rgba(205, 170, 99, .7), inset 0 1px 0 rgba(255, 255, 255, .35);
     }
 
     .btn-ghost {
       padding: 16px 24px;
       font-size: 17px;
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, .28);
+      border-color: rgba(255, 255, 255, .26);
+      background: rgba(255, 255, 255, .04);
     }
 
-    .btn-ghost:hover { background: rgba(255, 255, 255, .08); }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .1); }
 
     .btn-dark {
-      padding: 16px 28px;
-      font-size: 17px;
+      padding: 15px 26px;
+      font-size: 16.5px;
       background: var(--green-deep);
       color: #fff;
       box-shadow: 0 14px 30px -14px rgba(10, 36, 28, .8);
+    }
+
+    .btn-soft {
+      padding: 15px 24px;
+      font-size: 16.5px;
+      background: var(--paper);
+      color: var(--green-deep);
+      border-color: var(--line);
     }
 
     /* ───────── Hero ───────── */
@@ -135,10 +210,10 @@
       overflow: hidden;
       color: #fff;
       background:
-        radial-gradient(900px 520px at 85% -10%, rgba(205, 170, 99, .16), transparent 60%),
-        radial-gradient(700px 480px at -10% 110%, rgba(23, 107, 77, .45), transparent 60%),
-        linear-gradient(150deg, var(--green-deep) 0%, #0E3428 50%, var(--hero-end) 100%);
-      padding: 52px 0 64px;
+        radial-gradient(900px 520px at 85% -10%, rgba(205, 170, 99, .18), transparent 60%),
+        radial-gradient(700px 480px at -10% 110%, rgba(23, 107, 77, .5), transparent 60%),
+        linear-gradient(150deg, var(--green-deep) 0%, var(--green-mid) 50%, var(--hero-end) 100%);
+      padding: 72px 0 96px;
     }
 
     .hero::after {
@@ -146,9 +221,9 @@
       position: absolute;
       inset: 0;
       background-image:
-        linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
-      background-size: 44px 44px;
+        linear-gradient(rgba(255, 255, 255, .04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .04) 1px, transparent 1px);
+      background-size: 48px 48px;
       mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 72%);
       -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 72%);
       pointer-events: none;
@@ -158,7 +233,7 @@
       position: relative;
       z-index: 1;
       display: grid;
-      grid-template-columns: 1.1fr .9fr;
+      grid-template-columns: 1.15fr .85fr;
       gap: 56px;
       align-items: center;
     }
@@ -166,11 +241,11 @@
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 14px;
+      gap: 9px;
+      padding: 7px 15px 7px 11px;
       border-radius: 99px;
-      background: rgba(255, 255, 255, .1);
-      border: 1px solid rgba(255, 255, 255, .16);
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid rgba(255, 255, 255, .14);
       font-size: 13.5px;
       font-weight: 600;
       color: rgba(255, 255, 255, .9);
@@ -185,55 +260,71 @@
     }
 
     h1 {
-      font-size: clamp(34px, 4.8vw, 54px);
-      line-height: 1.04;
-      letter-spacing: -2px;
+      font-size: clamp(38px, 5.4vw, 64px);
+      line-height: 1.02;
+      letter-spacing: -2.2px;
       font-weight: 800;
-      margin: 22px 0 18px;
+      margin: 24px 0 22px;
+      text-wrap: balance;
     }
 
-    h1 em {
+    h1 em, h2 em {
       font-style: normal;
-      background: linear-gradient(90deg, #E6CC92, var(--brass));
+      background: linear-gradient(90deg, #E9D29C, var(--brass));
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
 
     .hero p.sub {
-      font-size: clamp(16px, 1.5vw, 19px);
-      color: rgba(255, 255, 255, .8);
-      max-width: 520px;
-      margin: 0 0 26px;
+      font-size: clamp(17px, 1.6vw, 19.5px);
+      line-height: 1.6;
+      color: rgba(255, 255, 255, .78);
+      max-width: 34em;
+      margin: 0 0 32px;
     }
 
     .actions { display: flex; gap: 14px; flex-wrap: wrap; }
 
     .meta {
-      margin-top: 22px;
-      font-size: 14px;
-      color: rgba(255, 255, 255, .62);
+      margin-top: 28px;
+      font-size: 14.5px;
+      color: rgba(255, 255, 255, .64);
       display: flex;
-      gap: 18px;
+      gap: 10px 22px;
       flex-wrap: wrap;
     }
 
-    .meta span::before { content: "✓ "; color: var(--brass); font-weight: 700; }
+    .meta span { display: inline-flex; align-items: center; gap: 7px; }
+    .meta svg { width: 16px; height: 16px; color: var(--brass); }
 
     /* ───────── Phone mock-up ───────── */
-    .stage { position: relative; display: flex; justify-content: center; }
+    .stage { position: relative; display: flex; justify-content: center; padding: 10px 0; }
+
+    .stage::before {
+      content: "";
+      position: absolute;
+      width: 380px;
+      height: 380px;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(205, 170, 99, .22), transparent 65%);
+      filter: blur(10px);
+    }
 
     .phone {
       position: relative;
-      width: 262px;
-      border-radius: 40px;
+      width: 270px;
+      border-radius: 42px;
       padding: 11px;
-      background: linear-gradient(160deg, #26342D, #0A1410);
+      background: linear-gradient(160deg, #2A3A32, #0A1410);
       box-shadow:
-        0 50px 90px -30px rgba(0, 0, 0, .7),
-        0 0 0 1px rgba(255, 255, 255, .08) inset;
+        0 60px 100px -34px rgba(0, 0, 0, .75),
+        0 0 0 1px rgba(255, 255, 255, .1) inset;
       transform: rotate(3deg);
-      animation: float 7s ease-in-out infinite;
+      animation: float 8s ease-in-out infinite;
     }
 
     @keyframes float {
@@ -247,8 +338,8 @@
       color: var(--ink);
       padding: 16px 14px 20px;
       font-size: 12px;
+      line-height: 1.45;
       overflow: hidden;
-      /* The hero centres its text on phones; the app does not. */
       text-align: left;
     }
 
@@ -264,7 +355,8 @@
       box-shadow: 0 12px 24px -14px rgba(10, 36, 28, .8);
     }
 
-    .m-hero .name { font-weight: 800; font-size: 13.5px; }
+    .m-hero .name { font-weight: 800; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+    .m-hero .name i { width: 13px; height: 13px; border-radius: 50%; background: var(--brass); color: var(--green-deep); font-style: normal; font-size: 8px; font-weight: 900; display: grid; place-items: center; }
     .m-hero .lbl { margin-top: 7px; color: var(--brass); font-weight: 800; font-size: 8.5px; letter-spacing: 1.3px; }
     .m-hero .rate { display: flex; justify-content: space-between; align-items: center; }
     .m-hero .rate b { font-size: 26px; letter-spacing: -1px; font-weight: 800; }
@@ -288,142 +380,364 @@
     .m-today div { background: var(--mint); border-radius: 10px; padding: 6px 8px; display: flex; justify-content: space-between; font-weight: 700; }
     .m-today .duty { grid-column: span 2; justify-content: flex-start; gap: 6px; }
     .m-today .duty i { width: 9px; height: 9px; border-radius: 3px; background: var(--brass-deep); align-self: center; }
-    .m-row { display: flex; justify-content: space-between; padding: 3px 0; font-weight: 600; }
-    .pay { color: #D64545; font-weight: 800; }
-    .get { color: #218653; font-weight: 800; }
+    .m-add { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .m-add div { background: var(--mint); border-radius: 10px; padding: 7px 8px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: var(--green); }
+    .m-add b { width: 18px; height: 18px; border-radius: 6px; background: var(--green); color: #fff; display: grid; place-items: center; font-size: 13px; line-height: 1; }
+    .m-tabs { display: grid; grid-template-columns: repeat(4, 1fr); margin: 12px -14px -20px; padding: 9px 4px 14px; background: #fff; border-top: 1px solid var(--line); font-size: 9px; font-weight: 700; color: var(--ink-soft); text-align: center; }
+    .m-tabs span::before { content: ""; display: block; width: 16px; height: 16px; margin: 0 auto 3px; border-radius: 5px; border: 2px solid currentColor; }
+    .m-tabs .on { color: var(--green); }
+    .m-tabs .on::before { background: var(--mint); }
 
     .chip {
       position: absolute;
-      background: #fff;
+      z-index: 2;
+      background: rgba(255, 255, 255, .96);
       color: var(--ink);
       border-radius: 16px;
       padding: 11px 15px;
-      box-shadow: 0 22px 44px -18px rgba(0, 0, 0, .55);
-      font-size: 13px;
+      box-shadow: 0 22px 44px -18px rgba(0, 0, 0, .6);
+      font-size: 12.5px;
       font-weight: 600;
       line-height: 1.3;
+      color: var(--ink-soft);
     }
 
-    .chip strong { display: block; font-size: 17px; letter-spacing: -.3px; }
-    .chip-a { left: -6px; top: 70px; }
-    .chip-b { right: -10px; bottom: 76px; }
+    .chip strong { display: block; font-size: 17px; letter-spacing: -.3px; color: var(--ink); }
+    .chip-a { left: -6px; top: 64px; }
+    .chip-b { right: -14px; bottom: 84px; }
     .chip-a strong { color: var(--brass-deep); }
     .chip-b strong { color: var(--green); }
 
     /* ───────── Sections ───────── */
-    section { padding: 56px 0; }
+    section { padding: 104px 0; }
+    section.tight { padding-top: 0; }
 
-    .label { color: var(--brass-deep); font-weight: 800; font-size: 13.5px; letter-spacing: 1.4px; text-transform: uppercase; }
+    .head { max-width: 680px; margin-bottom: 48px; }
+    .head.center { margin-inline: auto; text-align: center; }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--brass-deep);
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+    }
+
+    .kicker::before { content: ""; width: 22px; height: 2px; background: currentColor; border-radius: 2px; }
 
     h2 {
-      font-size: clamp(26px, 3vw, 36px);
-      line-height: 1.12;
-      letter-spacing: -1px;
+      font-size: clamp(30px, 3.6vw, 44px);
+      line-height: 1.08;
+      letter-spacing: -1.4px;
       font-weight: 800;
-      margin: 8px 0 10px;
+      margin: 14px 0 16px;
+      text-wrap: balance;
     }
 
-    .lead { font-size: 17px; color: var(--ink-soft); max-width: 620px; margin: 0; }
-    .center { text-align: center; }
-    .center .lead { margin-inline: auto; }
+    h3 { margin: 0 0 8px; font-size: 19px; line-height: 1.3; letter-spacing: -.3px; }
 
-    /* Steps */
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+    .lead { font-size: 18.5px; color: var(--ink-soft); margin: 0; text-wrap: pretty; }
 
-    .step {
+    .card {
       background: var(--paper);
       border-radius: var(--radius);
-      padding: 22px;
-      position: relative;
       box-shadow: var(--card-shadow);
+      border: 1px solid rgba(10, 36, 28, .04);
     }
 
-    .step .n {
-      width: 42px;
-      height: 42px;
-      border-radius: 13px;
-      background: var(--mint);
-      color: var(--green);
-      font-weight: 800;
+    /* Before / after */
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    .compare .card { padding: 32px; }
+
+    .compare h3 { display: flex; align-items: center; gap: 12px; font-size: 20px; margin-bottom: 18px; }
+
+    .compare h3 span {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
       display: grid;
       place-items: center;
-      margin-bottom: 14px;
+      background: var(--canvas);
+      color: var(--ink-faint);
     }
 
-    .step h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.3px; }
+    .compare h3 svg { width: 21px; height: 21px; }
+
+    .compare ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+
+    .compare li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; color: var(--ink-soft); }
+    .compare li svg { width: 20px; height: 20px; margin-top: 3px; }
+
+    .compare .old li svg { color: var(--ink-faint); }
+
+    .compare .new {
+      background: linear-gradient(150deg, var(--green-deep), var(--hero-end));
+      color: #fff;
+      border: 0;
+    }
+
+    .compare .new h3 span { background: rgba(205, 170, 99, .16); color: var(--brass); }
+    .compare .new li { color: rgba(255, 255, 255, .84); }
+    .compare .new li svg { color: var(--brass); }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; position: relative; }
+
+    .step { padding: 30px 28px; position: relative; }
+
+    .step .n {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .step .n b {
+      width: 48px;
+      height: 48px;
+      border-radius: 15px;
+      background: var(--green-deep);
+      color: var(--brass);
+      font-weight: 800;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+    }
+
+    .step .n svg { width: 26px; height: 26px; color: var(--green); opacity: .5; }
     .step p { margin: 0; color: var(--ink-soft); }
 
-    /* Bento features */
-    .features { background: var(--paper); }
+    /* Calculator */
+    .calc-section { background: var(--paper); }
 
-    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-top: 28px; }
+    .calc-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: center; }
+
+    .formula {
+      margin-top: 28px;
+      background: var(--canvas);
+      border-radius: 18px;
+      padding: 20px 22px;
+      display: grid;
+      gap: 10px;
+      font-size: 16px;
+    }
+
+    .formula div { line-height: 1.5; }
+    .formula b { margin-right: 6px; }
+    .formula b { color: var(--green-deep); }
+    .formula span { color: var(--ink-soft); }
+
+    .note { margin-top: 18px; font-size: 15px; color: var(--ink-soft); }
+
+    .calc {
+      background: linear-gradient(160deg, var(--green-deep), var(--green-mid));
+      color: #fff;
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .calc-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+      flex-wrap: wrap;
+    }
+
+    .calc-top small { display: block; color: var(--brass); font-weight: 800; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
+    .calc-top .rate { font-size: 44px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .calc-top .rate span { font-size: 16px; font-weight: 600; color: rgba(255, 255, 255, .6); letter-spacing: 0; }
+    .calc-top .totals { text-align: right; font-size: 14.5px; color: rgba(255, 255, 255, .7); font-variant-numeric: tabular-nums; }
+    .calc-top .totals b { color: #fff; }
+
+    .calc-head, .calc-row {
+      display: grid;
+      grid-template-columns: 1fr 92px 112px 1.1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .calc-head { padding: 16px 0 8px; font-size: 12.5px; font-weight: 700; color: rgba(255, 255, 255, .55); text-transform: uppercase; letter-spacing: 1px; }
+    .calc-head span:last-child { text-align: right; }
+
+    .calc-row { padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+    .calc-row .who { font-weight: 700; }
+
+    .calc input {
+      width: 100%;
+      font: inherit;
+      font-weight: 700;
+      font-size: 16px;
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 11px;
+      padding: 9px 11px;
+      font-variant-numeric: tabular-nums;
+      transition: border-color .15s, background .15s;
+    }
+
+    .calc input:focus { outline: none; border-color: var(--brass); background: rgba(255, 255, 255, .12); }
+
+    .result { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .result small { display: block; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .55); }
+    .result.get { color: #7FD3AA; }
+    .result.pay { color: var(--brass); }
+    .result.even { color: rgba(255, 255, 255, .8); }
+
+    .calc-due { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 18px; }
+    .calc-due label { font-weight: 700; }
+    .calc-due label small { display: block; font-weight: 500; font-size: 13.5px; color: rgba(255, 255, 255, .55); }
+    .calc-due input { max-width: 130px; }
+
+    /* Features */
+    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
 
     .tile {
       grid-column: span 2;
-      background: var(--canvas);
-      border: 1px solid transparent;
-      border-radius: var(--radius);
-      padding: 22px;
-      transition: transform .2s, box-shadow .2s, border-color .2s;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      transition: transform .25s, box-shadow .25s;
     }
 
-    .tile:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--line); }
+    .tile:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
     .tile.wide { grid-column: span 3; }
+    .tile p { margin: 0; color: var(--ink-soft); font-size: 16px; }
 
-    .tile.dark {
-      grid-column: span 3;
-      background: linear-gradient(150deg, var(--green-deep), var(--hero-end));
-      color: #fff;
-      border-color: transparent;
+    .viz {
+      margin-top: auto;
+      padding-top: 24px;
     }
 
-    .tile.dark p { color: rgba(255, 255, 255, .8); }
-
-    .tile .ic {
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
-      background: var(--mint);
-      color: var(--green);
-      display: grid;
-      place-items: center;
-      margin-bottom: 14px;
-    }
-
-    .tile.dark .ic { background: rgba(205, 170, 99, .16); color: var(--brass); }
-    .tile .ic svg { width: 23px; height: 23px; }
-    .tile h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.3px; }
-    .tile p { margin: 0; color: var(--ink-soft); font-size: 15.5px; }
-
-    .formula {
-      margin-top: 14px;
-      background: rgba(0, 0, 0, .2);
-      border-radius: 14px;
-      padding: 14px 16px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    .viz-box {
+      background: var(--canvas);
+      border-radius: 16px;
+      padding: 14px;
       font-size: 13.5px;
-      line-height: 1.8;
-      color: #F1E6CC;
     }
+
+    .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+    .week div { background: var(--paper); border-radius: 10px; padding: 8px 0 7px; font-weight: 700; }
+    .week small { display: block; font-size: 11px; color: var(--ink-faint); font-weight: 600; }
+    .week .auto { background: var(--brass-soft); color: var(--brass-deep); }
+    .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+    .trend svg { width: 100%; height: 96px; display: block; }
+
+    .rows { display: grid; gap: 7px; }
+    .rows div { display: flex; justify-content: space-between; align-items: center; background: var(--paper); border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+    .tag { font-size: 11px; font-weight: 800; letter-spacing: .4px; padding: 3px 8px; border-radius: 99px; background: var(--mint); color: var(--green); }
+    .tag.brass { background: var(--brass-soft); color: var(--brass-deep); }
+
+    .switch { width: 34px; height: 20px; border-radius: 99px; background: var(--green); position: relative; flex: none; }
+    .switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+    .switch.off { background: #C9D1CC; }
+    .switch.off::after { right: auto; left: 3px; }
+
+    .bubble { background: var(--paper); border-radius: 14px 14px 14px 4px; padding: 12px 14px; }
+    .bubble b { display: block; font-size: 12px; color: var(--brass-deep); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+
+    .code { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .code > span:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 20px; font-weight: 700; letter-spacing: 5px; color: var(--green-deep); }
+
+    /* Accountability */
+    .trust {
+      background:
+        radial-gradient(800px 500px at 100% 0%, rgba(205, 170, 99, .12), transparent 60%),
+        linear-gradient(160deg, var(--green-deep), var(--green-mid));
+      color: #fff;
+    }
+
+    .trust .lead { color: rgba(255, 255, 255, .74); }
+    .trust .kicker { color: var(--brass); }
+
+    .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+
+    .points { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 22px; }
+    .points li { display: grid; grid-template-columns: 44px 1fr; gap: 16px; }
+    .points .ic { width: 44px; height: 44px; border-radius: 13px; background: rgba(205, 170, 99, .14); color: var(--brass); display: grid; place-items: center; }
+    .points .ic svg { width: 22px; height: 22px; }
+    .points b { display: block; font-size: 17.5px; margin-bottom: 2px; }
+    .points span { color: rgba(255, 255, 255, .7); font-size: 16px; }
+
+    .log {
+      background: rgba(255, 255, 255, .05);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 26px;
+      padding: 22px;
+      backdrop-filter: blur(6px);
+    }
+
+    .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-weight: 800; font-size: 17px; }
+    .log-head span { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .55); display: flex; align-items: center; gap: 7px; }
+    .log-head span i { width: 8px; height: 8px; border-radius: 50%; background: var(--brass); }
+
+    .entry { display: grid; grid-template-columns: 12px 1fr auto; gap: 14px; padding: 14px 4px; border-top: 1px solid rgba(255, 255, 255, .07); align-items: start; }
+    .entry i { width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; }
+    .entry .add { background: #7FD3AA; }
+    .entry .chg { background: var(--brass); }
+    .entry .del { background: transparent; border: 2px solid rgba(255, 255, 255, .5); }
+    .entry b { display: block; font-size: 15.5px; }
+    .entry span { color: rgba(255, 255, 255, .62); font-size: 14px; }
+    .entry em { font-style: normal; font-weight: 700; color: #fff; }
+    .entry s { color: rgba(255, 255, 255, .5); }
+    .entry time { font-size: 13px; color: rgba(255, 255, 255, .5); white-space: nowrap; }
+
+    .lock {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(205, 170, 99, .1);
+      border: 1px solid rgba(205, 170, 99, .28);
+      border-radius: 18px;
+      padding: 14px 18px;
+      font-size: 15px;
+      color: rgba(255, 255, 255, .8);
+    }
+
+    .lock svg { width: 22px; height: 22px; color: var(--brass); flex: none; }
+    .lock b { color: #fff; }
+
+    /* Roles */
+    .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .role { padding: 32px; }
+    .role .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .role p { color: var(--ink-soft); margin: 0 0 20px; }
+    .role ul { list-style: none; margin: 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+    .role li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; }
+    .role li svg { width: 20px; height: 20px; color: var(--green); margin-top: 3px; }
 
     /* Install */
     .install { background: var(--paper); }
-    .install-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 32px; margin-top: 28px; align-items: start; }
+    .install-grid { display: grid; grid-template-columns: 1.3fr .7fr; gap: 18px; align-items: stretch; }
+    .install-card { padding: 34px; background: var(--canvas); border-radius: var(--radius); }
+    .install-card h3 { display: flex; align-items: center; gap: 10px; font-size: 21px; margin-bottom: 22px; }
 
-    .install ol { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+    .install ol { list-style: none; counter-reset: s; margin: 0 0 28px; padding: 0; }
 
     .install li {
       counter-increment: s;
       position: relative;
-      padding: 0 0 16px 54px;
-      font-size: 16px;
+      padding: 0 0 20px 56px;
+      font-size: 16.5px;
+      min-height: 40px;
     }
 
     .install li::before {
       content: counter(s);
       position: absolute;
       left: 0;
-      top: -4px;
+      top: -5px;
       width: 38px;
       height: 38px;
       border-radius: 12px;
@@ -439,26 +753,15 @@
       position: absolute;
       left: 18px;
       top: 38px;
-      bottom: 6px;
+      bottom: 4px;
       width: 2px;
       background: var(--line);
     }
 
     .install li strong { color: var(--green-deep); }
 
-    .qr {
-      background: var(--canvas);
-      border-radius: var(--radius);
-      padding: 26px;
-      text-align: center;
-    }
-
-    .qr img { width: 180px; height: 180px; display: block; margin: 0 auto 14px; border-radius: 12px; }
-    .qr b { display: block; font-size: 16px; }
-    .qr span { color: var(--ink-soft); font-size: 14.5px; }
-
     .tip {
-      margin-top: 20px;
+      margin-top: 24px;
       background: var(--brass-soft);
       border: 1px solid #E9D9B4;
       border-radius: 16px;
@@ -467,49 +770,82 @@
       color: #5C4718;
     }
 
+    .side { display: grid; gap: 18px; }
+    .side .install-card { display: flex; flex-direction: column; }
+    .side p { margin: 0 0 20px; color: var(--ink-soft); font-size: 16px; }
+    .side .btn { margin-top: auto; align-self: flex-start; }
+    .qr { text-align: center; }
+    .qr img { width: 160px; height: 160px; display: block; margin: 0 auto 14px; border-radius: 14px; background: #fff; padding: 8px; }
+    .qr b { display: block; font-size: 16px; }
+    .qr span { color: var(--ink-soft); font-size: 14.5px; }
+
     /* Guide */
     .guide-card {
       background: linear-gradient(150deg, var(--green-deep), var(--hero-end));
       color: #fff;
-      border-radius: 24px;
-      padding: 28px 32px;
-      display: flex;
-      justify-content: space-between;
+      border-radius: 28px;
+      padding: 40px 44px;
+      display: grid;
+      grid-template-columns: 1fr auto;
       align-items: center;
-      gap: 28px;
-      flex-wrap: wrap;
+      gap: 32px;
+      position: relative;
+      overflow: hidden;
     }
 
-    .guide-card h2 { margin: 6px 0 10px; }
-    .guide-card p { margin: 0; color: rgba(255, 255, 255, .78); max-width: 560px; }
-    .guide-card .label { color: var(--brass); }
+    .guide-card::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      top: -120px;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(205, 170, 99, .22), transparent 65%);
+    }
 
-    .soon {
-      padding: 12px 20px;
-      border-radius: 99px;
-      border: 1px solid rgba(205, 170, 99, .55);
-      color: var(--brass);
+    .guide-card h2 { margin: 12px 0 10px; font-size: clamp(26px, 3vw, 34px); }
+    .guide-card p { margin: 0; color: rgba(255, 255, 255, .76); max-width: 560px; }
+    .guide-card .kicker { color: var(--brass); }
+
+    .path {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .07);
+      border: 1px solid rgba(205, 170, 99, .4);
       font-weight: 700;
-      font-size: 15px;
+      color: #fff;
+      white-space: nowrap;
     }
+
+    .path span { color: var(--brass); }
 
     /* FAQ */
-    .faq { max-width: 780px; margin: 24px auto 0; }
+    .faq-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 56px; align-items: start; }
+    .faq-grid .head { position: sticky; top: calc(var(--nav-h) + 32px); margin-bottom: 0; }
 
     details {
       background: var(--paper);
-      border-radius: 16px;
-      padding: 0 22px;
+      border-radius: 18px;
+      padding: 0 24px;
       box-shadow: var(--card-shadow);
       margin-bottom: 12px;
+      transition: box-shadow .2s;
     }
+
+    details[open] { box-shadow: var(--shadow); }
 
     summary {
       cursor: pointer;
       list-style: none;
-      padding: 16px 0;
+      padding: 20px 0;
       font-weight: 700;
-      font-size: 16px;
+      font-size: 17px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -517,65 +853,133 @@
     }
 
     summary::-webkit-details-marker { display: none; }
-    summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--brass-deep); transition: transform .2s; }
-    details[open] summary::after { transform: rotate(45deg); }
-    details p { margin: 0 0 20px; color: var(--ink-soft); }
+
+    summary::after {
+      content: "+";
+      flex: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--canvas);
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--brass-deep);
+      transition: transform .2s, background .2s;
+    }
+
+    details[open] summary::after { transform: rotate(45deg); background: var(--brass-soft); }
+    details p { margin: 0 0 22px; color: var(--ink-soft); max-width: 60ch; }
+    details a { color: var(--green); font-weight: 700; }
 
     /* Footer */
-    footer { background: var(--green-deep); color: rgba(255, 255, 255, .7); padding: 28px 0; font-size: 14.5px; }
-    footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
-    footer .brand { font-size: 17px; }
-    footer a.link { color: #fff; font-weight: 600; text-decoration: none; }
-    footer a.link:hover { text-decoration: underline; }
+    footer { background: var(--green-deep); color: rgba(255, 255, 255, .66); padding: 56px 0 32px; font-size: 15px; }
+    .foot { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; padding-bottom: 36px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+    .foot p { margin: 14px 0 0; max-width: 34ch; }
+    .foot h4 { margin: 0 0 14px; color: #fff; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
+    .foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+    .foot a { text-decoration: none; transition: color .15s; }
+    .foot a:hover { color: #fff; }
+    .base { padding-top: 24px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+    .base strong { color: #fff; }
+    .base a { color: #fff; font-weight: 600; text-decoration: none; }
+    .base a:hover { text-decoration: underline; }
 
     /* Reveal on scroll */
-    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2, .7, .2, 1); }
     .reveal.in { opacity: 1; transform: none; }
+    .d1 { transition-delay: .08s; }
+    .d2 { transition-delay: .16s; }
 
     @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
       .phone { animation: none; }
       .reveal { opacity: 1; transform: none; transition: none; }
-      html { scroll-behavior: auto; }
+    }
+
+    @media (max-width: 1020px) {
+      .nav-links, .nav-cta .btn-line { display: none; }
+      .menu-btn { display: grid; }
+      .nav-cta { margin-left: auto; }
     }
 
     @media (max-width: 920px) {
-      .hero { padding: 40px 0 56px; }
-      .hero .wrap { grid-template-columns: 1fr; gap: 44px; text-align: center; }
+      section { padding: 72px 0; }
+      .head { margin-bottom: 36px; }
+      .hero { padding: 48px 0 72px; }
+      .hero .wrap { grid-template-columns: 1fr; gap: 56px; text-align: center; }
       .hero p.sub { margin-inline: auto; }
       .actions, .meta { justify-content: center; }
-      .nav-links { display: none; }
-      .nav .btn-small { margin-left: auto; }
-      .steps, .roles, .install-grid { grid-template-columns: 1fr; }
-      .tile, .tile.wide, .tile.dark { grid-column: span 6; }
-      section { padding: 44px 0; }
-      .guide-card { padding: 24px 22px; }
-      /* Keep the floating labels clear of the phone's content. */
-      .chip-a { top: -18px; left: 6%; }
-      .chip-b { bottom: -16px; right: 6%; }
+      .compare, .steps, .roles, .install-grid, .calc-grid, .trust-grid, .faq-grid { grid-template-columns: 1fr; }
+      .calc-grid, .trust-grid { gap: 40px; }
+      .faq-grid { gap: 8px; }
+      .faq-grid .head { position: static; margin-bottom: 28px; }
+      .tile, .tile.wide { grid-column: span 6; }
+      .guide-card { grid-template-columns: 1fr; padding: 32px 26px; }
+      .path { justify-self: start; }
+      .foot { grid-template-columns: 1fr 1fr; }
+      .foot > div:first-child { grid-column: span 2; }
+      .chip-a { top: -14px; left: 4%; }
+      .chip-b { bottom: -34px; right: 4%; }
     }
 
-    @media (max-width: 420px) {
-      .chip-a { left: 0; }
-      .chip-b { right: 0; }
-      .btn-primary, .btn-ghost, .btn-dark { width: 100%; }
+    @media (max-width: 560px) {
+      body { font-size: 16.5px; }
+      .wrap { width: calc(100% - 32px); }
+      .compare .card, .step, .role, .tile, .install-card { padding: 24px 22px; }
+      .calc { padding: 22px 18px; border-radius: 22px; }
+      .calc-head { display: none; }
+      .calc-row { grid-template-columns: 1fr 1fr; gap: 8px 10px; padding: 14px 0; }
+      .calc-row .who { grid-column: 1; }
+      .calc-row .result { grid-column: 2; grid-row: 1; }
+      .calc-row label { display: block; font-size: 12px; color: rgba(255, 255, 255, .55); font-weight: 600; margin-bottom: 4px; }
+      .calc-top .totals { text-align: left; }
+      .btn-primary, .btn-ghost { width: 100%; }
+      .chip { padding: 9px 12px; }
+      .chip strong { font-size: 15px; }
+    }
+
+    @media (min-width: 561px) {
+      .calc-row label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
     }
   </style>
 </head>
 <body>
 
-  <nav class="nav">
+  <nav class="nav" id="nav">
     <div class="wrap">
       <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
       <div class="nav-links">
-        <a href="#how">How it works</a>
+        <a href="#how">How It Works</a>
+        <a href="#maths">The Maths</a>
         <a href="#features">Features</a>
+        <a href="#trust">Accountability</a>
         <a href="#install">Install</a>
         <a href="#guide">Guide</a>
         <a href="#faq">FAQ</a>
-        <a href="/app/">Web app</a>
       </div>
-      <a class="btn btn-small" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">Download</a>
+      <div class="nav-cta">
+        <a class="btn btn-line" href="/app/">Web App</a>
+        <a class="btn btn-small" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">Download</a>
+        <button class="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
     </div>
+    <div class="menu" id="menu">
+      <div class="wrap">
+        <a href="#how">How It Works</a>
+        <a href="#maths">The Maths</a>
+        <a href="#features">Features</a>
+        <a href="#trust">Accountability</a>
+        <a href="#install">Install</a>
+        <a href="#guide">Guide</a>
+        <a href="#faq">FAQ</a>
+        <a href="/app/">Open the Web App</a>
+      </div>
+    </div>
+    <div class="progress" id="progress"></div>
   </nav>
 
   <header class="hero" id="top">
@@ -583,135 +987,370 @@
       <div>
         <span class="eyebrow"><i></i>Android app and web version</span>
         <h1>Hostel meals and expenses, <em>settled without the arguments.</em></h1>
-        <p class="sub">Everyone records their own meals and what they spent. HostelMate works out the meal rate, fills in forgotten days from each member's meal plan, and shows each person exactly what they pay or collect.</p>
+        <p class="sub">Everyone records their own meals and what they spent. HostelMate works out the meal rate and shows each person exactly what they pay or collect, with every change on record.</p>
 
         <div class="actions">
           <a class="btn btn-primary" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
             Download for Android
           </a>
-          <a class="btn btn-ghost" href="/app/">Use it in your browser</a>
+          <a class="btn btn-ghost" href="/app/">Use It in Your Browser</a>
         </div>
 
         <div class="meta">
-          <span>Free to download</span>
-          <span>Android 7.0 or newer</span>
-          <span>Works on iPhone and laptop in the browser</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.500 4.500L19 7.500"/></svg>Free to download</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.500 4.500L19 7.500"/></svg>Android 7.0 or newer</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.500 4.500L19 7.500"/></svg>iPhone and laptop in the browser</span>
         </div>
       </div>
 
-      <!-- An illustration of the app, drawn in HTML. Sample data only. -->
+      <!-- An illustration of the app's Home tab, drawn in HTML. Sample data only. -->
       <div class="stage" aria-hidden="true">
         <div class="phone">
           <div class="screen">
             <div class="bar">HostelMate <span><b></b><b></b></span></div>
 
             <div class="m-hero">
-              <div class="name">Green View</div>
+              <div class="name">Green View <i>✓</i></div>
               <div class="lbl">MEAL RATE</div>
-              <div class="rate"><b>৳70.00</b><span>Details →</span></div>
+              <div class="rate"><b>৳70.00</b><span>Hostel Details →</span></div>
               <div class="mine">
-                <div><small>My expense</small><strong>৳2,400</strong></div>
-                <div><small>My meals</small><strong>30</strong></div>
+                <div><small>My Expense</small><strong>৳2,400</strong></div>
+                <div><small>My Meals</small><strong>30</strong></div>
               </div>
             </div>
 
             <div class="m-card">
-              <h4>For today <span>14 Oct</span></h4>
+              <h4>For Today <span>26 Oct</span></h4>
               <div class="m-today">
                 <div><span>Lunch</span><span>5</span></div>
                 <div><span>Dinner</span><span>6</span></div>
-                <div class="duty"><i></i><span>On duty · Karim</span></div>
+                <div class="duty"><i></i><span>On Duty · Karim</span></div>
               </div>
             </div>
 
             <div class="m-card">
-              <h4>Members</h4>
-              <div class="m-row"><span>Adnan</span><span class="get">Collect ৳300</span></div>
-              <div class="m-row"><span>Rahim</span><span class="pay">Pay ৳800</span></div>
-              <div class="m-row"><span>Karim</span><span class="pay">Pay ৳450</span></div>
-              <div class="m-row"><span>Salam</span><span class="get">Collect ৳950</span></div>
+              <h4>Update</h4>
+              <div class="m-add">
+                <div><span>Meals</span><b>+</b></div>
+                <div><span>Expenses</span><b>+</b></div>
+              </div>
+            </div>
+
+            <div class="m-tabs">
+              <span class="on">Home</span>
+              <span>Meals</span>
+              <span>Expenses</span>
+              <span>Balance</span>
             </div>
           </div>
         </div>
 
-        <div class="chip chip-a">Meal rate<strong>৳70 per meal</strong></div>
-        <div class="chip chip-b">Rahim added<strong>Rice · ৳1,200</strong></div>
+        <div class="chip chip-a">Rahim<strong>Pay ৳800</strong></div>
+        <div class="chip chip-b">Accountability<strong>Lunch 1 → 2</strong></div>
       </div>
     </div>
   </header>
 
   <main>
 
-    <section id="how">
+    <section id="why">
       <div class="wrap">
-        <div class="center reveal">
-          <span class="label">How it works</span>
-          <h2>From daily entries to one fair amount</h2>
-          <p class="lead">Three small habits replace the notebook and the end-of-month debate.</p>
+        <div class="head reveal">
+          <span class="kicker">Why HostelMate</span>
+          <h2>The notebook worked. Until the month ended.</h2>
+          <p class="lead">Most hostels keep one register and trust one person to add it up. HostelMate keeps the same records, but shares the work and shows everyone the same answer.</p>
         </div>
 
-        <div class="steps">
-          <div class="step reveal">
-            <div class="n">1</div>
-            <h3>Record your meals</h3>
-            <p>Tap +, set lunch and dinner, save. It takes a few seconds, and every member does their own.</p>
+        <div class="compare">
+          <div class="card old reveal">
+            <h3><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h10.500a2 2 0 012 2v15H8a2 2 0 01-2-2v-15z"/><path d="M6 18.500a2 2 0 012-2h10.500"/></svg></span>The Notebook</h3>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>One person writes everything down and does the sums by hand.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>A forgotten day becomes a guess, and a guess becomes an argument.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>Pages can be corrected later, and nobody can tell.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>Members see one final number they cannot check.</li>
+            </ul>
           </div>
-          <div class="step reveal">
-            <div class="n">2</div>
-            <h3>Add what you spent</h3>
-            <p>Bought rice or paid the gas bill? Add the expense and the whole hostel is notified.</p>
-          </div>
-          <div class="step reveal">
-            <div class="n">3</div>
-            <h3>Settle in one tap</h3>
-            <p>At month end the app shows what each person pays or collects. Copy it straight into your group chat.</p>
+
+          <div class="card new reveal d1">
+            <h3><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.500" y="2.500" width="11" height="19" rx="2.500"/><path d="M11 18.500h2"/></svg></span>HostelMate</h3>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Every member records their own meals and expenses in seconds.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Forgotten days are filled in from each member's meal plan.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Every change is recorded, and closed months are locked.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Everyone sees the same figures, with the working shown.</li>
+            </ul>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="features" id="features">
+    <section id="how" class="tight">
       <div class="wrap">
-        <div class="reveal">
-          <span class="label">Features</span>
-          <h2>Everything a shared kitchen needs</h2>
-          <p class="lead">Built around how hostels actually run.</p>
+        <div class="head center reveal">
+          <span class="kicker">How It Works</span>
+          <h2>Three small habits</h2>
+          <p class="lead">They replace the register and the end-of-month debate.</p>
         </div>
 
-        <div class="bento">
-          <div class="tile dark reveal">
-            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></svg></div>
-            <h3>An automatic, transparent calculation</h3>
-            <p>No spreadsheet and no trust required. The same figures appear on every member's phone, with the working shown.</p>
-            <div class="formula">
-              Meal rate = Total cost ÷ Total meals<br>
-              You pay = Your meals × Meal rate − What you spent
+        <div class="steps">
+          <div class="card step reveal">
+            <div class="n"><b>1</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8a2 2 0 002 2v8M11 3v6M7 3v6"/><path d="M17 21V3c-2 1-3 4-3 7s1 3 3 3"/></svg></div>
+            <h3>Record your meals</h3>
+            <p>Tap +, set lunch and dinner, save. It takes a few seconds, and every member does their own.</p>
+          </div>
+          <div class="card step reveal d1">
+            <div class="n"><b>2</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div>
+            <h3>Add what you spent</h3>
+            <p>Bought rice or paid the gas bill? Add the expense and it appears on everyone's phone straight away.</p>
+          </div>
+          <div class="card step reveal d2">
+            <div class="n"><b>3</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.500l5 5L20 6.500"/></svg></div>
+            <h3>Settle in one tap</h3>
+            <p>At month end the Balance tab shows what each person pays or collects. Copy it straight into your group chat.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="maths" class="calc-section">
+      <div class="wrap calc-grid">
+        <div class="reveal">
+          <span class="kicker">The Maths</span>
+          <h2>Simple enough to check by hand</h2>
+          <p class="lead">The whole month's cost is shared by meals eaten. If you paid for more than you ate, you collect the difference; if you ate more than you paid for, you pay it.</p>
+
+          <div class="formula">
+            <div><b>Meal Rate</b><span>= Total cost ÷ Total meals</span></div>
+            <div><b>Balance</b><span>= What you paid − Your meals × Meal rate</span></div>
+          </div>
+
+          <p class="note">Try it: change any number in the example. Hostels can also set a minimum number of meals each month.</p>
+        </div>
+
+        <div class="calc reveal d1" id="calc">
+          <div class="calc-top">
+            <div>
+              <small>Meal Rate</small>
+              <div class="rate"><output id="rate">৳70.00</output> <span>per meal</span></div>
+            </div>
+            <div class="totals">
+              Total cost <b id="cost">৳4,900</b><br>
+              Total meals <b id="meals">70</b>
             </div>
           </div>
 
-          <div class="tile wide reveal">
-            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h2M12 14h2M8 17h2"/></svg></div>
-            <h3>Meal plans and a duty roster</h3>
-            <p>Set your usual lunch and dinner once, and days you forget are still counted. Admins choose who looks after the hostel on which dates, shown on everyone's home screen.</p>
+          <div class="calc-head" aria-hidden="true">
+            <span>Member</span><span>Meals</span><span>Paid ৳</span><span>Balance</span>
           </div>
 
-          <div class="tile reveal">
-            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.900 2.100 6.500 5.500"/><path d="M17 8v6M14 11h6"/></svg></div>
+          <div class="calc-row">
+            <span class="who">Adnan</span>
+            <div><label for="m0">Meals</label><input id="m0" type="number" inputmode="decimal" min="0" value="30"></div>
+            <div><label for="p0">Paid ৳</label><input id="p0" type="number" inputmode="decimal" min="0" value="2400"></div>
+            <span class="result" id="r0"></span>
+          </div>
+          <div class="calc-row">
+            <span class="who">Rahim</span>
+            <div><label for="m1">Meals</label><input id="m1" type="number" inputmode="decimal" min="0" value="20"></div>
+            <div><label for="p1">Paid ৳</label><input id="p1" type="number" inputmode="decimal" min="0" value="600"></div>
+            <span class="result" id="r1"></span>
+          </div>
+          <div class="calc-row">
+            <span class="who">Karim</span>
+            <div><label for="m2">Meals</label><input id="m2" type="number" inputmode="decimal" min="0" value="20"></div>
+            <div><label for="p2">Paid ৳</label><input id="p2" type="number" inputmode="decimal" min="0" value="1400"></div>
+            <span class="result" id="r2"></span>
+          </div>
+
+          <div class="calc-due">
+            <label for="due">Shop Due<small>Owed to the shop, shared like any cost</small></label>
+            <input id="due" type="number" inputmode="decimal" min="0" value="500">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <div class="head reveal">
+          <span class="kicker">Features</span>
+          <h2>Everything a shared kitchen needs</h2>
+          <p class="lead">Built around how hostels actually run, with four tabs: Home, Meals, Expenses and Balance.</p>
+        </div>
+
+        <div class="bento">
+          <div class="card tile wide reveal">
+            <h3>Meal plans fill the gaps</h3>
+            <p>Set your usual lunch and dinner once. Days you forget to enter are counted from your plan and marked Auto.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box">
+                <div class="week">
+                  <div><small>Mon</small>2</div>
+                  <div><small>Tue</small>2</div>
+                  <div class="auto"><small>Wed</small>2</div>
+                  <div><small>Thu</small>1</div>
+                  <div class="auto"><small>Fri</small>2</div>
+                  <div><small>Sat</small>2</div>
+                  <div><small>Sun</small>0</div>
+                </div>
+                <div class="legend"><span><i style="background:var(--paper)"></i>Entered</span><span><i style="background:var(--brass-soft)"></i>Auto From Plan</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tile wide reveal d1">
+            <h3>Balance and Month Trend</h3>
+            <p>Each member's Pay or Collect, the change from last month, and a day-by-day chart of the meal rate, meals or cost.</p>
+            <div class="viz trend" aria-hidden="true">
+              <div class="viz-box">
+                <svg viewBox="0 0 300 96" preserveAspectRatio="none">
+                  <path d="M0 70 C30 64 50 72 80 58 S130 50 160 54 S220 40 250 44 S285 36 300 38" fill="none" stroke="#C9D1CC" stroke-width="2.5" stroke-dasharray="5 5"/>
+                  <path d="M0 78 C30 70 55 60 85 62 S135 42 165 46 S220 30 250 28 S285 22 300 20" fill="none" stroke="#176B4D" stroke-width="3" stroke-linecap="round"/>
+                  <circle cx="300" cy="20" r="5" fill="#CDAA63"/>
+                </svg>
+                <div class="legend"><span><i style="background:var(--green)"></i>This Month</span><span><i style="background:#C9D1CC"></i>Last Month</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tile reveal">
             <h3>Members without the app</h3>
-            <p>Add someone by name. An admin records their meals, and they are included in every calculation.</p>
+            <p>Add anyone by name. An admin records their meals, and they count in every calculation.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box rows">
+                <div>Adnan <span class="tag brass">Admin</span></div>
+                <div>Salam <span class="tag">No App</span></div>
+              </div>
+            </div>
           </div>
 
-          <div class="tile reveal">
-            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2.500 7 2.500 7h-17S6 15 6 9z"/><path d="M10 20a2 2 0 004 0"/></svg></div>
-            <h3>Announcements and alerts</h3>
-            <p>Admins post short notices to the hostel. Members are told whenever a new expense is added.</p>
+          <div class="card tile reveal d1">
+            <h3>Admins set the rules</h3>
+            <p>Choose whether members can add meals and expenses, or edit them after saving.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box rows">
+                <div>Add Meals <span class="switch"></span></div>
+                <div>Edit Their Entries <span class="switch off"></span></div>
+              </div>
+            </div>
           </div>
 
-          <div class="tile reveal">
-            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6l8-3z"/><path d="M8.500 12l2.500 2.500 4.500-5"/></svg></div>
+          <div class="card tile reveal d2">
+            <h3>Duty roster and notices</h3>
+            <p>See who looks after the hostel today, read announcements, and know who will be away.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box">
+                <div class="bubble"><b>Announcement</b>Gas bill is due on Friday.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tile wide reveal">
             <h3>Private to your hostel</h3>
             <p>Only your hostel's members can see its records, and nobody joins without your invitation code.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box code"><span>7KQ4PX</span><span class="tag">Invitation Code</span></div>
+            </div>
+          </div>
+
+          <div class="card tile wide reveal d1">
+            <h3>Updates inside the app</h3>
+            <p>The Android app tells you when a new version is ready and installs it itself. The web version is always current.</p>
+            <div class="viz" aria-hidden="true">
+              <div class="viz-box rows">
+                <div>Check for Updates <span class="tag">Up To Date</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust" class="trust">
+      <div class="wrap trust-grid">
+        <div class="reveal">
+          <span class="kicker">Accountability</span>
+          <h2>Nothing hidden. <em>Nothing rewritten.</em></h2>
+          <p class="lead">Admins can correct entries for anyone, so HostelMate makes every change visible and limits how far back changes can go.</p>
+
+          <ul class="points">
+            <li>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.500 12a8.500 8.500 0 102.500-6"/><path d="M3.500 4v4h4"/><path d="M12 7.500V12l3 2"/></svg></span>
+              <div><b>Every change on record</b><span>Who changed what, when, and the old and new figures. Nobody can edit or delete the history, admins included.</span></div>
+            </li>
+            <li>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg></span>
+              <div><b>Closed months stay closed</b><span>Entries can change until the 7th of the next month. After that the month is locked for everyone.</span></div>
+            </li>
+            <li>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.800 2.800 0 00-4-4L4 16z"/><path d="M13.500 6.500l4 4"/></svg></span>
+              <div><b>Edited marks</b><span>A meal or expense changed after it was saved is marked Edited in its table.</span></div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="reveal d1" aria-hidden="true">
+          <div class="log">
+            <div class="log-head">Accountability <span><i></i>2 new</span></div>
+            <div class="entry">
+              <i class="chg"></i>
+              <div><b>Rahim changed a meal</b><span>Lunch <s>1</s> → <em>2</em> · 25 Oct</span></div>
+              <time>2m ago</time>
+            </div>
+            <div class="entry">
+              <i class="add"></i>
+              <div><b>Adnan added an expense</b><span>Rice · <em>৳1,200</em></span></div>
+              <time>1h ago</time>
+            </div>
+            <div class="entry">
+              <i class="del"></i>
+              <div><b>Karim deleted an expense</b><span><s>Gas · ৳900</s></span></div>
+              <time>Yesterday</time>
+            </div>
+            <div class="entry">
+              <i class="chg"></i>
+              <div><b>Adnan set the shop due</b><span>৳0 → <em>৳500</em></span></div>
+              <time>2 days ago</time>
+            </div>
+          </div>
+
+          <div class="lock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg>
+            <span>October can change until <b>7 November</b>, then it is locked.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="roles">
+      <div class="wrap">
+        <div class="head center reveal">
+          <span class="kicker">Who Does What</span>
+          <h2>Members and admins</h2>
+          <p class="lead">One person creates the hostel and becomes its admin. Everyone else joins with the invitation code.</p>
+        </div>
+
+        <div class="roles">
+          <div class="card role reveal">
+            <div class="top"><h3>Member</h3><span class="tag">Everyone</span></div>
+            <p>Anyone living in the hostel.</p>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Records their own meals and expenses, if the admins allow it</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sets a meal plan and announces days away</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sees every record, the balance and Accountability</li>
+            </ul>
+          </div>
+
+          <div class="card role reveal d1">
+            <div class="top"><h3>Admin</h3><span class="tag brass">One or More</span></div>
+            <p>Everything a member can do, plus:</p>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Manages members, admins and the duty roster</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Records entries for anyone, including members without the app</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>Sets minimum meals and shop due, sends announcements, activates the hostel</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -719,14 +1358,15 @@
 
     <section class="install" id="install">
       <div class="wrap">
-        <div class="reveal">
-          <span class="label">Install</span>
+        <div class="head reveal">
+          <span class="kicker">Install</span>
           <h2>Up and running in two minutes</h2>
-          <p class="lead">On Android, HostelMate is installed directly from this page, so your phone asks for permission once. On anything else, <a href="/app/" style="color:var(--green);font-weight:600">open the web version</a>.</p>
+          <p class="lead">On Android, HostelMate installs straight from this page. On an iPhone or a laptop, use the web version with the same account.</p>
         </div>
 
         <div class="install-grid">
-          <div class="reveal">
+          <div class="install-card reveal">
+            <h3>On Android</h3>
             <ol>
               <li>Tap <strong>Download for Android</strong> on your phone.</li>
               <li>When the download finishes, open <strong>HostelMate.apk</strong>.</li>
@@ -745,10 +1385,18 @@
             </div>
           </div>
 
-          <div class="qr reveal">
-            <img src="qr.png" alt="QR code for hostelmate.web.app" width="180" height="180">
-            <b>On a computer?</b>
-            <span>Scan this with your phone's camera to open this page there.</span>
+          <div class="side">
+            <div class="install-card reveal d1">
+              <h3>iPhone and Laptop</h3>
+              <p>The web version runs in any modern browser, with the same account and the same hostel.</p>
+              <a class="btn btn-soft" href="/app/">Open the Web App</a>
+            </div>
+
+            <div class="install-card qr reveal d2">
+              <img src="qr.png" alt="QR code for hostelmate.web.app" width="160" height="160">
+              <b>On a computer?</b>
+              <span>Scan with your phone's camera to open this page there.</span>
+            </div>
           </div>
         </div>
       </div>
@@ -758,23 +1406,24 @@
       <div class="wrap">
         <div class="guide-card reveal">
           <div>
-            <span class="label">User guide</span>
-            <h2>A step-by-step guide is on the way</h2>
-            <p>Setting up a hostel, adding members, recording meals and reading the Details page, explained with pictures.</p>
+            <span class="kicker">User Guide</span>
+            <h2>The HostelMate Guide is in the app</h2>
+            <p>Every part of HostelMate on one page, from setting up a hostel to reading the Balance tab, with a menu that jumps to each section.</p>
           </div>
-          <span class="soon">Coming soon</span>
+          <div class="path">Profile <span>→</span> HostelMate Guide</div>
         </div>
       </div>
     </section>
 
-    <section id="faq" style="padding-top:0">
-      <div class="wrap">
-        <div class="center reveal">
-          <span class="label">Questions</span>
+    <section id="faq" class="tight">
+      <div class="wrap faq-grid">
+        <div class="head reveal">
+          <span class="kicker">Questions</span>
           <h2>Good to know</h2>
+          <p class="lead">Something else on your mind? Send it from the app with Request a Feature.</p>
         </div>
 
-        <div class="faq reveal">
+        <div class="reveal d1">
           <details>
             <summary>Does everyone in the hostel need the app?</summary>
             <p>No. An admin can add anyone by name and record their meals and expenses for them. They are included in the calculation like everyone else, and can be linked to an account later if they join.</p>
@@ -784,12 +1433,24 @@
             <p>One person creates the hostel and becomes its admin. The app gives an invitation code to share; everyone else joins with that code. A new hostel is activated by its admin with a voucher code.</p>
           </details>
           <details>
+            <summary>Can an admin quietly change old records?</summary>
+            <p>No. Every change, by a member or an admin, appears in Accountability with the old and new figures, and nobody can delete those records. A month's meals and expenses lock on the 8th of the next month for everyone, admins included.</p>
+          </details>
+          <details>
+            <summary>What happens when the hostel's activation ends?</summary>
+            <p>The hostel becomes read-only: every record stays visible, but nothing new can be added until an admin activates it again from Hostel Details.</p>
+          </details>
+          <details>
             <summary>Who can see our meals and expenses?</summary>
             <p>Only the members of your hostel. Other hostels cannot see your records, and nobody can join without your invitation code.</p>
           </details>
           <details>
+            <summary>How do I get updates?</summary>
+            <p>The Android app tells you when a new version is ready and installs it from inside the app. You can also check any time from Profile → Check for Updates. The web version is always up to date.</p>
+          </details>
+          <details>
             <summary>Can I use it on an iPhone or a laptop?</summary>
-            <p>Yes, through the <a href="/app/" style="color:var(--green);font-weight:600">web version</a>, which runs in any modern browser with the same account and the same hostel. There is no iPhone app to install; Android users can install the app or use the web version.</p>
+            <p>Yes, through the <a href="/app/">web version</a>, which runs in any modern browser with the same account and the same hostel. There is no iPhone app to install; Android users can install the app or use the web version.</p>
           </details>
         </div>
       </div>
@@ -799,8 +1460,32 @@
 
   <footer>
     <div class="wrap">
-      <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
-      <span>Designed and built by <strong style="color:#fff">Abu Adnan Shad</strong> · <a class="link" href="https://www.linkedin.com/in/abuadnanshad/">LinkedIn</a></span>
+      <div class="foot">
+        <div>
+          <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
+          <p>Hostel meals and expenses, settled without the arguments.</p>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#how">How It Works</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#trust">Accountability</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Help</h4>
+          <ul>
+            <li><a href="#install">Install</a></li>
+            <li><a href="#guide">Guide</a></li>
+            <li><a href="#faq">FAQ</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="base">
+        <span>Designed and built by <strong>Abu Adnan Shad</strong></span>
+        <a href="https://www.linkedin.com/in/abuadnanshad/">LinkedIn</a>
+      </div>
     </div>
   </footer>
 
@@ -824,6 +1509,94 @@
       }, { threshold: 0.12 });
 
       items.forEach(function (el) { observer.observe(el); });
+    })();
+
+    // Reading progress under the navigation bar, and the current section's link.
+    (function () {
+      var bar = document.getElementById('progress');
+      var links = document.querySelectorAll('.nav-links a');
+      var sections = Array.prototype.map.call(links, function (a) {
+        return document.querySelector(a.getAttribute('href'));
+      });
+      var ticking = false;
+
+      function update() {
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        bar.style.transform = 'scaleX(' + (max > 0 ? window.scrollY / max : 0) + ')';
+
+        var current = -1;
+        sections.forEach(function (s, i) {
+          if (s && s.getBoundingClientRect().top < window.innerHeight * 0.4) current = i;
+        });
+        links.forEach(function (a, i) { a.classList.toggle('on', i === current); });
+        ticking = false;
+      }
+
+      window.addEventListener('scroll', function () {
+        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+      }, { passive: true });
+      update();
+    })();
+
+    // The phone menu.
+    (function () {
+      var nav = document.getElementById('nav');
+      var button = nav.querySelector('.menu-btn');
+
+      function close() {
+        nav.classList.remove('open');
+        button.setAttribute('aria-expanded', 'false');
+      }
+
+      button.addEventListener('click', function () {
+        var open = nav.classList.toggle('open');
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+
+      nav.querySelectorAll('.menu a').forEach(function (a) { a.addEventListener('click', close); });
+    })();
+
+    // The worked example: the same sums the app does, rounded once at the end.
+    (function () {
+      var taka = function (n, digits) {
+        return '৳' + n.toLocaleString('en-US', { minimumFractionDigits: digits || 0, maximumFractionDigits: digits || 0 });
+      };
+      var value = function (id) {
+        var n = parseFloat(document.getElementById(id).value);
+        return isFinite(n) && n > 0 ? n : 0;
+      };
+
+      function calculate() {
+        var meals = [0, 1, 2].map(function (i) { return value('m' + i); });
+        var paid = [0, 1, 2].map(function (i) { return value('p' + i); });
+        var totalMeals = meals.reduce(function (a, b) { return a + b; }, 0);
+        var totalCost = paid.reduce(function (a, b) { return a + b; }, 0) + value('due');
+        var rate = totalMeals > 0 ? totalCost / totalMeals : 0;
+
+        document.getElementById('rate').textContent = taka(rate, 2);
+        document.getElementById('cost').textContent = taka(totalCost);
+        document.getElementById('meals').textContent = totalMeals.toLocaleString('en-US');
+
+        [0, 1, 2].forEach(function (i) {
+          var balance = Math.round(paid[i] - meals[i] * rate);
+          var cell = document.getElementById('r' + i);
+          if (balance > 0) {
+            cell.className = 'result get';
+            cell.innerHTML = 'Collect ' + taka(balance) + '<small>' + meals[i] + ' meals × ' + taka(rate, 2) + '</small>';
+          } else if (balance < 0) {
+            cell.className = 'result pay';
+            cell.innerHTML = 'Pay ' + taka(-balance) + '<small>' + meals[i] + ' meals × ' + taka(rate, 2) + '</small>';
+          } else {
+            cell.className = 'result even';
+            cell.innerHTML = 'Settled<small>Paid exactly their share</small>';
+          }
+        });
+      }
+
+      document.querySelectorAll('#calc input').forEach(function (input) {
+        input.addEventListener('input', calculate);
+      });
+      calculate();
     })();
   </script>
 

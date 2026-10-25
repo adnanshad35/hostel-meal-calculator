@@ -140,7 +140,7 @@ The super admin's account opens directly into an administration panel, with a de
 
 ### Updates and the web version
 
-- The same app runs at [hostelmate.web.app/app](https://hostelmate.web.app/app/), with the same accounts and data
+- The same app runs at [hostelmate.web.app/app](https://hostelmate.web.app/app/), with the same accounts, data and phone layout (a phone-width column on a wide window)
 - The super admin sets the **Latest Version**, an optional **Minimum Version**, and **What's New** under App Update
 - On launch the Android app checks that setting. A version below the minimum must update before continuing; otherwise the update is optional. The APK downloads and installs inside the app, with a progress bar
 - After updating, the app shows **What's New** once
@@ -438,7 +438,6 @@ firebase deploy --only firestore:rules
 - A **Download Backup** button for the super admin
 - Calculate other costs (rent and shared bills), redesigned
 - Bangla language
-- The phone layout on the web and desktop
 - Push notifications
 - A Play Store listing
 - Automated tests for the security rules
