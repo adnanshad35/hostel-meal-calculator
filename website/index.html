@@ -511,202 +511,29 @@
     .step .n svg { width: 26px; height: 26px; color: var(--green); opacity: .5; }
     .step p { margin: 0; color: var(--ink-soft); }
 
-    /* Calculator */
-    .calc-section { background: var(--paper); }
-
-    .calc-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: center; }
-
-    .formula {
-      margin-top: 28px;
-      background: var(--canvas);
-      border-radius: 18px;
-      padding: 20px 22px;
-      display: grid;
-      gap: 10px;
-      font-size: 16px;
-    }
-
-    .formula div { line-height: 1.5; }
-    .formula b { margin-right: 6px; }
-    .formula b { color: var(--green-deep); }
-    .formula span { color: var(--ink-soft); }
-
-    .note { margin-top: 18px; font-size: 15px; color: var(--ink-soft); }
-
-    .calc {
-      background: linear-gradient(160deg, var(--green-deep), var(--green-mid));
-      color: #fff;
-      border-radius: 28px;
-      padding: 28px;
-      box-shadow: var(--shadow);
-    }
-
-    .calc-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 16px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, .1);
-      flex-wrap: wrap;
-    }
-
-    .calc-top small { display: block; color: var(--brass); font-weight: 800; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
-    .calc-top .rate { font-size: 44px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .calc-top .rate span { font-size: 16px; font-weight: 600; color: rgba(255, 255, 255, .6); letter-spacing: 0; }
-    .calc-top .totals { text-align: right; font-size: 14.5px; color: rgba(255, 255, 255, .7); font-variant-numeric: tabular-nums; }
-    .calc-top .totals b { color: #fff; }
-
-    .calc-head, .calc-row {
-      display: grid;
-      grid-template-columns: 1fr 92px 112px 1.1fr;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .calc-head { padding: 16px 0 8px; font-size: 12.5px; font-weight: 700; color: rgba(255, 255, 255, .55); text-transform: uppercase; letter-spacing: 1px; }
-    .calc-head span:last-child { text-align: right; }
-
-    .calc-row { padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .07); }
-    .calc-row .who { font-weight: 700; }
-
-    .calc input {
-      width: 100%;
-      font: inherit;
-      font-weight: 700;
-      font-size: 16px;
-      color: #fff;
-      background: rgba(255, 255, 255, .08);
-      border: 1px solid rgba(255, 255, 255, .14);
-      border-radius: 11px;
-      padding: 9px 11px;
-      font-variant-numeric: tabular-nums;
-      transition: border-color .15s, background .15s;
-    }
-
-    .calc input:focus { outline: none; border-color: var(--brass); background: rgba(255, 255, 255, .12); }
-
-    .result { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .result small { display: block; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .55); }
-    .result.get { color: #7FD3AA; }
-    .result.pay { color: var(--brass); }
-    .result.even { color: rgba(255, 255, 255, .8); }
-
-    .calc-due { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 18px; }
-    .calc-due label { font-weight: 700; }
-    .calc-due label small { display: block; font-weight: 500; font-size: 13.5px; color: rgba(255, 255, 255, .55); }
-    .calc-due input { max-width: 130px; }
-
     /* Features */
-    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
+    .features { background: var(--paper); }
+    .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 
-    .tile {
-      grid-column: span 2;
-      padding: 28px;
-      display: flex;
-      flex-direction: column;
-      transition: transform .25s, box-shadow .25s;
-    }
-
-    .tile:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
-    .tile.wide { grid-column: span 3; }
-    .tile p { margin: 0; color: var(--ink-soft); font-size: 16px; }
-
-    .viz {
-      margin-top: auto;
-      padding-top: 24px;
-    }
-
-    .viz-box {
-      background: var(--canvas);
-      border-radius: 16px;
-      padding: 14px;
-      font-size: 13.5px;
-    }
-
-    .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
-    .week div { background: var(--paper); border-radius: 10px; padding: 8px 0 7px; font-weight: 700; }
-    .week small { display: block; font-size: 11px; color: var(--ink-faint); font-weight: 600; }
-    .week .auto { background: var(--brass-soft); color: var(--brass-deep); }
-    .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
-    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-
-    .trend svg { width: 100%; height: 96px; display: block; }
-
-    .rows { display: grid; gap: 7px; }
-    .rows div { display: flex; justify-content: space-between; align-items: center; background: var(--paper); border-radius: 10px; padding: 8px 12px; font-weight: 700; }
-    .tag { font-size: 11px; font-weight: 800; letter-spacing: .4px; padding: 3px 8px; border-radius: 99px; background: var(--mint); color: var(--green); }
-    .tag.brass { background: var(--brass-soft); color: var(--brass-deep); }
-
-    .switch { width: 34px; height: 20px; border-radius: 99px; background: var(--green); position: relative; flex: none; }
-    .switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
-    .switch.off { background: #C9D1CC; }
-    .switch.off::after { right: auto; left: 3px; }
-
-    .bubble { background: var(--paper); border-radius: 14px 14px 14px 4px; padding: 12px 14px; }
-    .bubble b { display: block; font-size: 12px; color: var(--brass-deep); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
-
-    .code { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .code > span:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 20px; font-weight: 700; letter-spacing: 5px; color: var(--green-deep); }
-
-    /* Accountability */
-    .trust {
-      background:
-        radial-gradient(800px 500px at 100% 0%, rgba(205, 170, 99, .12), transparent 60%),
-        linear-gradient(160deg, var(--green-deep), var(--green-mid));
-      color: #fff;
-    }
-
-    .trust .lead { color: rgba(255, 255, 255, .74); }
-    .trust .kicker { color: var(--brass); }
-
-    .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
-
-    .points { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 22px; }
-    .points li { display: grid; grid-template-columns: 44px 1fr; gap: 16px; }
-    .points .ic { width: 44px; height: 44px; border-radius: 13px; background: rgba(205, 170, 99, .14); color: var(--brass); display: grid; place-items: center; }
-    .points .ic svg { width: 22px; height: 22px; }
-    .points b { display: block; font-size: 17.5px; margin-bottom: 2px; }
-    .points span { color: rgba(255, 255, 255, .7); font-size: 16px; }
-
-    .log {
-      background: rgba(255, 255, 255, .05);
-      border: 1px solid rgba(255, 255, 255, .1);
-      border-radius: 26px;
+    .feat {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 16px;
       padding: 22px;
-      backdrop-filter: blur(6px);
+      border-radius: 20px;
+      background: var(--canvas);
+      transition: transform .2s, box-shadow .2s;
     }
 
-    .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-weight: 800; font-size: 17px; }
-    .log-head span { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .55); display: flex; align-items: center; gap: 7px; }
-    .log-head span i { width: 8px; height: 8px; border-radius: 50%; background: var(--brass); }
+    .feat:hover { transform: translateY(-3px); box-shadow: var(--card-shadow); }
+    .feat .ic { width: 44px; height: 44px; border-radius: 13px; background: var(--paper); color: var(--green); display: grid; place-items: center; }
+    .feat .ic svg { width: 22px; height: 22px; }
+    .feat h3 { font-size: 17px; margin: 1px 0 4px; }
+    .feat p { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
 
-    .entry { display: grid; grid-template-columns: 12px 1fr auto; gap: 14px; padding: 14px 4px; border-top: 1px solid rgba(255, 255, 255, .07); align-items: start; }
-    .entry i { width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; }
-    .entry .add { background: #7FD3AA; }
-    .entry .chg { background: var(--brass); }
-    .entry .del { background: transparent; border: 2px solid rgba(255, 255, 255, .5); }
-    .entry b { display: block; font-size: 15.5px; }
-    .entry span { color: rgba(255, 255, 255, .62); font-size: 14px; }
-    .entry em { font-style: normal; font-weight: 700; color: #fff; }
-    .entry s { color: rgba(255, 255, 255, .5); }
-    .entry time { font-size: 13px; color: rgba(255, 255, 255, .5); white-space: nowrap; }
-
-    .lock {
-      margin-top: 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: rgba(205, 170, 99, .1);
-      border: 1px solid rgba(205, 170, 99, .28);
-      border-radius: 18px;
-      padding: 14px 18px;
-      font-size: 15px;
-      color: rgba(255, 255, 255, .8);
-    }
-
-    .lock svg { width: 22px; height: 22px; color: var(--brass); flex: none; }
-    .lock b { color: #fff; }
+    .feat.key { background: linear-gradient(150deg, var(--green-deep), var(--hero-end)); color: #fff; }
+    .feat.key .ic { background: rgba(205, 170, 99, .16); color: var(--brass); }
+    .feat.key p { color: rgba(255, 255, 255, .76); }
 
     /* Roles */
     .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -998,11 +825,10 @@
       .hero .wrap { grid-template-columns: 1fr; gap: 56px; text-align: center; }
       .hero p.sub { margin-inline: auto; }
       .actions, .meta { justify-content: center; }
-      .compare, .steps, .roles, .install-grid, .calc-grid, .trust-grid, .faq-grid { grid-template-columns: 1fr; }
-      .calc-grid, .trust-grid { gap: 40px; }
+      .compare, .steps, .roles, .install-grid, .faq-grid { grid-template-columns: 1fr; }
+      .feat-grid { grid-template-columns: 1fr 1fr; }
       .faq-grid { gap: 8px; }
       .faq-grid .head { position: static; margin-bottom: 28px; }
-      .tile, .tile.wide { grid-column: span 6; }
       .guide-card { grid-template-columns: 1fr; padding: 32px 26px; }
       .rm-fork { grid-template-columns: 1fr; }
       .rm-branch { display: none; }
@@ -1023,21 +849,11 @@
     @media (max-width: 560px) {
       body { font-size: 16.5px; }
       .wrap { width: calc(100% - 32px); }
-      .compare .card, .step, .role, .tile, .install-card { padding: 24px 22px; }
-      .calc { padding: 22px 18px; border-radius: 22px; }
-      .calc-head { display: none; }
-      .calc-row { grid-template-columns: 1fr 1fr; gap: 8px 10px; padding: 14px 0; }
-      .calc-row .who { grid-column: 1; }
-      .calc-row .result { grid-column: 2; grid-row: 1; }
-      .calc-row label { display: block; font-size: 12px; color: rgba(255, 255, 255, .55); font-weight: 600; margin-bottom: 4px; }
-      .calc-top .totals { text-align: left; }
+      .compare .card, .step, .role, .install-card { padding: 24px 22px; }
+      .feat-grid { grid-template-columns: 1fr; }
       .btn-primary, .btn-ghost { width: 100%; }
       .chip { padding: 9px 12px; }
       .chip strong { font-size: 15px; }
-    }
-
-    @media (min-width: 561px) {
-      .calc-row label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
     }
   </style>
 </head>
@@ -1048,9 +864,7 @@
       <a class="brand" href="#top"><img src="favicon.png" alt="">HostelMate</a>
       <div class="nav-links">
         <a href="#how">How It Works</a>
-        <a href="#maths">The Maths</a>
         <a href="#features">Features</a>
-        <a href="#trust">Accountability</a>
         <a href="#install">Install</a>
         <a href="#guide">Guide</a>
         <a href="#faq">FAQ</a>
@@ -1066,9 +880,7 @@
     <div class="menu" id="menu">
       <div class="wrap">
         <a href="#how">How It Works</a>
-        <a href="#maths">The Maths</a>
         <a href="#features">Features</a>
-        <a href="#trust">Accountability</a>
         <a href="#install">Install</a>
         <a href="#guide">Guide</a>
         <a href="#faq">FAQ</a>
@@ -1210,211 +1022,62 @@
       </div>
     </section>
 
-    <section id="maths" class="calc-section">
-      <div class="wrap calc-grid">
-        <div class="reveal">
-          <span class="kicker">The Maths</span>
-          <h2>Simple enough to check by hand</h2>
-          <p class="lead">The whole month's cost is shared by meals eaten. If you paid for more than you ate, you collect the difference; if you ate more than you paid for, you pay it.</p>
-
-          <div class="formula">
-            <div><b>Meal Rate</b><span>= Total cost ÷ Total meals</span></div>
-            <div><b>Balance</b><span>= What you paid − Your meals × Meal rate</span></div>
-          </div>
-
-          <p class="note">Try it: change any number in the example. Hostels can also set a minimum number of meals each month.</p>
-        </div>
-
-        <div class="calc reveal d1" id="calc">
-          <div class="calc-top">
-            <div>
-              <small>Meal Rate</small>
-              <div class="rate"><output id="rate">৳70.00</output> <span>per meal</span></div>
-            </div>
-            <div class="totals">
-              Total cost <b id="cost">৳4,900</b><br>
-              Total meals <b id="meals">70</b>
-            </div>
-          </div>
-
-          <div class="calc-head" aria-hidden="true">
-            <span>Member</span><span>Meals</span><span>Paid ৳</span><span>Balance</span>
-          </div>
-
-          <div class="calc-row">
-            <span class="who">Adnan</span>
-            <div><label for="m0">Meals</label><input id="m0" type="number" inputmode="decimal" min="0" value="30"></div>
-            <div><label for="p0">Paid ৳</label><input id="p0" type="number" inputmode="decimal" min="0" value="2400"></div>
-            <span class="result" id="r0"></span>
-          </div>
-          <div class="calc-row">
-            <span class="who">Rahim</span>
-            <div><label for="m1">Meals</label><input id="m1" type="number" inputmode="decimal" min="0" value="20"></div>
-            <div><label for="p1">Paid ৳</label><input id="p1" type="number" inputmode="decimal" min="0" value="600"></div>
-            <span class="result" id="r1"></span>
-          </div>
-          <div class="calc-row">
-            <span class="who">Karim</span>
-            <div><label for="m2">Meals</label><input id="m2" type="number" inputmode="decimal" min="0" value="20"></div>
-            <div><label for="p2">Paid ৳</label><input id="p2" type="number" inputmode="decimal" min="0" value="1400"></div>
-            <span class="result" id="r2"></span>
-          </div>
-
-          <div class="calc-due">
-            <label for="due">Shop Due<small>Owed to the shop, shared like any cost</small></label>
-            <input id="due" type="number" inputmode="decimal" min="0" value="500">
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="features">
+    <section id="features" class="features">
       <div class="wrap">
-        <div class="head reveal">
+        <div class="head center reveal">
           <span class="kicker">Features</span>
           <h2>Everything a shared kitchen needs</h2>
-          <p class="lead">Built around how hostels actually run, with four tabs: Home, Meals, Expenses and Balance.</p>
+          <p class="lead">Four tabs: Home, Meals, Expenses and Balance. Here is what is inside.</p>
         </div>
 
-        <div class="bento">
-          <div class="card tile wide reveal">
-            <h3>Meal plans fill the gaps</h3>
-            <p>Set your usual lunch and dinner once. Days you forget to enter are counted from your plan and marked Auto.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box">
-                <div class="week">
-                  <div><small>Mon</small>2</div>
-                  <div><small>Tue</small>2</div>
-                  <div class="auto"><small>Wed</small>2</div>
-                  <div><small>Thu</small>1</div>
-                  <div class="auto"><small>Fri</small>2</div>
-                  <div><small>Sat</small>2</div>
-                  <div><small>Sun</small>0</div>
-                </div>
-                <div class="legend"><span><i style="background:var(--paper)"></i>Entered</span><span><i style="background:var(--brass-soft)"></i>Auto From Plan</span></div>
-              </div>
-            </div>
+        <div class="feat-grid">
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 002 2v8M11 3v6M7 3v6"/><path d="M17 21V3c-2 1-3 4-3 7s1 3 3 3"/></svg></span>
+            <div><h3>Meals in seconds</h3><p>Lunch and dinner for the day, entered by each member.</p></div>
           </div>
-
-          <div class="card tile wide reveal d1">
-            <h3>Balance and Month Trend</h3>
-            <p>Each member's Pay or Collect, the change from last month, and a day-by-day chart of the meal rate, meals or cost.</p>
-            <div class="viz trend" aria-hidden="true">
-              <div class="viz-box">
-                <svg viewBox="0 0 300 96" preserveAspectRatio="none">
-                  <path d="M0 70 C30 64 50 72 80 58 S130 50 160 54 S220 40 250 44 S285 36 300 38" fill="none" stroke="#C9D1CC" stroke-width="2.5" stroke-dasharray="5 5"/>
-                  <path d="M0 78 C30 70 55 60 85 62 S135 42 165 46 S220 30 250 28 S285 22 300 20" fill="none" stroke="#176B4D" stroke-width="3" stroke-linecap="round"/>
-                  <circle cx="300" cy="20" r="5" fill="#CDAA63"/>
-                </svg>
-                <div class="legend"><span><i style="background:var(--green)"></i>This Month</span><span><i style="background:#C9D1CC"></i>Last Month</span></div>
-              </div>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.500" y="5" width="17" height="15" rx="2.500"/><path d="M3.500 10h17M8 3v4M16 3v4"/></svg></span>
+            <div><h3>Meal plans</h3><p>Set your usual meals once; forgotten days still count.</p></div>
           </div>
-
-          <div class="card tile reveal">
-            <h3>Members without the app</h3>
-            <p>Add anyone by name. An admin records their meals, and they count in every calculation.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box rows">
-                <div>Adnan <span class="tag brass">Admin</span></div>
-                <div>Salam <span class="tag">No App</span></div>
-              </div>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
+            <div><h3>Shared expenses</h3><p>Item, amount and who paid, on every phone at once.</p></div>
           </div>
-
-          <div class="card tile reveal d1">
-            <h3>Admins set the rules</h3>
-            <p>Choose whether members can add meals and expenses, or edit them after saving.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box rows">
-                <div>Add Meals <span class="switch"></span></div>
-                <div>Edit Their Entries <span class="switch off"></span></div>
-              </div>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.500"/><path d="M8 8h8M8 12h2M12 12h2M8 16h2M12 16h2"/></svg></span>
+            <div><h3>Automatic balance</h3><p>The meal rate and each member's Pay or Collect, ready to copy.</p></div>
           </div>
-
-          <div class="card tile reveal d2">
-            <h3>Duty roster and notices</h3>
-            <p>See who looks after the hostel today, read announcements, and know who will be away.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box">
-                <div class="bubble"><b>Announcement</b>Gas bill is due on Friday.</div>
-              </div>
-            </div>
+          <div class="feat key reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.500 12a8.500 8.500 0 102.500-6"/><path d="M3.500 4v4h4"/><path d="M12 7.500V12l3 2"/></svg></span>
+            <div><h3>Accountability</h3><p>Every change is recorded with the old and new figures, and nobody can delete it.</p></div>
           </div>
-
-          <div class="card tile wide reveal">
-            <h3>Private to your hostel</h3>
-            <p>Only your hostel's members can see its records, and nobody joins without your invitation code.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box code"><span>7KQ4PX</span><span class="tag">Invitation Code</span></div>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg></span>
+            <div><h3>Month lock</h3><p>A month closes on the 7th of the next, for admins too.</p></div>
           </div>
-
-          <div class="card tile wide reveal d1">
-            <h3>Updates inside the app</h3>
-            <p>The Android app tells you when a new version is ready and installs it itself. The web version is always current.</p>
-            <div class="viz" aria-hidden="true">
-              <div class="viz-box rows">
-                <div>Check for Updates <span class="tag">Up To Date</span></div>
-              </div>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16h16"/><path d="M7.500 15l4-4.500 3 3L20 7"/></svg></span>
+            <div><h3>Month Trend</h3><p>This month against last, day by day.</p></div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="trust" class="trust">
-      <div class="wrap trust-grid">
-        <div class="reveal">
-          <span class="kicker">Accountability</span>
-          <h2>Nothing hidden. <em>Nothing rewritten.</em></h2>
-          <p class="lead">Admins can correct entries for anyone, so HostelMate makes every change visible and limits how far back changes can go.</p>
-
-          <ul class="points">
-            <li>
-              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.500 12a8.500 8.500 0 102.500-6"/><path d="M3.500 4v4h4"/><path d="M12 7.500V12l3 2"/></svg></span>
-              <div><b>Every change on record</b><span>Who changed what, when, and the old and new figures. Nobody can edit or delete the history, admins included.</span></div>
-            </li>
-            <li>
-              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg></span>
-              <div><b>Closed months stay closed</b><span>Entries can change until the 7th of the next month. After that the month is locked for everyone.</span></div>
-            </li>
-            <li>
-              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.800 2.800 0 00-4-4L4 16z"/><path d="M13.500 6.500l4 4"/></svg></span>
-              <div><b>Edited marks</b><span>A meal or expense changed after it was saved is marked Edited in its table.</span></div>
-            </li>
-          </ul>
-        </div>
-
-        <div class="reveal d1" aria-hidden="true">
-          <div class="log">
-            <div class="log-head">Accountability <span><i></i>2 new</span></div>
-            <div class="entry">
-              <i class="chg"></i>
-              <div><b>Rahim changed a meal</b><span>Lunch <s>1</s> → <em>2</em> · 25 Oct</span></div>
-              <time>2m ago</time>
-            </div>
-            <div class="entry">
-              <i class="add"></i>
-              <div><b>Adnan added an expense</b><span>Rice · <em>৳1,200</em></span></div>
-              <time>1h ago</time>
-            </div>
-            <div class="entry">
-              <i class="del"></i>
-              <div><b>Karim deleted an expense</b><span><s>Gas · ৳900</s></span></div>
-              <time>Yesterday</time>
-            </div>
-            <div class="entry">
-              <i class="chg"></i>
-              <div><b>Adnan set the shop due</b><span>৳0 → <em>৳500</em></span></div>
-              <time>2 days ago</time>
-            </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.6-3.400 3.200-5.500 6.500-5.500s5.900 2.100 6.500 5.500"/><path d="M17 8v6M14 11h6"/></svg></span>
+            <div><h3>Members without the app</h3><p>Admins add them by name and record for them.</p></div>
           </div>
-
-          <div class="lock">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.500" y="10.500" width="15" height="10" rx="2.500"/><path d="M8 10.500V7.500a4 4 0 018 0v3"/></svg>
-            <span>October can change until <b>7 November</b>, then it is locked.</span>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
+            <div><h3>Admin controls</h3><p>Permissions, duty roster, announcements and month end.</p></div>
+          </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 6 2.500 7 2.500 7h-17S6 15 6 9z"/><path d="M10 20a2 2 0 004 0"/></svg></span>
+            <div><h3>Notices</h3><p>Announcements and away dates, under the bell.</p></div>
+          </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6l8-3z"/><path d="M8.500 12l2.500 2.500 4.500-5"/></svg></span>
+            <div><h3>Private to your hostel</h3><p>Only members see its records; joining needs your code.</p></div>
+          </div>
+          <div class="feat reveal">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.500" y="2.500" width="11" height="19" rx="2.500"/><path d="M11 18.500h2"/></svg></span>
+            <div><h3>Android and web</h3><p>One account on any device; the app updates itself.</p></div>
           </div>
         </div>
       </div>
@@ -1724,7 +1387,6 @@
           <ul>
             <li><a href="#how">How It Works</a></li>
             <li><a href="#features">Features</a></li>
-            <li><a href="#trust">Accountability</a></li>
           </ul>
         </div>
         <div>
@@ -1808,49 +1470,6 @@
       });
 
       nav.querySelectorAll('.menu a').forEach(function (a) { a.addEventListener('click', close); });
-    })();
-
-    // The worked example: the same sums the app does, rounded once at the end.
-    (function () {
-      var taka = function (n, digits) {
-        return '৳' + n.toLocaleString('en-US', { minimumFractionDigits: digits || 0, maximumFractionDigits: digits || 0 });
-      };
-      var value = function (id) {
-        var n = parseFloat(document.getElementById(id).value);
-        return isFinite(n) && n > 0 ? n : 0;
-      };
-
-      function calculate() {
-        var meals = [0, 1, 2].map(function (i) { return value('m' + i); });
-        var paid = [0, 1, 2].map(function (i) { return value('p' + i); });
-        var totalMeals = meals.reduce(function (a, b) { return a + b; }, 0);
-        var totalCost = paid.reduce(function (a, b) { return a + b; }, 0) + value('due');
-        var rate = totalMeals > 0 ? totalCost / totalMeals : 0;
-
-        document.getElementById('rate').textContent = taka(rate, 2);
-        document.getElementById('cost').textContent = taka(totalCost);
-        document.getElementById('meals').textContent = totalMeals.toLocaleString('en-US');
-
-        [0, 1, 2].forEach(function (i) {
-          var balance = Math.round(paid[i] - meals[i] * rate);
-          var cell = document.getElementById('r' + i);
-          if (balance > 0) {
-            cell.className = 'result get';
-            cell.innerHTML = 'Collect ' + taka(balance) + '<small>' + meals[i] + ' meals × ' + taka(rate, 2) + '</small>';
-          } else if (balance < 0) {
-            cell.className = 'result pay';
-            cell.innerHTML = 'Pay ' + taka(-balance) + '<small>' + meals[i] + ' meals × ' + taka(rate, 2) + '</small>';
-          } else {
-            cell.className = 'result even';
-            cell.innerHTML = 'Settled<small>Paid exactly their share</small>';
-          }
-        });
-      }
-
-      document.querySelectorAll('#calc input').forEach(function (input) {
-        input.addEventListener('input', calculate);
-      });
-      calculate();
     })();
   </script>
 
