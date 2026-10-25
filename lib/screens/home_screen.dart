@@ -7,9 +7,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
 import '../services/profile_service.dart';
-import '../widgets/web_layout.dart';
 import 'create_group_screen.dart';
-import 'desktop_shell.dart';
 import 'join_group_screen.dart';
 import 'phone_shell.dart';
 import 'profile_screen.dart';
@@ -135,20 +133,9 @@ class HomeScreen extends StatelessWidget {
             final groupName = group['name'] as String? ?? 'Hostel Group';
             final inviteCode = group['inviteCode'] as String? ?? '';
 
-            // On a wide browser window, the hostel gets a sidebar.
-            if (WebLayout.isDesktopOf(context)) {
-              return DesktopShell(
-                key: ValueKey('desktop-$groupId'),
-                groupId: groupId,
-                groupName: groupName,
-                inviteCode: inviteCode,
-                memberName: name,
-                role: role,
-              );
-            }
-
             // A member belongs to one hostel, so the app opens straight
-            // into it.
+            // into it. The browser shows the same phone layout, in a
+            // phone-width column on a wide window.
             return PhoneShell(
               key: ValueKey(groupId),
               groupId: groupId,
