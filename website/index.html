@@ -779,7 +779,94 @@
     .qr b { display: block; font-size: 16px; }
     .qr span { color: var(--ink-soft); font-size: 14.5px; }
 
-    /* Guide */
+    /* Guide: the roadmap from sign-up to settings */
+    .roadmap { max-width: 920px; margin: 0 auto 56px; display: flex; flex-direction: column; align-items: center; }
+
+    .rm-step {
+      width: 100%;
+      max-width: 560px;
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 18px;
+      padding: 22px 24px;
+      text-align: left;
+    }
+
+    .rm-n {
+      width: 48px;
+      height: 48px;
+      border-radius: 15px;
+      background: var(--green-deep);
+      color: var(--brass);
+      font-weight: 800;
+      font-size: 17px;
+      display: grid;
+      place-items: center;
+    }
+
+    .rm-step h3 { margin: 2px 0 4px; font-size: 18px; }
+    .rm-step p { margin: 0; color: var(--ink-soft); font-size: 15.5px; line-height: 1.55; }
+
+    .tapline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+
+    .tap {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 11px;
+      border-radius: 9px;
+      background: var(--mint);
+      color: var(--green);
+      font-size: 13.5px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .tapline i { font-style: normal; color: var(--brass-deep); font-weight: 800; font-size: 14px; }
+
+    .rm-line { width: 2px; height: 30px; background: #CCD6D0; flex: none; }
+    .rm-line.grow { flex: 1; min-height: 30px; }
+
+    .rm-tag {
+      padding: 7px 16px;
+      border-radius: 99px;
+      background: var(--brass-soft);
+      color: var(--brass-deep);
+      border: 1px solid #E9D9B4;
+      font-size: 12.5px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .rm-branch { display: block; width: 100%; height: 40px; }
+    .rm-branch path { stroke: #CCD6D0; stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
+
+    .rm-fork { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .rm-lane { display: flex; flex-direction: column; align-items: center; padding: 0 10px; }
+
+    .rm-lane-head {
+      width: 100%;
+      max-width: 430px;
+      padding: 16px 20px;
+      border-radius: 18px;
+      background: linear-gradient(150deg, var(--green-deep), var(--hero-end));
+      color: #fff;
+      text-align: center;
+    }
+
+    .rm-lane-head b { display: block; font-size: 17px; }
+    .rm-lane-head span { font-size: 14px; color: rgba(255, 255, 255, .7); }
+    .rm-lane .rm-step { max-width: 430px; }
+    .rm-or { display: none; }
+    .rm-mobile { display: none; }
+
+    .rm-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .rm-settings > div { background: var(--canvas); border-radius: 14px; padding: 14px 16px; }
+    .rm-settings b { display: block; font-size: 15.5px; }
+    .rm-settings small { display: block; color: var(--ink-soft); font-size: 14px; line-height: 1.5; margin-top: 2px; }
+    .rm-settings .tapline { margin-top: 10px; }
+    .rm-step.wide { max-width: 680px; }
+
     .guide-card {
       background: linear-gradient(150deg, var(--green-deep), var(--hero-end));
       color: #fff;
@@ -917,6 +1004,15 @@
       .faq-grid .head { position: static; margin-bottom: 28px; }
       .tile, .tile.wide { grid-column: span 6; }
       .guide-card { grid-template-columns: 1fr; padding: 32px 26px; }
+      .rm-fork { grid-template-columns: 1fr; }
+      .rm-branch { display: none; }
+      .rm-mobile { display: block; }
+      .rm-lane { padding: 0; }
+      .rm-or { display: flex; align-items: center; gap: 14px; width: 100%; max-width: 430px; margin: 22px auto; color: var(--ink-faint); font-weight: 800; font-size: 13px; letter-spacing: 1.5px; }
+      .rm-or::before, .rm-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+      .rm-line.grow { display: none; }
+      .rm-settings { margin-left: -66px; }
+      .rm-settings { grid-template-columns: 1fr; }
       .path { justify-self: start; }
       .foot { grid-template-columns: 1fr 1fr; }
       .foot > div:first-child { grid-column: span 2; }
@@ -1404,10 +1500,168 @@
 
     <section id="guide">
       <div class="wrap">
+        <div class="head center reveal">
+          <span class="kicker">User Guide</span>
+          <h2>From sign-up to settings</h2>
+          <p class="lead">Follow the path that fits you: start a new hostel as its admin, or join one with a code. The green labels are the buttons you tap.</p>
+        </div>
+
+        <div class="roadmap">
+          <span class="rm-tag reveal">Everyone</span>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step reveal">
+            <span class="rm-n">1</span>
+            <div>
+              <h3>Create your account</h3>
+              <p>Your name, email, an 11-digit phone number and a strong password.</p>
+              <div class="tapline"><span class="tap">Create Account</span></div>
+            </div>
+          </div>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step reveal">
+            <span class="rm-n">2</span>
+            <div>
+              <h3>Verify your email</h3>
+              <p>Open the link HostelMate emails you, then come back to the app.</p>
+              <div class="tapline"><span class="tap">I Have Verified My Email</span></div>
+            </div>
+          </div>
+
+          <svg class="rm-branch" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0V20M25 40V20H75V40"/></svg>
+          <div class="rm-line rm-mobile"></div>
+
+          <div class="rm-fork">
+            <div class="rm-lane reveal">
+              <div class="rm-lane-head"><b>Starting a Hostel</b><span>You become its admin</span></div>
+              <div class="rm-line"></div>
+
+              <div class="card rm-step">
+                <span class="rm-n">3a</span>
+                <div>
+                  <h3>Create the hostel</h3>
+                  <p>Give it a name. The name cannot be changed later.</p>
+                  <div class="tapline"><span class="tap">Create Hostel</span><i>→</i><span class="tap">Create Group</span></div>
+                </div>
+              </div>
+              <div class="rm-line"></div>
+
+              <div class="card rm-step">
+                <span class="rm-n">3b</span>
+                <div>
+                  <h3>Activate it</h3>
+                  <p>Enter a voucher code so members can start adding entries.</p>
+                  <div class="tapline"><span class="tap">Hostel Details</span><i>→</i><span class="tap">Activation</span><i>→</i><span class="tap">Apply Voucher</span></div>
+                </div>
+              </div>
+              <div class="rm-line"></div>
+
+              <div class="card rm-step">
+                <span class="rm-n">3c</span>
+                <div>
+                  <h3>Share the code</h3>
+                  <p>Tap the Hostel Code to copy it, and send it to everyone in the hostel.</p>
+                  <div class="tapline"><span class="tap">Hostel Details</span><i>→</i><span class="tap">Hostel Code</span></div>
+                </div>
+              </div>
+              <div class="rm-line grow"></div>
+            </div>
+
+            <div class="rm-or">OR</div>
+
+            <div class="rm-lane reveal d1">
+              <div class="rm-lane-head"><b>Joining a Hostel</b><span>You join as a member</span></div>
+              <div class="rm-line"></div>
+
+              <div class="card rm-step">
+                <span class="rm-n">3a</span>
+                <div>
+                  <h3>Get the code</h3>
+                  <p>Ask your hostel's admin for the Hostel Code.</p>
+                </div>
+              </div>
+              <div class="rm-line"></div>
+
+              <div class="card rm-step">
+                <span class="rm-n">3b</span>
+                <div>
+                  <h3>Join the hostel</h3>
+                  <p>Enter the code, and the hostel opens straight away.</p>
+                  <div class="tapline"><span class="tap">Join Hostel</span><i>→</i><span class="tap">Join Group</span></div>
+                </div>
+              </div>
+              <div class="rm-line grow"></div>
+            </div>
+          </div>
+
+          <svg class="rm-branch" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M25 0V20H75V0M50 20V40"/></svg>
+          <div class="rm-line rm-mobile"></div>
+
+          <span class="rm-tag reveal">Every Day</span>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step reveal">
+            <span class="rm-n">4</span>
+            <div>
+              <h3>Record your meals</h3>
+              <p>Set lunch and dinner for the day. Add a meal plan once, and days you forget are still counted.</p>
+              <div class="tapline"><span class="tap">Home</span><i>→</i><span class="tap">Meals +</span></div>
+            </div>
+          </div>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step reveal">
+            <span class="rm-n">5</span>
+            <div>
+              <h3>Add what you spent</h3>
+              <p>The item, the amount and who paid. Everyone sees it at once.</p>
+              <div class="tapline"><span class="tap">Home</span><i>→</i><span class="tap">Expenses +</span></div>
+            </div>
+          </div>
+          <div class="rm-line"></div>
+
+          <span class="rm-tag reveal">Month End</span>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step reveal">
+            <span class="rm-n">6</span>
+            <div>
+              <h3>Check the balance</h3>
+              <p>See what each person pays or collects, then copy it into your group chat.</p>
+              <div class="tapline"><span class="tap">Balance</span><i>→</i><span class="tap">Copy</span></div>
+            </div>
+          </div>
+          <div class="rm-line"></div>
+
+          <span class="rm-tag reveal">Settings</span>
+          <div class="rm-line"></div>
+
+          <div class="card rm-step wide reveal">
+            <span class="rm-n">7</span>
+            <div>
+              <h3>Make it yours</h3>
+              <p>Your own settings are in Profile. Admins also run the hostel from Admin Settings.</p>
+              <div class="rm-settings">
+                <div>
+                  <b>Profile</b>
+                  <small>Nickname, password, the full guide and updates. For everyone.</small>
+                  <div class="tapline"><span class="tap">Home</span><i>→</i><span class="tap">Profile icon</span></div>
+                </div>
+                <div>
+                  <b>Admin Settings</b>
+                  <small>Members, permissions, duty roster, announcements and month end. Admins only.</small>
+                  <div class="tapline"><span class="tap">Hostel Details</span><i>→</i><span class="tap">Admin Settings</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="guide-card reveal">
           <div>
-            <span class="kicker">User Guide</span>
-            <h2>The HostelMate Guide is in the app</h2>
+            <span class="kicker">Need More Detail?</span>
+            <h2>The full guide is in the app</h2>
             <p>Every part of HostelMate on one page, from setting up a hostel to reading the Balance tab, with a menu that jumps to each section.</p>
           </div>
           <div class="path">Profile <span>→</span> HostelMate Guide</div>
