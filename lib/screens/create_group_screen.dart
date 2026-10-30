@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
 class CreateGroupScreen extends StatefulWidget {
@@ -90,6 +91,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         'role': 'admin',
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      SubscriptionService.startFreeTrial(
+        batch,
+        groupReference.id,
+        uid: user.uid,
+      );
 
       await batch.commit();
 

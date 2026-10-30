@@ -210,7 +210,7 @@ Together they owe ৳500, which is exactly the shop due.
 
 A hostel is **active** for a number of days. When the period ends it becomes **read-only**: every record stays visible, but meals, expenses, and monthly settings cannot be added or changed until it is activated again.
 
-A hostel admin activates or extends the hostel from Hostel Details → Activation with a **voucher**: a code issued by the super admin. Each hostel can use a given voucher once. Extending an active hostel adds days to the end of its period. Every activation is recorded in Accountability.
+Every new hostel starts with **7 free days**, with no voucher needed. After that, a hostel admin activates or extends the hostel from Hostel Details → Activation with a **voucher**: a code issued by the super admin. Each hostel can use a given voucher once. Extending an active hostel adds days to the end of its period. Every activation is recorded in Accountability.
 
 **Paying with bKash**: an admin reports the transaction ID, and the super admin approves or rejects it in the Payments tab.
 
@@ -284,6 +284,7 @@ All of the following is enforced in [`firestore.rules`](firestore.rules):
 | Accountability records can be added, by their own author at the server's time, but never changed or deleted | The history cannot be hidden or backdated |
 | Writes are refused unless the hostel's period is running | Read-only really is read-only |
 | A voucher gives exactly its days, once per hostel | Vouchers cannot be reused or inflated |
+| A hostel's 7 free days can only be written in the batch that creates it | The free period cannot be repeated or lengthened |
 | Feature requests can be sent by anyone signed in, in their own name, and read only by the super admin | Messages stay private |
 | Only the super admin changes periods, vouchers, payments, and app settings | Activation cannot be self-granted |
 
@@ -372,7 +373,7 @@ flutter run -d chrome    # web
 ### First run
 
 1. Sign in as the super admin and create a voucher under **Vouchers**.
-2. Sign in as a normal user, create a hostel, and activate it with the voucher.
+2. Sign in as a normal user and create a hostel. It is active for 7 free days, and the voucher extends it.
 3. Share the hostel's code with its members.
 
 ## Testing

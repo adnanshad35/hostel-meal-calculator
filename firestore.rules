@@ -609,8 +609,33 @@ service cloud.firestore {
           );
       }
 
+      // Every new hostel starts with 7 free days, written in the same
+      // batch that creates it, so a hostel can only do this once.
+      function startsFreeTrial() {
+        let group = /databases/$(database)/documents/groups/$(groupId);
+
+        return isSignedIn()
+          && !exists(group)
+          && existsAfter(group)
+          && request.auth.uid in getAfter(group).data.admins
+          && request.resource.data.keys().hasOnly([
+            'periodStart',
+            'days',
+            'lastSource',
+            'updatedBy',
+            'updatedAt'
+          ])
+          && request.resource.data.periodStart == request.time
+          && request.resource.data.days == 7
+          && request.resource.data.lastSource == 'trial'
+          && request.resource.data.updatedBy == request.auth.uid;
+      }
+
       allow read: if isGroupMember(groupId) || isSuperAdmin();
-      allow create, update: if isSuperAdmin() || redeemsVoucher();
+      allow create: if isSuperAdmin()
+        || redeemsVoucher()
+        || startsFreeTrial();
+      allow update: if isSuperAdmin() || redeemsVoucher();
       allow delete: if isSuperAdmin();
     }
 

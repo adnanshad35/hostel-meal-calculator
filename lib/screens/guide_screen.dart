@@ -49,8 +49,8 @@ const guideSections = [
       ),
       (
         'Activate the Hostel',
-        'An admin activates it from {b:Hostel Details → Activation}, with '
-            'a voucher or bKash.',
+        'A new hostel is free for 7 days. After that, an admin activates it '
+            'from {b:Hostel Details → Activation}, with a voucher or bKash.',
       ),
     ],
   ),

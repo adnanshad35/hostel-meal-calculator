@@ -231,6 +231,10 @@ class SubscriptionException implements Exception {
 class SubscriptionService {
   SubscriptionService._();
 
+  /// Free days every new hostel starts with. The security rules
+  /// require exactly this number.
+  static const freeTrialDays = 7;
+
   static FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   static DocumentReference<Map<String, dynamic>> _subscription(String groupId) {
@@ -268,6 +272,27 @@ class SubscriptionService {
     }
 
     return {'periodStart': FieldValue.serverTimestamp(), 'days': addDays};
+  }
+
+  /// Adds a new hostel's free days to the [batch] that creates it. The
+  /// security rules allow this only in that batch.
+  static void startFreeTrial(
+    WriteBatch batch,
+    String groupId, {
+    required String uid,
+  }) {
+    batch.set(_subscription(groupId), freeTrialFields(uid: uid));
+  }
+
+  /// The fields of a new hostel's free period, starting now.
+  static Map<String, dynamic> freeTrialFields({required String uid}) {
+    return {
+      'periodStart': FieldValue.serverTimestamp(),
+      'days': freeTrialDays,
+      'lastSource': 'trial',
+      'updatedBy': uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
   }
 
   static Stream<HostelSubscription> watch(String groupId) {
