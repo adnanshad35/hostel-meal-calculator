@@ -168,6 +168,30 @@ void main() {
     });
   });
 
+  group('freeTrialFields', () {
+    test('gives a new hostel 7 days from now', () {
+      final fields = SubscriptionService.freeTrialFields(uid: 'admin');
+
+      expect(fields['days'], 7);
+      expect(fields['periodStart'], isA<FieldValue>());
+      expect(fields['lastSource'], 'trial');
+      expect(fields['updatedBy'], 'admin');
+      expect(fields.containsKey('voucherCode'), isFalse);
+    });
+
+    test('a voucher used during the free days adds to them', () {
+      final trial = HostelSubscription(periodStart: start, days: 7);
+
+      final fields = SubscriptionService.extensionFields(
+        trial,
+        addDays: 30,
+        now: DateTime(2026, 10, 3),
+      );
+
+      expect(fields, {'days': 37});
+    });
+  });
+
   group('codes and transaction IDs', () {
     test('are compared without spaces or case', () {
       expect(SubscriptionService.normalizeCode(' wc 100 '), 'WC100');
