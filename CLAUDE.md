@@ -11,7 +11,7 @@ Flutter app (Android + web) for shared hostel meals, expenses and monthly balanc
 
 ## Commands
 - Check: `flutter analyze lib` and `flutter test`
-- APK: `flutter build apk --release` (signed via `android/key.properties`)
+- APK: `flutter build apk --release --target-platform android-arm64` (arm64 only, to keep the download small; signed via `android/key.properties`)
 - Web: `python tool/build_site.py`, then `firebase deploy --only hosting`
 - Rules: `firebase deploy --only firestore:rules`
 

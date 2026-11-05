@@ -408,8 +408,9 @@ The security rules are not covered by automated tests. The month lock was checke
 1. Raise `version` in `pubspec.yaml` (for example `1.7.0+11` → `1.7.1+12`).
 2. Build the APK:
    ```bash
-   flutter build apk --release
+   flutter build apk --release --target-platform android-arm64
    ```
+   This builds for 64-bit ARM phones only, which keeps the APK at about a third of the all-devices size.
 3. Publish a GitHub release tagged `v<version>`, with the APK attached under the name `HostelMate.apk`.
 4. In the super admin panel, open **App Update** and set the **Latest Version**, **What's New**, and a **Minimum Version** only if the update must be installed.
 
