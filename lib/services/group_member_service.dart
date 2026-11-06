@@ -5,6 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/group_member.dart';
 import 'activity_log.dart';
+import 'meal_plan.dart';
+import 'member_departure_service.dart';
+import 'month_rules.dart';
 import 'month_archive.dart';
 import 'meal_plan_service.dart';
 
@@ -194,6 +197,14 @@ class GroupMemberService {
 
         if (data['active'] != true) {
           updates['active'] = true;
+
+          // Rejoined with the Hostel Code: back from the alumni, with
+          // everything they had before.
+          final status = data['status'] as String? ?? '';
+          if (status.isNotEmpty && status != 'active') {
+            updates['status'] = 'active';
+            updates['rejoinedAt'] = FieldValue.serverTimestamp();
+          }
         }
 
         // Only admins may correct another member's name.
@@ -270,85 +281,152 @@ class GroupMemberService {
     return DateTime(local.year, local.month);
   }
 
-  /// Whether a record of [month] may be deleted: while the month is
-  /// open, or once only its summary is kept. A record without a month
-  /// belongs to none, so it may go too.
-  static bool _mayClear(DateTime? month, DateTime now) {
-    return month == null ||
-        MonthLock.canEdit(month, now) ||
-        MonthLock.isSummaryOnly(month, now);
+  /// The fields that take a member out of the hostel's lists. Nothing
+  /// else of theirs changes.
+  static Map<String, dynamic> _leavingFields(LeavingWay way, DateTime now) {
+    return {
+      'active': false,
+      'status': way == LeavingWay.deleted
+          ? GroupMember.deleted
+          : GroupMember.alumni,
+      'leftOn': MealPlans.dateKey(now),
+      'leftAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
   }
 
-  /// Deletes a member who does not use the app, with their meal plan,
-  /// duty turns, and meals and expenses in open months. Closed months
-  /// keep theirs. Admins only.
-  static Future<void> deleteShadowMember({
+  /// Takes a member who does not use the app out of the hostel, as
+  /// alumni or for good, with how their month counts ([choice] is
+  /// null when they had nothing this month). Their meals and expenses
+  /// are never deleted. Admins only.
+  static Future<void> removeShadowMember({
     required String groupId,
     required GroupMember member,
+    required LeavingWay way,
+    required LeavingChoice? choice,
   }) async {
     if (member.isAppUser) {
       throw Exception('Members who use the app are removed, not deleted.');
     }
 
-    final group = _group(groupId);
-    final meals = await group
-        .collection('meals')
-        .where('userId', isEqualTo: member.id)
-        .get();
-    final expenses = await group
-        .collection('expenses')
-        .where('paidById', isEqualTo: member.id)
-        .get();
-
-    // A closed month keeps their records, so its totals never change;
-    // they are counted there as a former member.
     final now = DateTime.now();
-    final mealsToDelete = [
-      for (final meal in meals.docs)
-        if (_mayClear(_mealMonth(meal.data()), now)) meal.reference,
-    ];
-    final expensesToDelete = [
-      for (final expense in expenses.docs)
-        if (_mayClear(_expenseMonth(expense.data()), now)) expense.reference,
-    ];
-    final references = [...mealsToDelete, ...expensesToDelete];
+    final settingsReference = MemberDepartureService.settingsOf(groupId, now);
 
-    // Recorded first, so their records can never vanish unseen.
-    await ActivityLog.add(
+    await _firestore.runTransaction((transaction) async {
+      final settings = choice == null
+          ? null
+          : await transaction.get(settingsReference);
+
+      transaction.update(
+        _members(groupId).doc(member.id),
+        _leavingFields(way, now),
+      );
+      _recordLeaving(
+        transaction,
+        groupId,
+        member: member,
+        way: way,
+        choice: choice,
+        settingsReference: settingsReference,
+        settings: settings,
+        now: now,
+      );
+    });
+
+    await MealPlanService.close(groupId, member.id);
+  }
+
+  /// The departure, the month's choice and the history record of a
+  /// member an admin takes out, in the same [transaction].
+  static void _recordLeaving(
+    Transaction transaction,
+    String groupId, {
+    required GroupMember member,
+    required LeavingWay way,
+    required LeavingChoice? choice,
+    required DocumentReference<Map<String, dynamic>> settingsReference,
+    required DocumentSnapshot<Map<String, dynamic>>? settings,
+    required DateTime now,
+  }) {
+    if (choice != null && settings != null) {
+      MemberDepartureService.saveRuleIn(
+        transaction,
+        reference: settingsReference,
+        settings: settings,
+        rule: LeaverRule(
+          memberId: member.id,
+          choice: choice,
+          leftOn: MealPlans.dateKey(now),
+        ),
+      );
+      MemberDepartureService.addTo(
+        transaction,
+        groupId,
+        memberId: member.id,
+        memberName: member.name,
+        way: way,
+        leftOn: now,
+        choice: choice,
+      );
+    }
+
+    ActivityLog.addToTransaction(
+      transaction,
       groupId,
       kind: ActivityKind.memberRemoved,
       memberId: member.id,
       memberName: member.name,
-      details:
-          '${mealsToDelete.length} meal entries and '
-          '${expensesToDelete.length} expenses deleted',
+      details: [
+        way == LeavingWay.deleted ? 'Permanently deleted' : 'Made alumni',
+        ?choice?.label,
+      ].join(' · '),
     );
+  }
 
-    const chunkSize = 400;
-    for (var start = 0; start < references.length; start += chunkSize) {
-      final batch = _firestore.batch();
-      for (final reference in references.skip(start).take(chunkSize)) {
-        batch.delete(reference);
-      }
-      await batch.commit();
-    }
-
-    final groupData = (await group.get()).data();
-    final duties = groupData?['duties'] as List? ?? const [];
-    final remaining = [
-      for (final duty in duties)
-        if (duty is! Map || duty['memberId'] != member.id) duty,
-    ];
-
-    final batch = _firestore.batch();
-    batch.delete(group.collection('mealPlans').doc(member.id));
-    if (remaining.length != duties.length) {
-      batch.update(group, {
-        'duties': remaining,
+  /// Brings a member who does not use the app back from the alumni.
+  /// Their old records stay as they were, and they count again from
+  /// today. Admins only.
+  static Future<void> restoreShadowMember({
+    required String groupId,
+    required GroupMember member,
+  }) async {
+    final batch = _firestore.batch()
+      ..update(_members(groupId).doc(member.id), {
+        'active': true,
+        'status': 'active',
+        'rejoinedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    }
-    batch.delete(_members(groupId).doc(member.id));
+    ActivityLog.addTo(
+      batch,
+      groupId,
+      kind: ActivityKind.memberRestored,
+      memberId: member.id,
+      memberName: member.name,
+    );
+    await batch.commit();
+  }
+
+  /// Takes a member off the Alumni list for good. Their records stay,
+  /// and a member who uses the app may still rejoin with the Hostel
+  /// Code. Admins only.
+  static Future<void> deleteAlumni({
+    required String groupId,
+    required GroupMember member,
+  }) async {
+    final batch = _firestore.batch()
+      ..update(_members(groupId).doc(member.id), {
+        'status': GroupMember.deleted,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    ActivityLog.addTo(
+      batch,
+      groupId,
+      kind: ActivityKind.memberRemoved,
+      memberId: member.id,
+      memberName: member.name,
+      details: 'Permanently deleted',
+    );
     await batch.commit();
   }
 
@@ -361,19 +439,6 @@ class GroupMemberService {
       'name': name.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-  }
-
-  static Future<void> setActive({
-    required String groupId,
-    required String memberId,
-    required bool active,
-  }) async {
-    await _members(groupId)
-        .doc(memberId)
-        .update({'active': active, 'updatedAt': FieldValue.serverTimestamp()});
-
-    // A deactivated member's meal plan stops counting from tomorrow.
-    if (!active) await MealPlanService.close(groupId, memberId);
   }
 
   /// Promotes an app user to administrator or changes them back to
@@ -441,11 +506,28 @@ class GroupMemberService {
   }
 
   /// Removes the signed-in user from the hostel. Their meals and
-  /// expenses stay in the hostel records.
+  /// expenses stay in the hostel records. When they had any this
+  /// month, the admins are asked how the month counts; until one
+  /// decides it counts as it always did.
   static Future<void> leaveGroup(String groupId) async {
     final currentUser = FirebaseAuth.instance.currentUser!;
     final groupReference = _group(groupId);
     final userReference = _firestore.collection('users').doc(currentUser.uid);
+    final now = DateTime.now();
+
+    // Read while this user may still read the hostel. A failure only
+    // means the admins are not asked.
+    var hasActivity = false;
+    try {
+      final summary = await MemberDepartureService.summarize(
+        groupId: groupId,
+        memberId: currentUser.uid,
+        leftOn: now,
+      );
+      hasActivity = summary.hasActivity;
+    } catch (_) {
+      hasActivity = false;
+    }
 
     // Done first, while this user may still write in the hostel.
     await MealPlanService.close(groupId, currentUser.uid);
@@ -479,14 +561,15 @@ class GroupMemberService {
       final savedName = userData == null
           ? 'Member'
           : GroupMember.readUserName(userData);
+      final name = savedName != 'Member'
+          ? savedName
+          : currentUser.displayName ?? currentUser.email ?? 'Member';
 
       transaction.update(groupReference, {
         'memberIds': memberIds,
         'admins': admins,
         'formerMembers.${currentUser.uid}': {
-          'name': savedName != 'Member'
-              ? savedName
-              : currentUser.displayName ?? currentUser.email ?? 'Member',
+          'name': name,
           'email': currentUser.email ?? '',
           'leftAt': FieldValue.serverTimestamp(),
         },
@@ -498,6 +581,38 @@ class GroupMemberService {
         'role': 'member',
         'previousGroupId': groupId,
         'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      ActivityLog.addToTransaction(
+        transaction,
+        groupId,
+        kind: ActivityKind.memberLeft,
+        memberId: currentUser.uid,
+        memberName: name,
+      );
+
+      if (hasActivity) {
+        MemberDepartureService.addTo(
+          transaction,
+          groupId,
+          memberId: currentUser.uid,
+          memberName: name,
+          way: LeavingWay.left,
+          leftOn: now,
+          choice: null,
+        );
+      }
+
+      // The admins see it among the hostel's notifications.
+      transaction.set(_group(groupId).collection('notifications').doc(), {
+        'type': 'memberLeft',
+        'title': 'Member Left',
+        'message': hasActivity
+            ? '$name left the hostel. Choose how this month counts for '
+                  'them in Admin Settings.'
+            : '$name left the hostel.',
+        'actorId': currentUser.uid,
+        'createdAt': FieldValue.serverTimestamp(),
       });
     });
   }
@@ -555,20 +670,28 @@ class GroupMemberService {
     await batch.commit();
   }
 
-  /// Removes an app user from the hostel. Their meals and expenses
-  /// stay in the hostel records.
+  /// Removes an app user from the hostel, as alumni or for good, with
+  /// how their month counts ([choice] is null when they had nothing
+  /// this month). Their meals and expenses stay in the hostel records.
   static Future<void> removeAppUser({
     required String groupId,
     required GroupMember member,
+    required LeavingWay way,
+    required LeavingChoice? choice,
   }) async {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
     final memberId = member.id;
     final groupReference = _group(groupId);
     final userReference = _firestore.collection('users').doc(memberId);
+    final now = DateTime.now();
+    final settingsReference = MemberDepartureService.settingsOf(groupId, now);
 
     await _firestore.runTransaction((transaction) async {
       final groupSnapshot = await transaction.get(groupReference);
       final userSnapshot = await transaction.get(userReference);
+      final settings = choice == null
+          ? null
+          : await transaction.get(settingsReference);
 
       if (!groupSnapshot.exists) {
         throw Exception('The hostel group could not be found.');
@@ -614,18 +737,23 @@ class GroupMemberService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      ActivityLog.addToTransaction(
+      transaction.set(_members(groupId).doc(memberId), {
+        ..._leavingFields(way, now),
+        'name': member.name,
+      }, SetOptions(merge: true));
+
+      _recordLeaving(
         transaction,
         groupId,
-        kind: ActivityKind.memberRemoved,
-        memberId: memberId,
-        memberName: member.name,
-        details: 'Their meals and expenses stay',
+        member: member,
+        way: way,
+        choice: choice,
+        settingsReference: settingsReference,
+        settings: settings,
+        now: now,
       );
     });
 
-    // Deactivates the removed user's member entry.
-    await sync(groupId);
     await MealPlanService.close(groupId, memberId);
   }
 

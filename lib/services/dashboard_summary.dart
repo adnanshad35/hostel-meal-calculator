@@ -1,4 +1,5 @@
 import 'meal_plan.dart';
+import 'month_rules.dart';
 import 'monthly_calculator.dart';
 
 /// One member's meals today.
@@ -26,6 +27,8 @@ class DashboardSummary {
     this.todayMembers = const [],
     this.myMeals = 0,
     this.myExpense = 0,
+    this.isLunchCancelled = false,
+    this.isDinnerCancelled = false,
   });
 
   /// The same meal rate, cost and meal total the Details page
@@ -48,6 +51,11 @@ class DashboardSummary {
   final double myMeals;
   final double myExpense;
 
+  /// True when an admin cancelled today's lunch or dinner for
+  /// everyone.
+  final bool isLunchCancelled;
+  final bool isDinnerCancelled;
+
   /// [meals] and [expenses] may hold other months too; only this
   /// month's are counted.
   static DashboardSummary build({
@@ -58,9 +66,10 @@ class DashboardSummary {
     required List<ExpenseRecord> expenses,
     required double minimumMeals,
     required double shopDue,
+    MonthRules rules = MonthRules.none,
     String? memberId,
   }) {
-    final allMeals = [
+    final allMeals = rules.applyToMeals([
       ...meals,
       ...MealPlans.automaticMeals(
         plans: plans,
@@ -69,7 +78,7 @@ class DashboardSummary {
         month: now,
         today: now,
       ),
-    ];
+    ]);
 
     final result = MonthlyCalculator.calculate(
       month: now,
@@ -78,6 +87,7 @@ class DashboardSummary {
       expenses: expenses,
       minimumMeals: minimumMeals,
       shopDue: shopDue,
+      rules: rules,
     );
 
     final todayKey = MealPlans.dateKey(now);
@@ -120,6 +130,8 @@ class DashboardSummary {
       todayMembers: todayMembers,
       myMeals: mine?.actualMeals ?? 0,
       myExpense: mine?.spending ?? 0,
+      isLunchCancelled: rules.cancellations.isLunchCancelled(todayKey),
+      isDinnerCancelled: rules.cancellations.isDinnerCancelled(todayKey),
     );
   }
 }

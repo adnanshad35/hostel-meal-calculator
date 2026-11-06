@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'month_rules.dart';
+
 /// A person included in a monthly calculation.
 class CalcMember {
   const CalcMember({required this.id, required this.name});
@@ -147,6 +149,8 @@ class MonthlyCalculation {
 /// Meal rate = (expenses paid by members + shop due) / charged meals,
 /// where every member is charged at least [minimumMeals]. A member's
 /// balance is what they paid minus their charged meals at that rate.
+/// Meals an admin cancelled for everyone count as zero, and a member
+/// who left counts as an admin chose in [MonthRules.leavers].
 class MonthlyCalculator {
   MonthlyCalculator._();
 
@@ -172,6 +176,7 @@ class MonthlyCalculator {
     required Iterable<ExpenseRecord> expenses,
     required double minimumMeals,
     required double shopDue,
+    MonthRules rules = MonthRules.none,
   }) {
     final memberById = <String, CalcMember>{
       for (final member in members) member.id: member,
@@ -201,7 +206,7 @@ class MonthlyCalculator {
 
     final selectedMonthKey = monthKey(month);
 
-    for (final meal in meals) {
+    for (final meal in rules.applyToMeals(meals)) {
       final userId = meal.userId;
       if (userId == null) continue;
 
@@ -229,7 +234,7 @@ class MonthlyCalculator {
 
       final belongsToMonth =
           !date.isBefore(firstDay) && date.isBefore(nextMonth);
-      if (!belongsToMonth) continue;
+      if (!belongsToMonth || !rules.countsExpense(expense)) continue;
 
       if (!memberById.containsKey(userId)) {
         addFormerMember(userId, expense.paidByName);
@@ -245,7 +250,13 @@ class MonthlyCalculator {
 
     for (final member in memberById.values) {
       final actual = actualMeals[member.id] ?? 0;
-      final calculatedMealNumber = max(actual, minimumMeals).toDouble();
+      // A member who left may be charged only for what they ate.
+      final skipsMinimum =
+          formerMemberIds.contains(member.id) &&
+          rules.leavers.skipsMinimum(member.id);
+      final calculatedMealNumber = skipsMinimum
+          ? actual
+          : max(actual, minimumMeals).toDouble();
       final spending = memberSpending[member.id] ?? 0;
 
       totalMealNumber += calculatedMealNumber;

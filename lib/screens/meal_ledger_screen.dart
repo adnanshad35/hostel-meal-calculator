@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import '../models/group_member.dart';
 import '../services/edit_mark.dart';
 import '../services/group_member_service.dart';
+import '../services/meal_cancellation.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/month_records.dart';
+import '../services/month_rules.dart';
+import '../services/month_rules_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_calendar.dart';
 import 'admin_meal_edit_screen.dart';
@@ -20,10 +23,18 @@ class _DayMeal {
     required this.dinner,
     this.isPlan = false,
     this.isEdited = false,
-  });
+    double? savedLunch,
+    double? savedDinner,
+  }) : savedLunch = savedLunch ?? lunch,
+       savedDinner = savedDinner ?? dinner;
 
+  /// What counts: zero for a meal cancelled for everyone.
   final double lunch;
   final double dinner;
+
+  /// What the entry or plan holds, cancelled or not.
+  final double savedLunch;
+  final double savedDinner;
 
   /// True when it comes from the meal plan, not a saved entry.
   final bool isPlan;
@@ -63,6 +74,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
+  late Stream<MonthRules> _rulesStream;
 
   /// The signed-in member, whose own meals are picked out.
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
@@ -78,12 +90,14 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     _plansStream = MealPlanService.watchAll(widget.groupId);
     // One month at a time.
     _mealsStream = MonthRecords.meals(widget.groupId, _month).snapshots();
+    _rulesStream = MonthRulesService.watch(widget.groupId, _month);
   }
 
   void _showMonth(DateTime month) {
     setState(() {
       _month = month;
       _mealsStream = MonthRecords.meals(widget.groupId, month).snapshots();
+      _rulesStream = MonthRulesService.watch(widget.groupId, month);
     });
   }
 
@@ -238,7 +252,12 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     );
   }
 
-  void _openEditor(GroupMember member, int day, _DayMeal? meal) {
+  void _openEditor(
+    GroupMember member,
+    int day,
+    _DayMeal? meal,
+    CancelledDay? cancelled,
+  ) {
     final date = DateTime(_month.year, _month.month, day);
 
     Navigator.of(context).push(
@@ -249,9 +268,11 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
           memberName: member.name,
           date: date,
           dateKey: MealPlans.dateKey(date),
-          initialLunch: meal?.lunch ?? 0,
-          initialDinner: meal?.dinner ?? 0,
+          initialLunch: meal?.savedLunch ?? 0,
+          initialDinner: meal?.savedDinner ?? 0,
           hasEntry: meal != null && !meal.isPlan,
+          isLunchCancelled: cancelled?.lunch ?? false,
+          isDinnerCancelled: cancelled?.dinner ?? false,
         ),
       ),
     );
@@ -280,10 +301,14 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  return _buildCalendar(
-                    members.data!,
-                    plans.data ?? const [],
-                    meals.data!.docs,
+                  return StreamBuilder<MonthRules>(
+                    stream: _rulesStream,
+                    builder: (context, rules) => _buildCalendar(
+                      members.data!,
+                      plans.data ?? const [],
+                      meals.data!.docs,
+                      rules.data ?? MonthRules.none,
+                    ),
                   );
                 },
               );
@@ -298,6 +323,7 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
     List<GroupMember> members,
     List<MemberMealPlan> plans,
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    MonthRules rules,
   ) {
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final rulesOf = {for (final plan in plans) plan.memberId: plan.rules};
@@ -311,6 +337,8 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
       final userId = data['userId'] as String? ?? '';
       final day = int.tryParse(dateKey.split('-').last);
       if (day == null || userId.isEmpty) continue;
+      // Left out when an admin removed a member who left.
+      if (!rules.leavers.counts(userId, dateKey)) continue;
 
       byDay.putIfAbsent(day, () => {})[userId] = _DayMeal(
         lunch: (data['lunch'] as num?)?.toDouble() ?? 0,
@@ -342,6 +370,25 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
         );
       }
     }
+
+    // Meals cancelled for everyone count as zero, whatever was saved.
+    byDay.forEach((day, meals) {
+      final cancelled = rules.cancellations.dayOf(
+        MealPlans.dateKey(DateTime(_month.year, _month.month, day)),
+      );
+      if (cancelled == null) return;
+
+      meals.updateAll(
+        (_, meal) => _DayMeal(
+          lunch: cancelled.lunch ? 0 : meal.lunch,
+          dinner: cancelled.dinner ? 0 : meal.dinner,
+          isPlan: meal.isPlan,
+          isEdited: meal.isEdited,
+          savedLunch: meal.lunch,
+          savedDinner: meal.dinner,
+        ),
+      );
+    });
 
     // Up to today everything counts; a later day counts only what was
     // already saved, since a plan there is still only a plan. Every day
@@ -421,18 +468,50 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
           dinner += meal.dinner;
         }
 
-        return _MealTable(
+        final cancelled = rules.cancellations.dayOf(
+          MealPlans.dateKey(DateTime(_month.year, _month.month, day)),
+        );
+        final table = _MealTable(
           rows: [
             for (final member in ordered)
               _MealRow(
                 name: member.name,
                 meal: meals[member.id],
                 isMine: member.id == _uid,
-                onTap: _editorFor(member, day, meals[member.id]),
+                onTap: _editorFor(member, day, meals[member.id], cancelled),
               ),
           ],
           lunch: lunch,
           dinner: dinner,
+        );
+        if (cancelled == null) return table;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 4),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.no_meals_outlined,
+                    size: 18,
+                    color: AppTheme.accentDeep,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${cancelled.label} Off',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            table,
+          ],
         );
       },
     );
@@ -440,8 +519,14 @@ class _MealLedgerScreenState extends State<MealLedgerScreen> {
 
   /// What tapping a member's row does on [day]: an admin corrects
   /// anyone's meals, and a member enters their own, up to today.
-  VoidCallback? _editorFor(GroupMember member, int day, _DayMeal? meal) {
-    if (_canEdit) return () => _openEditor(member, day, meal);
+  VoidCallback? _editorFor(
+    GroupMember member,
+    int day,
+    _DayMeal? meal,
+    CancelledDay? cancelled,
+  ) {
+    if (cancelled != null && cancelled.lunch && cancelled.dinner) return null;
+    if (_canEdit) return () => _openEditor(member, day, meal, cancelled);
 
     final now = DateTime.now();
     final isPast = !isCurrentMonth(_month) || day <= now.day;

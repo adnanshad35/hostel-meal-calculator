@@ -233,6 +233,11 @@ class _ActivityRow extends StatelessWidget {
     ActivityKind.hostelActivated ||
     ActivityKind.activationSet => Icons.verified_outlined,
     ActivityKind.paymentSent => Icons.payments_outlined,
+    ActivityKind.mealCancelled => Icons.no_meals_outlined,
+    ActivityKind.mealRestored => Icons.restaurant_outlined,
+    ActivityKind.memberLeft => Icons.exit_to_app,
+    ActivityKind.memberRestored => Icons.person_add_alt_outlined,
+    ActivityKind.leavingChosen => Icons.rule_rounded,
   };
 
   /// The day the change was for, such as "For 20 Oct", when it was for

@@ -14,6 +14,8 @@ class GroupMember {
     this.addedAt,
     this.linkedTo,
     this.phone = '',
+    this.status = '',
+    this.leftOn,
   });
 
   factory GroupMember.fromDocument(
@@ -31,6 +33,8 @@ class GroupMember {
       addedAt: (data['addedAt'] as Timestamp?)?.toDate(),
       linkedTo: data['linkedTo'] as String?,
       phone: (data['phone'] as String? ?? '').trim(),
+      status: data['status'] as String? ?? '',
+      leftOn: data['leftOn'] as String?,
     );
   }
 
@@ -63,6 +67,25 @@ class GroupMember {
 
   /// The phone number on their account; empty when there is none.
   final String phone;
+
+  /// [alumni] or [deleted] for a member an admin removed; empty for
+  /// everyone else, including members saved before this existed.
+  final String status;
+
+  /// The day they left, as `YYYY-MM-DD`, when it was saved.
+  final String? leftOn;
+
+  static const String alumni = 'alumni';
+  static const String deleted = 'deleted';
+
+  /// True for someone in the Alumni list: made alumni by an admin, or a
+  /// member without the app deactivated before alumni existed. Never a
+  /// member who left on their own, was deleted, or was merged into an
+  /// app user.
+  bool get isAlumni {
+    if (active || linkedTo != null || status == deleted) return false;
+    return status == alumni || (status.isEmpty && !isAppUser);
+  }
 
   String get initials {
     final words = name

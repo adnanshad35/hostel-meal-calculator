@@ -17,6 +17,8 @@ class AdminMealEditScreen extends StatefulWidget {
     required this.initialLunch,
     required this.initialDinner,
     required this.hasEntry,
+    this.isLunchCancelled = false,
+    this.isDinnerCancelled = false,
   });
 
   final String groupId;
@@ -27,6 +29,11 @@ class AdminMealEditScreen extends StatefulWidget {
   final double initialLunch;
   final double initialDinner;
   final bool hasEntry;
+
+  /// True when an admin cancelled that meal of the day for everyone.
+  /// It cannot be entered, and an entry keeps what it had.
+  final bool isLunchCancelled;
+  final bool isDinnerCancelled;
 
   @override
   State<AdminMealEditScreen> createState() => _AdminMealEditScreenState();
@@ -45,12 +52,23 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
     _dinner = widget.initialDinner;
   }
 
+  /// What is saved: a cancelled meal keeps what the entry had, or
+  /// nothing for a new entry.
+  double get _lunchToSave => widget.isLunchCancelled
+      ? (widget.hasEntry ? widget.initialLunch : 0)
+      : _lunch;
+  double get _dinnerToSave => widget.isDinnerCancelled
+      ? (widget.hasEntry ? widget.initialDinner : 0)
+      : _dinner;
+
   String _displayQuantity(double value) {
     return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
   }
 
   Future<bool> _confirmLargeQuantity() async {
-    if (_lunch <= 5 && _dinner <= 5) return true;
+    final lunch = widget.isLunchCancelled ? 0 : _lunch;
+    final dinner = widget.isDinnerCancelled ? 0 : _dinner;
+    if (lunch <= 5 && dinner <= 5) return true;
 
     return await showDialog<bool>(
           context: context,
@@ -86,8 +104,8 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
     // Saving what is already there changes nothing, so it is not
     // recorded, nor marked as edited.
     if (widget.hasEntry &&
-        _lunch == widget.initialLunch &&
-        _dinner == widget.initialDinner) {
+        _lunchToSave == widget.initialLunch &&
+        _dinnerToSave == widget.initialDinner) {
       Navigator.of(context).pop(false);
       return;
     }
@@ -113,9 +131,9 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
         'userName': widget.memberName,
         'dateKey': widget.dateKey,
         'date': Timestamp.fromDate(widget.date),
-        'lunch': _lunch,
-        'dinner': _dinner,
-        'total': _lunch + _dinner,
+        'lunch': _lunchToSave,
+        'dinner': _dinnerToSave,
+        'total': _lunchToSave + _dinnerToSave,
         'submitted': true,
         'updatedBy': administrator.uid,
         'updatedByName': administrator.displayName ?? 'Administrator',
@@ -139,8 +157,8 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
         memberName: widget.memberName,
         day: widget.dateKey,
         details: ActivityLog.mealDetails(
-          lunch: _lunch,
-          dinner: _dinner,
+          lunch: _lunchToSave,
+          dinner: _dinnerToSave,
           oldLunch: widget.hasEntry ? widget.initialLunch : null,
           oldDinner: widget.hasEntry ? widget.initialDinner : null,
         ),
@@ -200,20 +218,24 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
                 child: Column(
                   children: [
                     MealCounter(
-                      title: 'Lunch',
-                      icon: Icons.lunch_dining_outlined,
-                      value: _lunch,
-                      enabled: !_isSaving,
+                      title: widget.isLunchCancelled ? 'Lunch Off' : 'Lunch',
+                      icon: widget.isLunchCancelled
+                          ? Icons.no_meals_outlined
+                          : Icons.lunch_dining_outlined,
+                      value: widget.isLunchCancelled ? 0 : _lunch,
+                      enabled: !_isSaving && !widget.isLunchCancelled,
                       onChanged: (value) {
                         setState(() => _lunch = value);
                       },
                     ),
                     const SizedBox(height: 12),
                     MealCounter(
-                      title: 'Dinner',
-                      icon: Icons.dinner_dining_outlined,
-                      value: _dinner,
-                      enabled: !_isSaving,
+                      title: widget.isDinnerCancelled ? 'Dinner Off' : 'Dinner',
+                      icon: widget.isDinnerCancelled
+                          ? Icons.no_meals_outlined
+                          : Icons.dinner_dining_outlined,
+                      value: widget.isDinnerCancelled ? 0 : _dinner,
+                      enabled: !_isSaving && !widget.isDinnerCancelled,
                       onChanged: (value) {
                         setState(() => _dinner = value);
                       },

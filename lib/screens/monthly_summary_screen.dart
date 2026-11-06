@@ -16,6 +16,8 @@ import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/month_archive.dart';
 import '../services/month_records.dart';
+import '../services/month_rules.dart';
+import '../services/month_rules_service.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_trend_chart.dart';
@@ -509,6 +511,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           final minimumMeals =
               (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
           final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
+          final rules = MonthRules.fromSettings(settings);
           final fixedCosts = FixedCostsCalculator.resolve(
             settingsByMonth,
             monthKey,
@@ -595,6 +598,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                                 expenses: expenseDocs,
                                 minimumMeals: minimumMeals,
                                 shopDue: shopDue,
+                                rules: rules,
                               );
 
                           return _buildContent(
@@ -606,6 +610,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                               expenses: expenseDocs.map(_expenseRecord),
                               plans: plans,
                               members: members,
+                              rules: rules,
                             ),
                             members: members,
                             fixedCosts: fixedCosts,
@@ -646,6 +651,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> expenses,
     required double minimumMeals,
     required double shopDue,
+    required MonthRules rules,
   }) {
     return MonthlyCalculator.calculate(
       month: _selectedMonth,
@@ -655,10 +661,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         plans: plans,
         members: members,
         month: _selectedMonth,
+        rules: rules,
       ),
       expenses: expenses.map(_expenseRecord),
       minimumMeals: minimumMeals,
       shopDue: shopDue,
+      rules: rules,
     );
   }
 
@@ -1187,6 +1195,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required Iterable<ExpenseRecord> expenses,
     required List<MemberMealPlan> plans,
     required List<CalcMember> members,
+    required MonthRules rules,
   }) {
     final now = DateTime.now();
     final isThisMonth = month.year == now.year && month.month == now.month;
@@ -1200,8 +1209,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         plans: plans,
         members: members,
         month: month,
+        rules: rules,
       ),
-      expenses: expenses,
+      expenses: expenses.where(rules.countsExpense),
     );
     return trend.isEmpty ? null : trend;
   }
@@ -1220,9 +1230,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     ).get();
     final plans = await MealPlanService.fetchAll(widget.groupId);
     final members = await GroupMemberService.fetchActive(widget.groupId);
+    final rules = await MonthRulesService.fetch(widget.groupId, previous);
 
     return _trendOf(
       previous,
+      rules: rules,
       meals: meals.docs.map(_mealRecord).toList(),
       expenses: expenses.docs.map(_expenseRecord),
       plans: plans,
@@ -2128,6 +2140,7 @@ Future<double?> _previousMealRate({
     for (final member in members) CalcMember(id: member.id, name: member.name),
   ];
 
+  final rules = MonthRules.fromSettings(settings);
   final result = MonthlyCalculator.calculate(
     month: previousMonthStart,
     members: calcMembers,
@@ -2136,10 +2149,12 @@ Future<double?> _previousMealRate({
       plans: plans,
       members: calcMembers,
       month: previousMonthStart,
+      rules: rules,
     ),
     expenses: expensesSnapshot.docs.map(_expenseRecord),
     minimumMeals: minimumMeals,
     shopDue: shopDue,
+    rules: rules,
   );
 
   if (result.totalMealNumber <= 0) return null;
@@ -2147,14 +2162,16 @@ Future<double?> _previousMealRate({
 }
 
 /// The saved meal entries, plus what the meal plans count for the
-/// days of [month] that have no entry.
+/// days of [month] that have no entry, counted as the month's [rules]
+/// say: cancelled meals as zero, and removed leavers left out.
 List<MealRecord> _withPlannedMeals(
   List<MealRecord> meals, {
   required List<MemberMealPlan> plans,
   required List<CalcMember> members,
   required DateTime month,
+  required MonthRules rules,
 }) {
-  return [
+  return rules.applyToMeals([
     ...meals,
     ...MealPlans.automaticMeals(
       plans: plans,
@@ -2163,7 +2180,7 @@ List<MealRecord> _withPlannedMeals(
       month: month,
       today: DateTime.now(),
     ),
-  ];
+  ]);
 }
 
 MealRecord _mealRecord(QueryDocumentSnapshot<Map<String, dynamic>> document) {

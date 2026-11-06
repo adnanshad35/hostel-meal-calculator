@@ -216,6 +216,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ? Icons.campaign_outlined
                     : item.type == 'mealPlan'
                     ? Icons.event_busy_outlined
+                    : item.type == 'mealCancelled'
+                    ? Icons.no_meals_outlined
+                    : item.type == 'memberLeft'
+                    ? Icons.exit_to_app
                     : Icons.receipt_long_outlined;
 
                 return Card(

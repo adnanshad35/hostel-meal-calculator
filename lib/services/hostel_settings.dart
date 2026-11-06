@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'month_rules.dart';
+
 /// How a hostel's admins have chosen to run it. Saved on the hostel
 /// itself, under `settings`. Everything is on unless switched off, so
 /// a hostel that never opened these settings works as it always did.
@@ -10,6 +12,7 @@ class HostelSettings {
     this.membersCanEdit = true,
     this.fixedCostsEnabled = true,
     this.specialPermission = false,
+    this.removeAllLimits = const RemoveAllLimits(),
   });
 
   /// Reads the settings from a `groups/{id}` document.
@@ -23,7 +26,21 @@ class HostelSettings {
       membersCanEdit: settings['membersCanEdit'] != false,
       fixedCostsEnabled: settings['fixedCostsEnabled'] != false,
       specialPermission: settings['specialPermission'] == true,
+      removeAllLimits: RemoveAllLimits(
+        maxMeals: _positive(
+          settings['removeAllMaxMeals'],
+          RemoveAllLimits.defaultMaxMeals,
+        ),
+        maxExpense: _positive(
+          settings['removeAllMaxExpense'],
+          RemoveAllLimits.defaultMaxExpense,
+        ),
+      ),
     );
+  }
+
+  static double _positive(Object? value, double fallback) {
+    return value is num && value >= 0 ? value.toDouble() : fallback;
   }
 
   /// When off, only admins enter meals and meal plans.
@@ -45,12 +62,16 @@ class HostelSettings {
   /// the month to the 5th of the next.
   final bool specialPermission;
 
+  /// When Remove All is offered for a member who left.
+  final RemoveAllLimits removeAllLimits;
+
   HostelSettings copyWith({
     bool? membersCanAddMeals,
     bool? membersCanAddExpenses,
     bool? membersCanEdit,
     bool? fixedCostsEnabled,
     bool? specialPermission,
+    RemoveAllLimits? removeAllLimits,
   }) {
     return HostelSettings(
       membersCanAddMeals: membersCanAddMeals ?? this.membersCanAddMeals,
@@ -59,6 +80,7 @@ class HostelSettings {
       membersCanEdit: membersCanEdit ?? this.membersCanEdit,
       fixedCostsEnabled: fixedCostsEnabled ?? this.fixedCostsEnabled,
       specialPermission: specialPermission ?? this.specialPermission,
+      removeAllLimits: removeAllLimits ?? this.removeAllLimits,
     );
   }
 
@@ -69,6 +91,8 @@ class HostelSettings {
       'membersCanEdit': membersCanEdit,
       'fixedCostsEnabled': fixedCostsEnabled,
       'specialPermission': specialPermission,
+      'removeAllMaxMeals': removeAllLimits.maxMeals,
+      'removeAllMaxExpense': removeAllLimits.maxExpense,
     };
   }
 }

@@ -10,6 +10,7 @@ import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/month_archive.dart';
+import '../services/month_rules.dart';
 import '../services/monthly_calculator.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
@@ -540,6 +541,7 @@ class _HostelOverviewState extends State<_HostelOverview> {
       ],
       minimumMeals: (monthSettings?['minimumMeals'] as num?)?.toDouble() ?? 0,
       shopDue: (monthSettings?['shopDue'] as num?)?.toDouble() ?? 0,
+      rules: MonthRules.fromSettings(monthSettings),
       memberId: FirebaseAuth.instance.currentUser?.uid,
     );
   }
@@ -999,12 +1001,14 @@ class _TodayCard extends StatelessWidget {
     );
   }
 
-  /// Lunch or dinner: its icon and name, with the count on the right.
+  /// Lunch or dinner: its icon and name, with the count on the right,
+  /// or Off when an admin cancelled it for everyone.
   Widget _meal({
     required String label,
     required double? count,
     required IconData icon,
     required VoidCallback onTap,
+    bool isCancelled = false,
   }) {
     return Material(
       color: AppTheme.surfaceSoft,
@@ -1029,13 +1033,26 @@ class _TodayCard extends StatelessWidget {
                 ),
               ),
               Text(
-                count == null ? '—' : _count(count),
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  height: 1.1,
-                ),
+                isCancelled
+                    ? 'Off'
+                    : count == null
+                    ? '—'
+                    : _count(count),
+                // Off is a word, not a count, so it is set smaller and
+                // lighter than the figures.
+                style: isCancelled
+                    ? const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                      )
+                    : const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
               ),
               // Shows that the row opens the list of who is eating.
               const Padding(
@@ -1102,6 +1119,7 @@ class _TodayCard extends StatelessWidget {
                         _meal(
                           label: 'Lunch',
                           count: summary?.todayLunch,
+                          isCancelled: summary?.isLunchCancelled ?? false,
                           icon: Icons.lunch_dining_outlined,
                           onTap: () => _showWho(
                             context,
@@ -1113,6 +1131,7 @@ class _TodayCard extends StatelessWidget {
                         _meal(
                           label: 'Dinner',
                           count: summary?.todayDinner,
+                          isCancelled: summary?.isDinnerCancelled ?? false,
                           icon: Icons.dinner_dining_outlined,
                           onTap: () => _showWho(
                             context,
