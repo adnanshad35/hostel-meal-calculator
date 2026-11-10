@@ -412,7 +412,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             'Minimum meals and shop due for '
             '${_monthName(_selectedMonth)} can be entered from $opens '
             'to $closes. Wait until then, or turn on Min Meals & Shop Due Any Day '
-            'in Admin Settings.',
+            'in Balance Options.',
           ),
           actions: [
             FilledButton(

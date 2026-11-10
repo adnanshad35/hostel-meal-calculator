@@ -286,9 +286,10 @@ const guideSections = [
     points: [
       (
         'Member Settings',
-        '{b:Allow New Members}, {b:Add Member Without App} and {b:Duty '
-            'Roster}. Make an admin or remove someone from {b:Hostel '
-            'Details}.',
+        '{b:Allow New Members}, {b:Add Member Without App}, {b:Duty '
+            'Roster} and {b:Remove All Limits}, which sets when Remove All is '
+            'offered: under 5 meals and ৳200 unless changed. Make an admin '
+            'or remove someone from {b:Hostel Details}.',
       ),
       (
         'Member Permissions',
@@ -301,14 +302,8 @@ const guideSections = [
             'Manager} on or off, here or with {b:+} on the Balance page. A '
             'switch changes this month and the months after it; earlier '
             'months keep their figures. Initial Shares already added still '
-            'count when it is off.',
-      ),
-      (
-        'Month End',
-        'Min Meals and Shop Due open from the 25th to the 5th of the next '
-            'month. {b:Min Meals & Shop Due Any Day} opens them always. '
-            '{b:Remove All Limits} sets when Remove All is offered: under 5 '
-            'meals and ৳200 unless changed.',
+            'count when it is off. Min Meals and Shop Due open from the 25th '
+            'to the 5th; {b:Min Meals & Shop Due Any Day} opens them always.',
       ),
       (
         'Members Who Left',

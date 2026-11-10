@@ -109,6 +109,23 @@ class _BalanceOptionsScreenState extends State<BalanceOptionsScreen> {
                   ),
                 ],
               ),
+              // Min Meals and Shop Due open from the 25th to the 5th,
+              // unless this is on.
+              if (options.usesMinimumMeals(thisMonth) ||
+                  options.usesShopDue(thisMonth)) ...[
+                const SizedBox(height: 22),
+                TileGroup(
+                  children: [
+                    SwitchTile(
+                      icon: Icons.lock_open_outlined,
+                      title: 'Min Meals & Shop Due Any Day',
+                      value: settings.specialPermission,
+                      onChanged: (isOn) =>
+                          _save(settings.copyWith(specialPermission: isOn)),
+                    ),
+                  ],
+                ),
+              ],
             ],
           );
         },

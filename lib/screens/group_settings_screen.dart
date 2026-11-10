@@ -103,6 +103,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   List<Widget> _memberTiles(Map<String, dynamic> groupData) {
     final inviteCode = groupData['inviteCode'] as String? ?? '';
+    final settings = HostelSettings.fromGroupData(groupData);
 
     // The member list itself is in Hostel Details.
     return [
@@ -120,6 +121,13 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         icon: Icons.assignment_ind_outlined,
         title: 'Duty Roster',
         onTap: () => _open(DutyRosterScreen(groupId: widget.groupId)),
+      ),
+      // When Remove All is offered for a member who leaves.
+      GroupTile(
+        icon: Icons.person_remove_outlined,
+        title: 'Remove All Limits',
+        trailing: _LimitsLabel(settings.removeAllLimits),
+        onTap: () => _editLimits(settings),
       ),
     ];
   }
@@ -148,31 +156,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         value: settings.membersCanEdit,
         onChanged: (isOn) =>
             _saveSettings(settings.copyWith(membersCanEdit: isOn)),
-      ),
-    ];
-  }
-
-  List<Widget> _monthEndTiles(Map<String, dynamic> groupData) {
-    final settings = HostelSettings.fromGroupData(groupData);
-    final options = settings.balanceOptions;
-    final thisMonth = _monthKey(DateTime.now());
-
-    return [
-      // Min Meals and Shop Due open from the 25th to the 5th, unless
-      // this is on.
-      if (options.usesMinimumMeals(thisMonth) || options.usesShopDue(thisMonth))
-        SwitchTile(
-          icon: Icons.lock_open_outlined,
-          title: 'Min Meals & Shop Due Any Day',
-          value: settings.specialPermission,
-          onChanged: (isOn) =>
-              _saveSettings(settings.copyWith(specialPermission: isOn)),
-        ),
-      GroupTile(
-        icon: Icons.person_remove_outlined,
-        title: 'Remove All Limits',
-        trailing: _LimitsLabel(settings.removeAllLimits),
-        onTap: () => _editLimits(settings),
       ),
     ];
   }
@@ -593,6 +576,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   onOpen: (departure) => _openDeparture(departure, settings),
                 ),
                 TileGroup(
+                  title: 'Members',
                   children: [
                     GroupTile(
                       icon: Icons.manage_accounts_outlined,
@@ -606,17 +590,24 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       onTap: () =>
                           _openSection('Member Permissions', _permissionTiles),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'Balance',
+                  children: [
                     GroupTile(
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Balance Options',
                       onTap: () =>
                           _open(BalanceOptionsScreen(groupId: widget.groupId)),
                     ),
-                    GroupTile(
-                      icon: Icons.event_available_outlined,
-                      title: 'Month End',
-                      onTap: () => _openSection('Month End', _monthEndTiles),
-                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                TileGroup(
+                  title: 'Hostel',
+                  children: [
                     GroupTile(
                       icon: Icons.campaign_outlined,
                       title: 'Send Announcement',
