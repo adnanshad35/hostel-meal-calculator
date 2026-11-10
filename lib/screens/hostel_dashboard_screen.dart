@@ -109,6 +109,7 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
                         stream: _roster,
                         builder: (context, roster) => _HostelOverview(
                           groupId: groupId,
+                          balance: settings.balanceOptions,
                           groupName: widget.groupName,
                           isAdmin: isAdmin,
                           subscription: subscription,
@@ -394,6 +395,7 @@ const _monthNames = [
 class _HostelOverview extends StatefulWidget {
   const _HostelOverview({
     required this.groupId,
+    required this.balance,
     required this.groupName,
     required this.isAdmin,
     required this.subscription,
@@ -405,6 +407,9 @@ class _HostelOverview extends StatefulWidget {
   final String groupId;
   final String groupName;
   final bool isAdmin;
+
+  /// Which of Min Meals and Shop Due count.
+  final BalanceOptions balance;
 
   /// Null while it loads.
   final HostelSubscription? subscription;
@@ -539,8 +544,14 @@ class _HostelOverviewState extends State<_HostelOverview> {
             amount: (expense.data()['amount'] as num?)?.toDouble() ?? 0,
           ),
       ],
-      minimumMeals: (monthSettings?['minimumMeals'] as num?)?.toDouble() ?? 0,
-      shopDue: (monthSettings?['shopDue'] as num?)?.toDouble() ?? 0,
+      minimumMeals: widget.balance.minimumMealsOf(
+        monthSettings,
+        MonthlyCalculator.monthKey(_now),
+      ),
+      shopDue: widget.balance.shopDueOf(
+        monthSettings,
+        MonthlyCalculator.monthKey(_now),
+      ),
       rules: MonthRules.fromSettings(monthSettings),
       memberId: FirebaseAuth.instance.currentUser?.uid,
     );

@@ -399,7 +399,7 @@ class _MealFormDialog extends StatefulWidget {
 }
 
 /// The two parts of the Add Meal dialog.
-enum _FormTab { entry, plan, mealOff }
+enum _FormTab { entry, plan }
 
 class _MealFormDialogState extends State<_MealFormDialog> {
   StreamSubscription<List<GroupMember>>? _membersSubscription;
@@ -579,33 +579,17 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     }
   }
 
-  /// The last day a meal can be entered, or turned off: a cook's
-  /// leave can be entered up to the end of next month.
-  DateTime _lastDate(DateTime now) => _tab == _FormTab.mealOff
-      ? DateTime(now.year, now.month + 2, 0)
-      : DateTime(now.year, now.month + 1, 0);
+  /// The last day a meal can be entered: the end of this month.
+  DateTime _lastDate(DateTime now) => DateTime(now.year, now.month + 1, 0);
 
-  void _showTab(_FormTab tab) {
-    final now = DateTime.now();
-    // A day next month, chosen for Meal Off, cannot have a meal
-    // entry yet, so the entry goes back to today.
-    final backToToday =
-        tab != _FormTab.mealOff &&
-        _selectedDate.isAfter(DateTime(now.year, now.month + 1, 0));
-
-    setState(() {
-      _tab = tab;
-      if (backToToday) _selectedDate = now;
-    });
-
-    if (backToToday) _loadEntry();
-  }
+  void _showTab(_FormTab tab) => setState(() => _tab = tab);
 
   /// Turns the selected day's lunch and dinner off for everyone, or on
   /// again. Each switch saves at once. Admins only.
-  Future<void> _setMealOff({required bool lunch, required bool dinner}) async {
-    if (!await ensureHostelEditable(context, widget.groupId)) return;
-    if (!mounted) return;
+  /// True once saved.
+  Future<bool> _setMealOff({required bool lunch, required bool dinner}) async {
+    if (!await ensureHostelEditable(context, widget.groupId)) return false;
+    if (!mounted) return false;
 
     final messenger = ScaffoldMessenger.of(context);
     final day = _selectedDate;
@@ -624,6 +608,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
           _isDinnerCancelled = dinner;
         });
       }
+      return true;
     } on FirebaseException catch (error) {
       messenger.showSnackBar(
         SnackBar(
@@ -632,49 +617,146 @@ class _MealFormDialogState extends State<_MealFormDialog> {
           ),
         ),
       );
+      return false;
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  /// The Meal Off tab: one switch for lunch and one for dinner, for
-  /// the day at the bottom.
-  Widget _mealOffPanel() {
-    if (_isLoadingEntry) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: CircularProgressIndicator(),
-      );
-    }
+  /// The chef's day: a green tick while the chef cooks, red once an
+  /// admin turned a meal of the selected day off for everyone.
+  Widget _chefButton() {
+    final isOff = _isLunchCancelled || _isDinnerCancelled;
+    final color = isOff ? AppTheme.danger : AppTheme.primary;
+    const shape = StadiumBorder();
 
-    return Column(
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          secondary: const Icon(Icons.lunch_dining_outlined),
-          title: const Text(
-            'Lunch Off for Everyone',
-            style: TextStyle(fontWeight: FontWeight.w700),
+    return Material(
+      color: color.withValues(alpha: 0.1),
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: _isSaving || _isLoadingEntry ? null : _openChefDialog,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Chef',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                isOff ? Icons.cancel : Icons.check_circle,
+                size: 20,
+                color: color,
+              ),
+            ],
           ),
-          value: _isLunchCancelled,
-          onChanged: _isSaving
-              ? null
-              : (isOff) =>
-                    _setMealOff(lunch: isOff, dinner: _isDinnerCancelled),
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          secondary: const Icon(Icons.dinner_dining_outlined),
-          title: const Text(
-            'Dinner Off for Everyone',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          value: _isDinnerCancelled,
-          onChanged: _isSaving
-              ? null
-              : (isOff) => _setMealOff(lunch: _isLunchCancelled, dinner: isOff),
-        ),
-      ],
+      ),
+    );
+  }
+
+  /// When the chef is away: lunch and dinner of the selected day can
+  /// be turned off for everyone. Nothing changes until Save.
+  Future<void> _openChefDialog() {
+    final day = _selectedDate.day.toString().padLeft(2, '0');
+    final month = _selectedDate.month.toString().padLeft(2, '0');
+
+    // The choice on screen; saved only with Save.
+    var lunchOff = _isLunchCancelled;
+    var dinnerOff = _isDinnerCancelled;
+    var isSaving = false;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final hasChanged =
+              lunchOff != _isLunchCancelled || dinnerOff != _isDinnerCancelled;
+
+          Future<void> save() async {
+            setDialogState(() => isSaving = true);
+            final saved = await _setMealOff(lunch: lunchOff, dinner: dinnerOff);
+            if (!dialogContext.mounted) return;
+            if (saved) {
+              Navigator.of(dialogContext).pop();
+            } else {
+              setDialogState(() => isSaving = false);
+            }
+          }
+
+          Widget offSwitch({
+            required String title,
+            required IconData icon,
+            required bool value,
+            required ValueChanged<bool> onChanged,
+          }) {
+            return SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Icon(
+                icon,
+                color: value ? AppTheme.danger : AppTheme.primary,
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: value ? AppTheme.danger : AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              activeThumbColor: AppTheme.danger,
+              value: value,
+              onChanged: isSaving ? null : onChanged,
+            );
+          }
+
+          return AlertDialog(
+            title: Text('Chef · $day/$month/${_selectedDate.year}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                offSwitch(
+                  title: 'Lunch Off for Everyone',
+                  icon: Icons.lunch_dining_outlined,
+                  value: lunchOff,
+                  onChanged: (isOff) => setDialogState(() => lunchOff = isOff),
+                ),
+                offSwitch(
+                  title: 'Dinner Off for Everyone',
+                  icon: Icons.dinner_dining_outlined,
+                  value: dinnerOff,
+                  onChanged: (isOff) => setDialogState(() => dinnerOff = isOff),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isSaving || !hasChanged ? null : save,
+                child: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -863,9 +945,9 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         .clamp(0.0, 520.0)
         .toDouble();
     final isPlan = _tab == _FormTab.plan;
-    final isMealOff = _tab == _FormTab.mealOff;
-    // Three tabs fit a phone only without their icons.
-    final showIcons = !widget.isAdmin;
+    final title = isPlan
+        ? 'Meal Plan'
+        : (_hasEntry ? 'Update Meal' : 'Add Meal');
 
     return AlertDialog(
       // Wider than the default, with room around each part, so the
@@ -873,13 +955,16 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-      title: Text(
-        isPlan
-            ? 'Meal Plan'
-            : isMealOff
-            ? 'Meal Off'
-            : (_hasEntry ? 'Update Meal' : 'Add Meal'),
-      ),
+      // Admins see the chef's day beside the title.
+      title: widget.isAdmin && !isPlan
+          ? Row(
+              children: [
+                Expanded(child: Text(title)),
+                const SizedBox(width: 8),
+                _chefButton(),
+              ],
+            )
+          : Text(title),
       content: SizedBox(
         width: dialogWidth,
         child: SingleChildScrollView(
@@ -888,26 +973,17 @@ class _MealFormDialogState extends State<_MealFormDialog> {
             children: [
               SegmentedButton<_FormTab>(
                 showSelectedIcon: false,
-                segments: [
+                segments: const [
                   ButtonSegment(
                     value: _FormTab.entry,
-                    label: const Text('Meal Entry'),
-                    icon: showIcons
-                        ? const Icon(Icons.restaurant_outlined)
-                        : null,
+                    label: Text('Meal Entry'),
+                    icon: Icon(Icons.restaurant_outlined),
                   ),
                   ButtonSegment(
                     value: _FormTab.plan,
-                    label: const Text('Meal Plan'),
-                    icon: showIcons
-                        ? const Icon(Icons.event_repeat_outlined)
-                        : null,
+                    label: Text('Meal Plan'),
+                    icon: Icon(Icons.event_repeat_outlined),
                   ),
-                  if (widget.isAdmin)
-                    const ButtonSegment(
-                      value: _FormTab.mealOff,
-                      label: Text('Meal Off'),
-                    ),
                 ],
                 selected: {_tab},
                 onSelectionChanged: _isSaving
@@ -921,8 +997,6 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                   isAdmin: widget.isAdmin,
                   embedded: true,
                 )
-              else if (isMealOff)
-                _mealOffPanel()
               else ...[
                 if (widget.isAdmin) ...[
                   if (_isLoadingMembers)
@@ -977,6 +1051,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                         ? Icons.no_meals_outlined
                         : Icons.lunch_dining_outlined,
                     value: _isLunchCancelled ? 0 : _lunch,
+                    color: _isLunchCancelled ? AppTheme.danger : null,
                     enabled: !_isSaving && !_isLunchCancelled,
                     onChanged: (value) => setState(() => _lunch = value),
                   ),
@@ -987,6 +1062,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                         ? Icons.no_meals_outlined
                         : Icons.dinner_dining_outlined,
                     value: _isDinnerCancelled ? 0 : _dinner,
+                    color: _isDinnerCancelled ? AppTheme.danger : null,
                     enabled: !_isSaving && !_isDinnerCancelled,
                     onChanged: (value) => setState(() => _dinner = value),
                   ),
@@ -1038,41 +1114,33 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                   ),
                 ),
               ),
-              if (isMealOff)
-                TextButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                )
-              else
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 4),
-                    FilledButton(
-                      onPressed:
-                          isBusy ||
-                              _isDayCancelled ||
-                              (widget.isAdmin && _isLoadingMembers)
-                          ? null
-                          : _save,
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Save'),
-                    ),
-                  ],
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 4),
+                  FilledButton(
+                    onPressed:
+                        isBusy ||
+                            _isDayCancelled ||
+                            (widget.isAdmin && _isLoadingMembers)
+                        ? null
+                        : _save,
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save'),
+                  ),
+                ],
+              ),
             ],
     );
   }

@@ -7,10 +7,13 @@ import 'package:flutter/services.dart';
 
 import '../models/group_member.dart';
 import '../services/activity_log.dart';
+import '../services/best_manager.dart';
+import '../services/duty_roster.dart';
 import '../services/error_messages.dart';
 import '../services/fixed_costs.dart';
 import '../services/group_member_service.dart';
 import '../services/hostel_settings.dart';
+import '../services/initial_share.dart';
 import '../services/daily_trend.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
@@ -23,6 +26,7 @@ import '../theme/app_theme.dart';
 import '../widgets/month_trend_chart.dart';
 import 'fixed_costs_screen.dart';
 import 'hostel_dashboard_screen.dart';
+import 'initial_share_screen.dart';
 
 class MonthlySummaryScreen extends StatefulWidget {
   const MonthlySummaryScreen({
@@ -53,6 +57,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _expensesStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
 
+  /// The duty turns, for Best Manager.
+  late final Stream<DutyRoster> _rosterStream = DutyRosterService.watch(
+    widget.groupId,
+  );
+
   /// Last month's running totals, for the chart.
   late Future<DailyTrend?> _previousTrend;
 
@@ -65,6 +74,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   /// True when the admins allow minimum meals and shop due to be
   /// entered on any day, not only at the month's end.
   bool _specialPermission = false;
+
+  /// Which of Min Meals, Shop Due and Initial Share the hostel uses.
+  BalanceOptions _balance = const BalanceOptions();
   StreamSubscription<HostelSettings>? _settingsSubscription;
 
   /// The members whose own figures are shown under their balance.
@@ -86,6 +98,7 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           if (!mounted) return;
           setState(() {
             _specialPermission = settings.specialPermission;
+            _balance = settings.balanceOptions;
           });
         }, onError: (_) {});
     _plansStream = MealPlanService.watchAll(widget.groupId);
@@ -192,10 +205,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
     );
-    buffer.writeln(
-      '${_bold('Shop Due')}: '
-      '৳${result.shopDue.toStringAsFixed(2)}',
-    );
+    if (_balance.usesShopDue(_monthKey(_selectedMonth))) {
+      buffer.writeln(
+        '${_bold('Shop Due')}: '
+        '৳${result.shopDue.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Total Monthly Cost')}: '
       '৳${result.totalExpense.toStringAsFixed(2)}',
@@ -229,10 +244,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       '${_bold('Member Paid')}: '
       '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
     );
-    buffer.writeln(
-      '${_bold('Shop Due')}: '
-      '৳${result.shopDue.toStringAsFixed(2)}',
-    );
+    if (_balance.usesShopDue(_monthKey(_selectedMonth))) {
+      buffer.writeln(
+        '${_bold('Shop Due')}: '
+        '৳${result.shopDue.toStringAsFixed(2)}',
+      );
+    }
     buffer.writeln(
       '${_bold('Total Monthly Cost')}: '
       '৳${result.totalExpense.toStringAsFixed(2)}',
@@ -508,9 +525,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               document.id: document.data(),
           };
           final settings = settingsByMonth[monthKey];
-          final minimumMeals =
+          // What is saved for the month, kept as it is when another
+          // figure changes, and what counts: zero for a figure the
+          // admins switched off.
+          final savedMinimum =
               (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
-          final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
+          final savedShopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
+          final minimumMeals = _balance.minimumMealsOf(settings, monthKey);
+          final shopDue = _balance.shopDueOf(settings, monthKey);
           final rules = MonthRules.fromSettings(settings);
           final fixedCosts = FixedCostsCalculator.resolve(
             settingsByMonth,
@@ -616,6 +638,25 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                             fixedCosts: fixedCosts,
                             minimumMeals: minimumMeals,
                             shopDue: shopDue,
+                            savedMinimum: savedMinimum,
+                            savedShopDue: savedShopDue,
+                            initialShareTotal: InitialShare.totalOf(
+                              expenseDocs,
+                            ),
+                            managerMeals: _withPlannedMeals(
+                              mealDocs.map(_mealRecord).toList(),
+                              plans: plans,
+                              members: members,
+                              month: _selectedMonth,
+                              rules: rules,
+                            ),
+                            // Food bought on each day: no Initial Share,
+                            // and nothing of a member removed with it.
+                            managerExpenses: [
+                              for (final expense in expenseDocs)
+                                if (!InitialShare.isPartOfShare(expense.data()))
+                                  _expenseRecord(expense),
+                            ].where(rules.countsExpense).toList(),
                             canGoNext: canGoNext,
                           );
                         },
@@ -639,6 +680,20 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           groupId: widget.groupId,
           isAdmin: widget.isAdmin,
           initialTab: tab,
+        ),
+      ),
+    );
+  }
+
+  void _openInitialShare({required bool canAdd, required bool canDelete}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InitialShareScreen(
+          groupId: widget.groupId,
+          month: _selectedMonth,
+          monthName: _monthName(_selectedMonth),
+          canAdd: canAdd,
+          canDelete: canDelete,
         ),
       ),
     );
@@ -855,6 +910,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     required FixedCosts? fixedCosts,
     required double minimumMeals,
     required double shopDue,
+    required double savedMinimum,
+    required double savedShopDue,
+    required double initialShareTotal,
+    required List<MealRecord> managerMeals,
+    required List<ExpenseRecord> managerExpenses,
     required bool canGoNext,
     required DailyTrend? trend,
   }) {
@@ -887,6 +947,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
 
     // A hostel that does not use fixed costs sees the meals only.
     final tab = _fixedCostsEnabled ? _tab : _CalcTab.meals;
+    final selectedKey = _monthKey(_selectedMonth);
+    final showsMinimum = _balance.usesMinimumMeals(selectedKey);
+    final showsShopDue = _balance.usesShopDue(selectedKey);
+    // Shares already added stay in view, even with the option off.
+    final showsInitialShare =
+        (_balance.initialShare && hasRecords) || initialShareTotal > 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -971,6 +1037,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             totalExpense: result.totalExpense,
             shopDue: shopDue,
             minimumMeals: minimumMeals,
+            showsMinimum: showsMinimum,
+            showsShopDue: showsShopDue,
+            initialShareTotal: showsInitialShare ? initialShareTotal : null,
+            onOpenInitialShare: hasRecords
+                ? () => _openInitialShare(
+                    canAdd: canChange && _balance.initialShare,
+                    canDelete: canChange,
+                  )
+                : null,
+            balance: _balance,
             previousMonthKey: _monthKey(previousMonth),
             groupId: widget.groupId,
             onCopy: () => _copySummaryCard(result: result),
@@ -978,14 +1054,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
             onOpenExpenses: hasRecords ? () => _openRecords(1) : null,
             onEditMinimum: canChange
                 ? () => _setMinimumMeals(
-                    currentMinimum: minimumMeals,
-                    currentShopDue: shopDue,
+                    currentMinimum: savedMinimum,
+                    currentShopDue: savedShopDue,
                   )
                 : null,
             onEditShopDue: canChange
                 ? () => _setShopDue(
-                    currentDue: shopDue,
-                    minimumMeals: minimumMeals,
+                    currentDue: savedShopDue,
+                    minimumMeals: savedMinimum,
                   )
                 : null,
           ),
@@ -1012,6 +1088,24 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               onCopyBalances: () => _copyMealBalances(result: result),
               onCopyTable: () => _copyFullTable(result: result),
             ),
+          if (_balance.bestManager && hasRecords) ...[
+            const SizedBox(height: 14),
+            StreamBuilder<DutyRoster>(
+              stream: _rosterStream,
+              builder: (context, roster) => _BestManagerCard(
+                monthName: _monthName(_selectedMonth),
+                report: roster.hasData
+                    ? BestManager.of(
+                        month: _selectedMonth,
+                        roster: roster.data!,
+                        meals: managerMeals,
+                        expenses: managerExpenses,
+                        today: DateTime.now(),
+                      )
+                    : null,
+              ),
+            ),
+          ],
           if (trend != null) ...[
             const SizedBox(height: 14),
             _trendChart(trend),
@@ -1044,8 +1138,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                           members: members,
                           rents: rents,
                           sharedBills: sharedBills,
-                          minimumMeals: minimumMeals,
-                          shopDue: shopDue,
+                          minimumMeals: savedMinimum,
+                          shopDue: savedShopDue,
                         ),
                         icon: const Icon(Icons.add),
                         label: const Text('Add Fixed Costs'),
@@ -1127,8 +1221,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _resetFixedCosts(
-                        minimumMeals: minimumMeals,
-                        shopDue: shopDue,
+                        minimumMeals: savedMinimum,
+                        shopDue: savedShopDue,
                       ),
                       icon: const Icon(Icons.restart_alt, size: 18),
                       label: const Text('Reset'),
@@ -1141,8 +1235,8 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                         members: members,
                         rents: rents,
                         sharedBills: sharedBills,
-                        minimumMeals: minimumMeals,
-                        shopDue: shopDue,
+                        minimumMeals: savedMinimum,
+                        shopDue: savedShopDue,
                       ),
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('Edit'),
@@ -1540,6 +1634,11 @@ class _RateHero extends StatelessWidget {
     required this.totalExpense,
     required this.shopDue,
     required this.minimumMeals,
+    required this.showsMinimum,
+    required this.showsShopDue,
+    required this.initialShareTotal,
+    required this.onOpenInitialShare,
+    required this.balance,
     required this.previousMonthKey,
     required this.groupId,
     required this.onCopy,
@@ -1555,6 +1654,13 @@ class _RateHero extends StatelessWidget {
   final double totalExpense;
   final double shopDue;
   final double minimumMeals;
+  final bool showsMinimum;
+  final bool showsShopDue;
+
+  /// Null when the month has no Initial Share to show.
+  final double? initialShareTotal;
+  final VoidCallback? onOpenInitialShare;
+  final BalanceOptions balance;
   final String previousMonthKey;
   final String groupId;
   final VoidCallback onCopy;
@@ -1632,6 +1738,7 @@ class _RateHero extends StatelessWidget {
                   groupId: groupId,
                   previousMonthKey: previousMonthKey,
                   currentRate: mealRate,
+                  balance: balance,
                 ),
               ],
             ),
@@ -1665,28 +1772,18 @@ class _RateHero extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _HeroFigure(
-                        label: 'Min Meals',
-                        value: minimumMeals > 0
-                            ? _amountText(minimumMeals)
-                            : '—',
-                        onTap: onEditMinimum,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _HeroFigure(
-                        label: 'Shop Due',
-                        value: shopDue > 0 ? '৳${_amountText(shopDue)}' : '—',
-                        onTap: onEditShopDue,
-                      ),
-                    ),
-                  ],
-                ),
+                for (final pair in _pairs(_optionFigures())) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: pair.$1),
+                      if (pair.$2 != null) ...[
+                        const SizedBox(width: 10),
+                        Expanded(child: pair.$2!),
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -1694,6 +1791,43 @@ class _RateHero extends StatelessWidget {
       ),
     );
   }
+}
+
+extension on _RateHero {
+  /// The figures the hostel uses: Min Meals, Shop Due, Initial Share.
+  List<Widget> _optionFigures() {
+    return [
+      if (showsMinimum)
+        _HeroFigure(
+          label: 'Min Meals',
+          value: minimumMeals > 0 ? _amountText(minimumMeals) : '—',
+          onTap: onEditMinimum,
+        ),
+      if (showsShopDue)
+        _HeroFigure(
+          label: 'Shop Due',
+          value: shopDue > 0 ? '৳${_amountText(shopDue)}' : '—',
+          onTap: onEditShopDue,
+        ),
+      if (initialShareTotal != null)
+        _HeroFigure(
+          label: InitialShare.name,
+          value: initialShareTotal! > 0
+              ? '৳${_amountText(initialShareTotal!)}'
+              : '—',
+          icon: Icons.chevron_right,
+          onTap: onOpenInitialShare,
+        ),
+    ];
+  }
+}
+
+/// [figures] two to a row.
+List<(Widget, Widget?)> _pairs(List<Widget> figures) {
+  return [
+    for (var index = 0; index < figures.length; index += 2)
+      (figures[index], index + 1 < figures.length ? figures[index + 1] : null),
+  ];
 }
 
 /// One figure on the [_RateHero]. With [onTap] it can be tapped, and
@@ -1992,6 +2126,236 @@ class _MemberFigure extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Best Manager: whose duty turn kept food cheapest this month
+// ─────────────────────────────────────────────────────────────
+String _shortDay(String dateKey) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final parts = dateKey.split('-').map(int.parse).toList();
+  return '${parts[2]} ${months[parts[1] - 1]}';
+}
+
+class _BestManagerCard extends StatelessWidget {
+  const _BestManagerCard({required this.monthName, required this.report});
+
+  final String monthName;
+
+  /// Null until a turn of the month is finished.
+  final BestManager? report;
+
+  void _openRanking(BuildContext context, BestManager report) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            children: [
+              Text(
+                'Best Manager · $monthName',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Month Average ৳${report.averageRate.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              for (final (index, turn) in report.turns.indexed)
+                _ManagerRow(
+                  rank: index + 1,
+                  turn: turn,
+                  difference: report.belowAverage(turn),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = this.report;
+    final best = report?.best;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(18, 6, 12, 6),
+        leading: const Icon(
+          Icons.emoji_events,
+          color: AppTheme.accentDeep,
+          size: 30,
+        ),
+        title: const Text(
+          'Best Manager',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          best?.memberName ?? '—',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        trailing: best == null
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '৳${best.rate.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      _DifferenceText(report!.belowAverage(best)),
+                    ],
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppTheme.textSecondary,
+                  ),
+                ],
+              ),
+        onTap: best == null ? null : () => _openRanking(context, report!),
+      ),
+    );
+  }
+}
+
+/// "৳4.20 Below Average" in green, or "৳3.10 Above Average".
+class _DifferenceText extends StatelessWidget {
+  const _DifferenceText(this.difference);
+
+  final double difference;
+
+  @override
+  Widget build(BuildContext context) {
+    final isBelow = difference >= 0;
+
+    return Text(
+      '৳${difference.abs().toStringAsFixed(2)} '
+      '${isBelow ? 'Below' : 'Above'} Average',
+      style: TextStyle(
+        color: isBelow ? AppTheme.success : AppTheme.danger,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+class _ManagerRow extends StatelessWidget {
+  const _ManagerRow({
+    required this.rank,
+    required this.turn,
+    required this.difference,
+  });
+
+  final int rank;
+  final ManagerTurn turn;
+  final double difference;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$rank',
+              style: TextStyle(
+                color: rank == 1 ? AppTheme.accentDeep : AppTheme.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  turn.memberName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  '${_shortDay(turn.fromDate)} – ${_shortDay(turn.toDate)}'
+                  ' · ${turn.days} Days',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '৳${turn.rate.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              _DifferenceText(difference),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Meal rate comparison widget
 // ─────────────────────────────────────────────────────────────
 class _MealRateComparison extends StatefulWidget {
@@ -1999,11 +2363,13 @@ class _MealRateComparison extends StatefulWidget {
     required this.groupId,
     required this.previousMonthKey,
     required this.currentRate,
+    required this.balance,
   });
 
   final String groupId;
   final String previousMonthKey;
   final double currentRate;
+  final BalanceOptions balance;
 
   @override
   State<_MealRateComparison> createState() => _MealRateComparisonState();
@@ -2021,6 +2387,7 @@ class _MealRateComparisonState extends State<_MealRateComparison> {
       groupId: widget.groupId,
       previousMonthKey: widget.previousMonthKey,
       previousMonthStart: previousMonthStart,
+      balance: widget.balance,
     );
   }
 
@@ -2029,7 +2396,11 @@ class _MealRateComparisonState extends State<_MealRateComparison> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.groupId != widget.groupId ||
-        oldWidget.previousMonthKey != widget.previousMonthKey) {
+        oldWidget.previousMonthKey != widget.previousMonthKey ||
+        !oldWidget.balance.countsLike(
+          widget.balance,
+          widget.previousMonthKey,
+        )) {
       _previousRate = _load();
     }
   }
@@ -2108,6 +2479,7 @@ Future<double?> _previousMealRate({
   required String groupId,
   required String previousMonthKey,
   required DateTime previousMonthStart,
+  required BalanceOptions balance,
 }) async {
   final firestore = FirebaseFirestore.instance;
   final groupRef = firestore.collection('groups').doc(groupId);
@@ -2121,8 +2493,8 @@ Future<double?> _previousMealRate({
   if (saved != null) {
     return saved.totalMealNumber > 0 ? saved.mealRate : null;
   }
-  final minimumMeals = (settings?['minimumMeals'] as num?)?.toDouble() ?? 0;
-  final shopDue = (settings?['shopDue'] as num?)?.toDouble() ?? 0;
+  final minimumMeals = balance.minimumMealsOf(settings, previousMonthKey);
+  final shopDue = balance.shopDueOf(settings, previousMonthKey);
 
   final members = await GroupMemberService.fetchActive(groupId);
 

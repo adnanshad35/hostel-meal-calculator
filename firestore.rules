@@ -416,6 +416,11 @@ service cloud.firestore {
             resource.data.paidById == request.auth.uid
             || isGroupAdmin(groupId)
           )
+          // A part of an Initial Share is changed by admins only.
+          && (
+            resource.data.get('kind', '') != 'initialShare'
+            || isGroupAdmin(groupId)
+          )
           && request.resource.data.name is string
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -528,8 +533,8 @@ service cloud.firestore {
             )
           );
 
-        // Never deleted: a member who leaves is marked alumni or
-        // deleted, and keeps their records. Only the super admin removes
+        // Never deleted: a member who leaves is marked as removed, and
+        // keeps their records. Only the super admin removes
         // members, with the whole hostel.
         allow delete: if false;
       }

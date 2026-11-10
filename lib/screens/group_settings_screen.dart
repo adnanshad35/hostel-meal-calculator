@@ -11,7 +11,6 @@ import '../services/month_rules.dart';
 import '../widgets/app_tiles.dart';
 import '../widgets/leaving_choice_sheet.dart';
 import '../widgets/member_name_dialog.dart';
-import 'alumni_screen.dart';
 import 'duty_roster_screen.dart';
 import 'notifications_screen.dart';
 
@@ -106,11 +105,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
     // The member list itself is in Hostel Details.
     return [
-      GroupTile(
-        icon: Icons.school_outlined,
-        title: 'Alumni',
-        onTap: () => _open(AlumniScreen(groupId: widget.groupId)),
-      ),
       if (inviteCode.isNotEmpty)
         _InviteSwitch(key: ValueKey(inviteCode), inviteCode: inviteCode),
       GroupTile(
@@ -157,19 +151,70 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     ];
   }
 
+  /// Which figures the Balance page uses. Switching Min Meals or Shop
+  /// Due off counts it as zero from this month on; earlier months and
+  /// the saved figures stay as they are.
+  List<Widget> _balanceTiles(Map<String, dynamic> groupData) {
+    final settings = HostelSettings.fromGroupData(groupData);
+    final options = settings.balanceOptions;
+    final thisMonth = _monthKey(DateTime.now());
+
+    return [
+      SwitchTile(
+        icon: Icons.restaurant_menu_outlined,
+        title: 'Min Meals',
+        value: options.usesMinimumMeals(thisMonth),
+        onChanged: (isOn) => _saveSettings(
+          settings.copyWith(
+            balanceOptions: options.withMinimumMeals(isOn, thisMonth),
+          ),
+        ),
+      ),
+      SwitchTile(
+        icon: Icons.storefront_outlined,
+        title: 'Shop Due',
+        value: options.usesShopDue(thisMonth),
+        onChanged: (isOn) => _saveSettings(
+          settings.copyWith(
+            balanceOptions: options.withShopDue(isOn, thisMonth),
+          ),
+        ),
+      ),
+      SwitchTile(
+        icon: Icons.savings_outlined,
+        title: 'Initial Share',
+        value: options.initialShare,
+        onChanged: (isOn) => _saveSettings(
+          settings.copyWith(balanceOptions: options.withInitialShare(isOn)),
+        ),
+      ),
+      SwitchTile(
+        icon: Icons.emoji_events_outlined,
+        title: 'Best Manager',
+        value: options.bestManager,
+        onChanged: (isOn) => _saveSettings(
+          settings.copyWith(balanceOptions: options.withBestManager(isOn)),
+        ),
+      ),
+    ];
+  }
+
   List<Widget> _monthEndTiles(Map<String, dynamic> groupData) {
     final settings = HostelSettings.fromGroupData(groupData);
+    final options = settings.balanceOptions;
+    final thisMonth = _monthKey(DateTime.now());
 
     return [
       // Min Meals and Shop Due open from the 25th to the 5th, unless
       // this is on.
-      SwitchTile(
-        icon: Icons.lock_open_outlined,
-        title: 'Min Meals & Shop Due Any Day',
-        value: settings.specialPermission,
-        onChanged: (isOn) =>
-            _saveSettings(settings.copyWith(specialPermission: isOn)),
-      ),
+      if (options.usesMinimumMeals(thisMonth) || options.usesShopDue(thisMonth))
+        SwitchTile(
+          icon: Icons.lock_open_outlined,
+          title: 'Min Meals & Shop Due Any Day',
+          value: settings.specialPermission,
+          onChanged: (isOn) =>
+              _saveSettings(settings.copyWith(specialPermission: isOn)),
+        ),
       GroupTile(
         icon: Icons.person_remove_outlined,
         title: 'Remove All Limits',
@@ -607,6 +652,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       title: 'Member Permissions',
                       onTap: () =>
                           _openSection('Member Permissions', _permissionTiles),
+                    ),
+                    GroupTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Balance Options',
+                      onTap: () =>
+                          _openSection('Balance Options', _balanceTiles),
                     ),
                     GroupTile(
                       icon: Icons.event_available_outlined,

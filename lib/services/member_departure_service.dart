@@ -8,6 +8,7 @@ import 'meal_plan_service.dart';
 import 'month_archive.dart';
 import 'month_records.dart';
 import 'month_rules.dart';
+import 'hostel_settings.dart';
 import 'monthly_calculator.dart';
 
 /// How a member left the hostel.
@@ -15,10 +16,12 @@ enum LeavingWay {
   /// They left on their own.
   left,
 
-  /// An admin made them alumni, so they can be restored.
-  alumni,
+  /// An admin removed them. Their records stay.
+  removed,
 
-  /// An admin removed them for good. Their records still stay.
+  /// Saved by earlier versions, which let an admin choose between
+  /// these two; both count as [removed].
+  alumni,
   deleted;
 
   static LeavingWay fromName(Object? name) {
@@ -161,18 +164,22 @@ class MemberDepartureService {
     final month = DateTime(leftOn.year, leftOn.month);
     final leftOnKey = MealPlans.dateKey(leftOn);
 
-    final (settings, meals, expenses, plans, members) = await (
+    final (settings, meals, expenses, plans, members, hostel) = await (
       _settings(groupId, MonthlyCalculator.monthKey(month)).get(),
       MonthRecords.meals(groupId, month).get(),
       MonthRecords.expenses(groupId, month).get(),
       MealPlanService.fetchAll(groupId),
       GroupMemberService.fetchActive(groupId),
+      HostelSettingsService.fetch(groupId),
     ).wait;
 
     final settingsData = settings.data();
-    final minimumMeals =
-        (settingsData?['minimumMeals'] as num?)?.toDouble() ?? 0;
-    final shopDue = (settingsData?['shopDue'] as num?)?.toDouble() ?? 0;
+    final monthKey = MonthlyCalculator.monthKey(month);
+    final minimumMeals = hostel.balanceOptions.minimumMealsOf(
+      settingsData,
+      monthKey,
+    );
+    final shopDue = hostel.balanceOptions.shopDueOf(settingsData, monthKey);
     final baseRules = MonthRules.fromSettings(settingsData);
 
     final mealRecords = [

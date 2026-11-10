@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/group_member.dart';
+import '../services/initial_share.dart';
 import '../services/activity_log.dart';
 import '../services/edit_mark.dart';
 import '../services/error_messages.dart';
@@ -756,8 +757,11 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     }
 
     final isOpen = isEditableMonth(_month);
+    // A member cannot change their part of an Initial Share.
     bool canEdit(Map<String, dynamic> data) =>
-        isOpen && (widget.isAdmin || data['paidById'] == _uid);
+        isOpen &&
+        (widget.isAdmin ||
+            (data['paidById'] == _uid && !InitialShare.isPartOfShare(data)));
     // A column for the pencil or menu, when any row has one.
     final hasAction = expenses.any((expense) => canEdit(expense.data()));
     final dayTotal = expenses.fold<double>(
@@ -975,7 +979,10 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
     // A month is read-only once it is locked.
     final isOpen = isEditableMonth(_month);
-    final canEdit = isOpen && (widget.isAdmin || data['paidById'] == _uid);
+    final canEdit =
+        isOpen &&
+        (widget.isAdmin ||
+            (data['paidById'] == _uid && !InitialShare.isPartOfShare(data)));
 
     return CalendarLine(
       title: name,

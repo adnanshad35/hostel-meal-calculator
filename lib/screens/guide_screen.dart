@@ -95,6 +95,12 @@ const guideSections = [
         'A day counted from your meal plan is marked {b:Auto}. Saving an '
             'entry for that day replaces it.',
       ),
+      (
+        'Meal Off',
+        'When the chef is away, an admin taps {b:Chef} beside the title and '
+            'turns lunch or dinner off for everyone that day. It shows '
+            '{r:Off} and counts as no meal. The next day is on again.',
+      ),
     ],
   ),
   GuideSection(
@@ -162,12 +168,24 @@ const guideSections = [
       (
         'Min Meals',
         'Every member is charged at least this many meals, even if they '
-            'ate fewer.',
+            'ate fewer. Admins can switch it off.',
       ),
       (
         'Shop Due',
         'What the hostel still owes the shop. It is added to the month\'s '
-            'cost.',
+            'cost. Admins can switch it off.',
+      ),
+      (
+        'Initial Share',
+        'Money collected from members at the start of the month for food '
+            'such as rice and oil. Each part counts as paid by that member, '
+            'and the whole amount as the month\'s cost.',
+      ),
+      (
+        'Best Manager',
+        'The duty turn that kept food cheapest, against the month\'s '
+            'average. Only finished turns of 3 days or more count, without '
+            'Initial Share and Shop Due. Tap it to see every manager.',
       ),
       (
         'Month Trend',
@@ -248,9 +266,16 @@ const guideSections = [
             'who.',
       ),
       (
+        'Remove a Member',
+        'Admins tap a member and {r:Remove from Hostel}. With meals or '
+            'expenses this month, they choose how it counts: {b:Remove All}, '
+            '{b:Keep Actual Records Only} or {b:Keep Normal Calculation}.',
+      ),
+      (
         'Leave Hostel',
-        'Your past meals and expenses stay in the hostel\'s records. The '
-            'only admin must first make another member admin.',
+        'Your past meals and expenses stay in the hostel\'s records, and an '
+            'admin chooses how your last month counts. The only admin must '
+            'first make another member admin.',
       ),
     ],
   ),
@@ -260,10 +285,10 @@ const guideSections = [
     isAdminOnly: true,
     points: [
       (
-        'Members',
-        '{b:Members} to make an admin or remove someone, {b:Allow New '
-            'Members}, {b:Add Member Without App}, {b:Duty Roster} and '
-            '{b:Send Announcement}.',
+        'Member Settings',
+        '{b:Allow New Members}, {b:Add Member Without App} and {b:Duty '
+            'Roster}. Make an admin or remove someone from {b:Hostel '
+            'Details}.',
       ),
       (
         'Member Permissions',
@@ -271,9 +296,22 @@ const guideSections = [
             'Their Entries} afterwards.',
       ),
       (
+        'Balance Options',
+        'Switch {b:Min Meals}, {b:Shop Due}, {b:Initial Share} and {b:Best '
+            'Manager} on or off. A switch changes this month and the months '
+            'after it; earlier months keep their figures.',
+      ),
+      (
         'Month End',
         'Min Meals and Shop Due open from the 25th to the 5th of the next '
-            'month. {b:Min Meals & Shop Due Any Day} opens them always.',
+            'month. {b:Min Meals & Shop Due Any Day} opens them always. '
+            '{b:Remove All Limits} sets when Remove All is offered: under 5 '
+            'meals and ৳200 unless changed.',
+      ),
+      (
+        'Members Who Left',
+        'Shows who left in a month that is still open, so an admin can '
+            'choose, or change, how their month counts.',
       ),
       (
         'Danger Zone',

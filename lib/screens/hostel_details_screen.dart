@@ -167,51 +167,10 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
-  /// Takes [member] out of the hostel: as alumni, who can be restored,
-  /// or for good. When they had meals or expenses this month, the
-  /// admin first sees them and chooses how the month counts. Nothing
-  /// they entered is changed or deleted.
+  /// Takes [member] out of the hostel. When they had meals or
+  /// expenses this month, the admin first sees them and chooses how
+  /// the month counts. Nothing they entered is changed or deleted.
   Future<void> _removeMember(GroupMember member) async {
-    final way = await showModalBottomSheet<LeavingWay>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                child: Text(
-                  'Remove ${member.name}',
-                  style: Theme.of(sheetContext).textTheme.titleLarge,
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.school_outlined),
-                title: const Text('Make Alumni'),
-                onTap: () => Navigator.of(sheetContext).pop(LeavingWay.alumni),
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: AppTheme.danger,
-                ),
-                title: const Text(
-                  'Permanently Delete',
-                  style: TextStyle(color: AppTheme.danger),
-                ),
-                onTap: () => Navigator.of(sheetContext).pop(LeavingWay.deleted),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (way == null || !mounted) return;
-
     setState(() => _isBusy = true);
     DepartureSummary summary;
     RemoveAllLimits limits;
@@ -238,9 +197,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     if (!mounted) return;
     setState(() => _isBusy = false);
 
-    final actionLabel = way == LeavingWay.alumni
-        ? 'Make Alumni'
-        : 'Permanently Delete';
+    const actionLabel = 'Remove';
     LeavingChoice? choice;
 
     if (summary.hasActivity) {
@@ -257,14 +214,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: Text('$actionLabel?'),
-            content: Text(
-              way == LeavingWay.alumni
-                  ? '${member.name} moves to the Alumni list. Their '
-                        'records stay, and they can be restored.'
-                  : '${member.name} is removed from the hostel. Their '
-                        'records stay in past months.',
-            ),
+            title: Text('Remove ${member.name}?'),
+            content: const Text('Their records stay in past months.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -273,7 +224,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(actionLabel),
+                child: const Text(actionLabel),
               ),
             ],
           );
@@ -289,18 +240,14 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           ? GroupMemberService.removeAppUser(
               groupId: widget.groupId,
               member: member,
-              way: way,
               choice: choice,
             )
           : GroupMemberService.removeShadowMember(
               groupId: widget.groupId,
               member: member,
-              way: way,
               choice: choice,
             ),
-      successMessage: way == LeavingWay.alumni
-          ? '${member.name} moved to Alumni.'
-          : '${member.name} was removed.',
+      successMessage: '${member.name} was removed.',
     );
   }
 

@@ -15,6 +15,7 @@ class MealCounter extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.color,
   });
 
   /// The largest quantity that can be entered for one meal.
@@ -25,6 +26,9 @@ class MealCounter extends StatefulWidget {
   final double value;
   final ValueChanged<double> onChanged;
   final bool enabled;
+
+  /// The icon and title colour; green unless set.
+  final Color? color;
 
   /// Turns typed text into a quantity: a number from 0 to [maxValue],
   /// rounded to the nearest half meal. Returns null for anything else.
@@ -116,13 +120,15 @@ class _MealCounterState extends State<MealCounter> {
 
     return Row(
       children: [
-        Icon(widget.icon, size: 24, color: AppTheme.primary),
+        Icon(widget.icon, size: 24, color: widget.color ?? AppTheme.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             widget.title,
             overflow: TextOverflow.ellipsis,
-            style: textStyle,
+            style: widget.color == null
+                ? textStyle
+                : textStyle?.copyWith(color: widget.color),
           ),
         ),
         IconButton.filledTonal(
