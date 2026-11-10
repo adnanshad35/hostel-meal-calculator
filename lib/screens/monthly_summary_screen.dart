@@ -1725,6 +1725,17 @@ class _RateHero extends StatelessWidget {
                   ),
                 ),
               ),
+              // A small + for admins while an option is off.
+              if (onOpenBalanceOptions != null)
+                IconButton(
+                  tooltip: 'Balance Options',
+                  onPressed: onOpenBalanceOptions,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.12),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.add, size: 20, color: AppTheme.accent),
+                ),
               IconButton(
                 tooltip: 'Copy summary',
                 onPressed: onCopy,
@@ -1799,11 +1810,10 @@ class _RateHero extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
+                      // A figure on its own keeps half the width.
                       Expanded(child: pair.$1),
-                      if (pair.$2 != null) ...[
-                        const SizedBox(width: 10),
-                        Expanded(child: pair.$2!),
-                      ],
+                      const SizedBox(width: 10),
+                      Expanded(child: pair.$2 ?? const SizedBox.shrink()),
                     ],
                   ),
                 ],
@@ -1840,13 +1850,6 @@ extension on _RateHero {
               : '—',
           icon: Icons.chevron_right,
           onTap: onOpenInitialShare,
-        ),
-      if (onOpenBalanceOptions != null)
-        _HeroFigure(
-          label: 'Balance Options',
-          value: '+',
-          icon: Icons.add,
-          onTap: onOpenBalanceOptions,
         ),
     ];
   }
