@@ -792,10 +792,13 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     return member?.name ?? 'Member';
   }
 
-  /// What is saved: a cancelled meal keeps what the entry had, or
-  /// nothing for a new entry.
-  double get _lunchToSave => _isLunchCancelled ? _savedLunch ?? 0 : _lunch;
-  double get _dinnerToSave => _isDinnerCancelled ? _savedDinner ?? 0 : _dinner;
+  /// What is saved: a meal that is off keeps what the entry had, or
+  /// for a new entry what it would have had (the meal plan, or the
+  /// usual one). It counts as nothing while the meal is off, and is
+  /// there again once the meal is turned back on.
+  double get _lunchToSave => _isLunchCancelled ? _savedLunch ?? _lunch : _lunch;
+  double get _dinnerToSave =>
+      _isDinnerCancelled ? _savedDinner ?? _dinner : _dinner;
 
   bool get _isDayCancelled => _isLunchCancelled && _isDinnerCancelled;
 

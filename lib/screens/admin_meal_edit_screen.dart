@@ -52,14 +52,13 @@ class _AdminMealEditScreenState extends State<AdminMealEditScreen> {
     _dinner = widget.initialDinner;
   }
 
-  /// What is saved: a cancelled meal keeps what the entry had, or
-  /// nothing for a new entry.
-  double get _lunchToSave => widget.isLunchCancelled
-      ? (widget.hasEntry ? widget.initialLunch : 0)
-      : _lunch;
-  double get _dinnerToSave => widget.isDinnerCancelled
-      ? (widget.hasEntry ? widget.initialDinner : 0)
-      : _dinner;
+  /// What is saved: a meal that is off keeps what the entry or the
+  /// meal plan had. It counts as nothing while the meal is off, and is
+  /// there again once the meal is turned back on.
+  double get _lunchToSave =>
+      widget.isLunchCancelled ? widget.initialLunch : _lunch;
+  double get _dinnerToSave =>
+      widget.isDinnerCancelled ? widget.initialDinner : _dinner;
 
   String _displayQuantity(double value) {
     return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
