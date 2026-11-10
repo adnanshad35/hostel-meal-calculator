@@ -24,6 +24,7 @@ import '../services/month_rules_service.dart';
 import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_trend_chart.dart';
+import 'balance_options_screen.dart';
 import 'fixed_costs_screen.dart';
 import 'hostel_dashboard_screen.dart';
 import 'initial_share_screen.dart';
@@ -685,6 +686,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     );
   }
 
+  void _openBalanceOptions() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BalanceOptionsScreen(groupId: widget.groupId),
+      ),
+    );
+  }
+
   void _openInitialShare({required bool canAdd, required bool canDelete}) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -950,9 +959,16 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     final selectedKey = _monthKey(_selectedMonth);
     final showsMinimum = _balance.usesMinimumMeals(selectedKey);
     final showsShopDue = _balance.usesShopDue(selectedKey);
-    // Shares already added stay in view, even with the option off.
-    final showsInitialShare =
-        (_balance.initialShare && hasRecords) || initialShareTotal > 0;
+    // With the option off, the box goes; shares already added still
+    // count, as the money was really collected and spent on food.
+    final showsInitialShare = _balance.initialShare && hasRecords;
+    // Admins see a + while any option is off, to switch one on.
+    final thisMonthKey = _monthKey(DateTime.now());
+    final hasOptionOff =
+        !_balance.usesMinimumMeals(thisMonthKey) ||
+        !_balance.usesShopDue(thisMonthKey) ||
+        !_balance.initialShare ||
+        !_balance.bestManager;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -1047,6 +1063,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
                   )
                 : null,
             balance: _balance,
+            onOpenBalanceOptions: widget.isAdmin && hasOptionOff
+                ? _openBalanceOptions
+                : null,
             previousMonthKey: _monthKey(previousMonth),
             groupId: widget.groupId,
             onCopy: () => _copySummaryCard(result: result),
@@ -1639,6 +1658,7 @@ class _RateHero extends StatelessWidget {
     required this.initialShareTotal,
     required this.onOpenInitialShare,
     required this.balance,
+    required this.onOpenBalanceOptions,
     required this.previousMonthKey,
     required this.groupId,
     required this.onCopy,
@@ -1661,6 +1681,9 @@ class _RateHero extends StatelessWidget {
   final double? initialShareTotal;
   final VoidCallback? onOpenInitialShare;
   final BalanceOptions balance;
+
+  /// Null unless an admin can switch on an option that is off.
+  final VoidCallback? onOpenBalanceOptions;
   final String previousMonthKey;
   final String groupId;
   final VoidCallback onCopy;
@@ -1817,6 +1840,13 @@ extension on _RateHero {
               : '—',
           icon: Icons.chevron_right,
           onTap: onOpenInitialShare,
+        ),
+      if (onOpenBalanceOptions != null)
+        _HeroFigure(
+          label: 'Balance Options',
+          value: '+',
+          icon: Icons.add,
+          onTap: onOpenBalanceOptions,
         ),
     ];
   }

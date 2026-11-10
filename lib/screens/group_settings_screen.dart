@@ -11,6 +11,7 @@ import '../services/month_rules.dart';
 import '../widgets/app_tiles.dart';
 import '../widgets/leaving_choice_sheet.dart';
 import '../widgets/member_name_dialog.dart';
+import 'balance_options_screen.dart';
 import 'duty_roster_screen.dart';
 import 'notifications_screen.dart';
 
@@ -147,54 +148,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         value: settings.membersCanEdit,
         onChanged: (isOn) =>
             _saveSettings(settings.copyWith(membersCanEdit: isOn)),
-      ),
-    ];
-  }
-
-  /// Which figures the Balance page uses. Switching Min Meals or Shop
-  /// Due off counts it as zero from this month on; earlier months and
-  /// the saved figures stay as they are.
-  List<Widget> _balanceTiles(Map<String, dynamic> groupData) {
-    final settings = HostelSettings.fromGroupData(groupData);
-    final options = settings.balanceOptions;
-    final thisMonth = _monthKey(DateTime.now());
-
-    return [
-      SwitchTile(
-        icon: Icons.restaurant_menu_outlined,
-        title: 'Min Meals',
-        value: options.usesMinimumMeals(thisMonth),
-        onChanged: (isOn) => _saveSettings(
-          settings.copyWith(
-            balanceOptions: options.withMinimumMeals(isOn, thisMonth),
-          ),
-        ),
-      ),
-      SwitchTile(
-        icon: Icons.storefront_outlined,
-        title: 'Shop Due',
-        value: options.usesShopDue(thisMonth),
-        onChanged: (isOn) => _saveSettings(
-          settings.copyWith(
-            balanceOptions: options.withShopDue(isOn, thisMonth),
-          ),
-        ),
-      ),
-      SwitchTile(
-        icon: Icons.savings_outlined,
-        title: 'Initial Share',
-        value: options.initialShare,
-        onChanged: (isOn) => _saveSettings(
-          settings.copyWith(balanceOptions: options.withInitialShare(isOn)),
-        ),
-      ),
-      SwitchTile(
-        icon: Icons.emoji_events_outlined,
-        title: 'Best Manager',
-        value: options.bestManager,
-        onChanged: (isOn) => _saveSettings(
-          settings.copyWith(balanceOptions: options.withBestManager(isOn)),
-        ),
       ),
     ];
   }
@@ -657,7 +610,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Balance Options',
                       onTap: () =>
-                          _openSection('Balance Options', _balanceTiles),
+                          _open(BalanceOptionsScreen(groupId: widget.groupId)),
                     ),
                     GroupTile(
                       icon: Icons.event_available_outlined,

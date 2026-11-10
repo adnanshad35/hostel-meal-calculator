@@ -298,8 +298,10 @@ const guideSections = [
       (
         'Balance Options',
         'Switch {b:Min Meals}, {b:Shop Due}, {b:Initial Share} and {b:Best '
-            'Manager} on or off. A switch changes this month and the months '
-            'after it; earlier months keep their figures.',
+            'Manager} on or off, here or with {b:+} on the Balance page. A '
+            'switch changes this month and the months after it; earlier '
+            'months keep their figures. Initial Shares already added still '
+            'count when it is off.',
       ),
       (
         'Month End',
