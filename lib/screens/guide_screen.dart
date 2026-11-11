@@ -136,6 +136,12 @@ const guideSections = [
             'the day. The calculator helps add up a long bazar list.',
       ),
       (
+        'Simple or Itemwise',
+        'Choose {b:Simple} for one name and amount, or {b:Itemwise} to list '
+            'each item with its quantity and price. Tap {b:Add Item} for '
+            'another row; the total and the name fill in by themselves.',
+      ),
+      (
         'Paid By',
         'An expense counts for the member who paid. Admins can record one '
             'for any member.',
