@@ -172,6 +172,11 @@ const guideSections = [
             'figure is what you get back; a negative one is what you pay.',
       ),
       (
+        'Share as Picture',
+        'Tap the share icon on {b:Members}, then {b:Share as Picture} to send '
+            'the month\'s balance to WhatsApp, Messenger or any group.',
+      ),
+      (
         'Min Meals',
         'Every member is charged at least this many meals, even if they '
             'ate fewer. Admins can switch it off.',

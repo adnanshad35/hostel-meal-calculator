@@ -25,6 +25,7 @@ import '../services/monthly_calculator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/month_trend_chart.dart';
 import 'balance_options_screen.dart';
+import 'balance_share.dart';
 import 'fixed_costs_screen.dart';
 import 'hostel_dashboard_screen.dart';
 import 'initial_share_screen.dart';
@@ -34,11 +35,15 @@ class MonthlySummaryScreen extends StatefulWidget {
     super.key,
     required this.groupId,
     required this.isAdmin,
+    this.groupName = '',
     this.embedded = false,
   });
 
   final String groupId;
   final bool isAdmin;
+
+  /// Shown on the shared picture.
+  final String groupName;
 
   /// True inside another page that has its own app bar.
   final bool embedded;
@@ -1106,6 +1111,12 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               },
               onCopyBalances: () => _copyMealBalances(result: result),
               onCopyTable: () => _copyFullTable(result: result),
+              onSharePicture: () => showBalanceShare(
+                context,
+                hostelName: widget.groupName,
+                monthName: _monthName(_selectedMonth),
+                result: result,
+              ),
             ),
           if (_balance.bestManager && hasRecords) ...[
             const SizedBox(height: 14),
@@ -1952,6 +1963,7 @@ class _MemberBalancesCard extends StatelessWidget {
     required this.onToggle,
     required this.onCopyBalances,
     required this.onCopyTable,
+    required this.onSharePicture,
   });
 
   final List<MemberCalculation> members;
@@ -1959,6 +1971,7 @@ class _MemberBalancesCard extends StatelessWidget {
   final ValueChanged<String> onToggle;
   final VoidCallback onCopyBalances;
   final VoidCallback onCopyTable;
+  final VoidCallback onSharePicture;
 
   @override
   Widget build(BuildContext context) {
@@ -1981,18 +1994,27 @@ class _MemberBalancesCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                PopupMenuButton<bool>(
-                  tooltip: 'Copy',
+                PopupMenuButton<VoidCallback>(
+                  tooltip: 'Copy or Share',
                   icon: const Icon(
-                    Icons.copy_outlined,
+                    Icons.ios_share_outlined,
                     size: 20,
                     color: AppTheme.primary,
                   ),
-                  onSelected: (isTable) =>
-                      isTable ? onCopyTable() : onCopyBalances(),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: false, child: Text('Copy Balances')),
-                    PopupMenuItem(value: true, child: Text('Copy Full Table')),
+                  onSelected: (action) => action(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: onCopyBalances,
+                      child: const Text('Copy Balances'),
+                    ),
+                    PopupMenuItem(
+                      value: onCopyTable,
+                      child: const Text('Copy Full Table'),
+                    ),
+                    PopupMenuItem(
+                      value: onSharePicture,
+                      child: const Text('Share as Picture'),
+                    ),
                   ],
                 ),
               ],

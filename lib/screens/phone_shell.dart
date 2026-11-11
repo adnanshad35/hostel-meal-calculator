@@ -75,6 +75,7 @@ class _PhoneShellState extends State<PhoneShell> {
         appBar: AppBar(title: const Text('Balance')),
         body: MonthlySummaryScreen(
           groupId: widget.groupId,
+          groupName: widget.groupName,
           isAdmin: _isAdmin,
           embedded: true,
         ),
