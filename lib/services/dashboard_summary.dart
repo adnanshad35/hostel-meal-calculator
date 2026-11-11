@@ -29,6 +29,8 @@ class DashboardSummary {
     this.myExpense = 0,
     this.isLunchCancelled = false,
     this.isDinnerCancelled = false,
+    this.myBalance,
+    this.memberCount = 0,
   });
 
   /// The same meal rate, cost and meal total the Details page
@@ -55,6 +57,12 @@ class DashboardSummary {
   /// everyone.
   final bool isLunchCancelled;
   final bool isDinnerCancelled;
+
+  /// The member's balance so far, as the Balance page shows it:
+  /// positive to get back, negative to pay. Null when not a member.
+  final int? myBalance;
+
+  final int memberCount;
 
   /// [meals] and [expenses] may hold other months too; only this
   /// month's are counted.
@@ -132,6 +140,8 @@ class DashboardSummary {
       myExpense: mine?.spending ?? 0,
       isLunchCancelled: rules.cancellations.isLunchCancelled(todayKey),
       isDinnerCancelled: rules.cancellations.isDinnerCancelled(todayKey),
+      myBalance: mine?.finalBalance,
+      memberCount: members.length,
     );
   }
 }

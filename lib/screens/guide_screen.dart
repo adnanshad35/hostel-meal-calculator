@@ -65,6 +65,12 @@ const guideSections = [
       ),
       ('Update', 'Tap {b:+} on Meals or Expenses to add one in a few seconds.'),
       (
+        'Rent Calculator',
+        'Enter your rent and the shared bills to see your fixed cost, and '
+            'with your meal balance, what you pay this month. Only your '
+            'phone keeps it.',
+      ),
+      (
         'Bell',
         'Announcements from your admins, notices from HostelMate, and when '
             'a member will be away.',
