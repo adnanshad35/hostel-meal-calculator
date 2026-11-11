@@ -23,7 +23,6 @@ import 'hostel_details_screen.dart';
 import 'meal_ledger_screen.dart';
 import 'meal_screen.dart';
 import 'profile_screen.dart';
-import 'rent_calculator_screen.dart';
 
 class HostelDashboardScreen extends StatefulWidget {
   const HostelDashboardScreen({
@@ -59,9 +58,6 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
   );
   late final Stream<HostelSubscription> _subscription =
       SubscriptionService.watch(widget.groupId);
-
-  /// The figures last shown, for the Rent Calculator.
-  final _latest = _LatestSummary();
 
   String get groupId => widget.groupId;
   bool get isAdmin => widget.role == 'admin';
@@ -113,7 +109,6 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
                         stream: _roster,
                         builder: (context, roster) => _HostelOverview(
                           groupId: groupId,
-                          latest: _latest,
                           balance: settings.balanceOptions,
                           groupName: widget.groupName,
                           isAdmin: isAdmin,
@@ -214,20 +209,9 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
               ),
             ),
           ),
-        if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
-        NavTile(
-          icon: Icons.calculate_outlined,
-          title: 'Rent Calculator',
-          onTap: () => _open(
-            RentCalculatorScreen(
-              mealBalance: _latest.summary?.myBalance,
-              memberCount: _latest.summary?.memberCount,
-            ),
-          ),
-        ),
         // On the phone these have their own tabs.
         if (!widget.isHome) ...[
-          const SizedBox(height: 12),
+          if (canAddMeals || canAddExpenses) const SizedBox(height: 12),
           NavTile(
             icon: Icons.groups_outlined,
             title: 'Total Meals & Expenses',
@@ -250,11 +234,6 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
       ],
     );
   }
-}
-
-/// Holds the dashboard's last figures without rebuilding anything.
-class _LatestSummary {
-  DashboardSummary? summary;
 }
 
 /// The whole hostel's meals and expenses this month, on two tabs.
@@ -416,7 +395,6 @@ const _monthNames = [
 class _HostelOverview extends StatefulWidget {
   const _HostelOverview({
     required this.groupId,
-    required this.latest,
     required this.balance,
     required this.groupName,
     required this.isAdmin,
@@ -431,7 +409,6 @@ class _HostelOverview extends StatefulWidget {
   final bool isAdmin;
 
   /// Which of Min Meals and Shop Due count.
-  final _LatestSummary latest;
   final BalanceOptions balance;
 
   /// Null while it loads.
@@ -582,7 +559,6 @@ class _HostelOverviewState extends State<_HostelOverview> {
 
   /// [summary] is null while loading, or when it could not be loaded.
   Widget _cards(DashboardSummary? summary, {required bool hasError}) {
-    if (summary != null) widget.latest.summary = summary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
