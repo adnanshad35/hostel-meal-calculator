@@ -71,12 +71,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   /// Last month's running totals, for the chart.
   late Future<DailyTrend?> _previousTrend;
 
-  _CalcTab _tab = _CalcTab.meals;
-
-  /// False while the app settles meals only: the Fixed and Overall
-  /// tabs are then not offered. Off until other costs are released.
-  final bool _fixedCostsEnabled = false;
-
   /// True when the admins allow minimum meals and shop due to be
   /// entered on any day, not only at the month's end.
   bool _specialPermission = false;
@@ -87,7 +81,9 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
 
   /// The members whose own figures are shown under their balance.
   final Set<String> _openMemberIds = {};
-  bool _showFixedDetails = false;
+
+  /// The same, in the Fixed Costs card.
+  final Set<String> _openFixedIds = {};
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
@@ -540,10 +536,14 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
           final minimumMeals = _balance.minimumMealsOf(settings, monthKey);
           final shopDue = _balance.shopDueOf(settings, monthKey);
           final rules = MonthRules.fromSettings(settings);
-          final fixedCosts = FixedCostsCalculator.resolve(
-            settingsByMonth,
-            monthKey,
-          );
+          final fixedCostsSince = _balance.fixedCostsSince(monthKey);
+          final fixedCosts = fixedCostsSince == null
+              ? null
+              : FixedCostsCalculator.resolve(
+                  settingsByMonth,
+                  monthKey,
+                  since: fixedCostsSince,
+                );
 
           // A locked month shows the summary saved for it, not one
           // worked out again from records that may no longer be kept.
@@ -762,72 +762,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
     );
   }
 
-  Future<void> _resetFixedCosts({
-    required double minimumMeals,
-    required double shopDue,
-  }) async {
-    final monthName = _monthName(_selectedMonth);
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Reset Fixed Costs?'),
-          content: Text(
-            'Rent and shared bills will be cleared from $monthName '
-            'onward. Earlier months keep their figures.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Reset'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      final monthKey = _monthKey(_selectedMonth);
-
-      await _firestore
-          .collection('groups')
-          .doc(widget.groupId)
-          .collection('monthlySettings')
-          .doc(monthKey)
-          .set({
-            'rents': <String, double>{},
-            'sharedBills': <Map<String, dynamic>>[],
-            'minimumMeals': minimumMeals,
-            'shopDue': shopDue,
-            'monthKey': monthKey,
-            'updatedBy': FirebaseAuth.instance.currentUser!.uid,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Fixed costs were reset.')));
-    } on FirebaseException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            saveErrorMessage(error, fallback: 'Unable to reset fixed costs.'),
-          ),
-        ),
-      );
-    }
-  }
-
   Future<void> _copyText(String text, String confirmation) async {
     await Clipboard.setData(ClipboardData(text: text.trim()));
     if (!mounted) return;
@@ -878,43 +812,22 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       buffer.writeln('');
     }
 
-    buffer.writeln(_bold('Each Member Pays'));
+    buffer.writeln(_bold('With Meals'));
     for (final settlement in settlements) {
-      final total = settlement.rent + settlement.billShare;
-      if (total <= 0) continue;
-
       final parts = [
         if (settlement.rent > 0) 'Rent ৳${_amountText(settlement.rent)}',
         if (settlement.billShare > 0)
           'Bills ৳${_amountText(settlement.billShare)}',
+        'Meals ${_mealBalanceText(settlement.mealBalance.round())}',
       ];
 
       buffer.writeln(
-        '• ${settlement.name}: ${_bold('৳${_amountText(total)}')} '
-        '(${parts.join(' + ')})',
+        '• ${settlement.name} ${_resultPhrase(settlement.finalTotal)} '
+        '(${parts.join(', ')})',
       );
     }
 
     return _copyText(buffer.toString(), 'Fixed costs copied.');
-  }
-
-  Future<void> _copyOverall({
-    required List<MemberSettlement> settlements,
-    required bool includesFixedCosts,
-  }) {
-    final buffer = StringBuffer();
-    buffer.writeln(_bold('HostelMate – Overall Calculation'));
-    buffer.writeln(_bold(_monthName(_selectedMonth)));
-    buffer.writeln(includesFixedCosts ? 'Meals + fixed costs' : 'Meals only');
-    buffer.writeln('');
-
-    for (final settlement in settlements) {
-      buffer.writeln(
-        '• ${settlement.name} ${_resultPhrase(settlement.finalTotal)}',
-      );
-    }
-
-    return _copyText(buffer.toString(), 'Overall calculation copied.');
   }
 
   Widget _buildContent(
@@ -959,8 +872,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
       bills: sharedBills,
     );
 
-    // A hostel that does not use fixed costs sees the meals only.
-    final tab = _fixedCostsEnabled ? _tab : _CalcTab.meals;
     final selectedKey = _monthKey(_selectedMonth);
     final showsMinimum = _balance.usesMinimumMeals(selectedKey);
     final showsShopDue = _balance.usesShopDue(selectedKey);
@@ -973,7 +884,11 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         !_balance.usesMinimumMeals(thisMonthKey) ||
         !_balance.usesShopDue(thisMonthKey) ||
         !_balance.initialShare ||
-        !_balance.bestManager;
+        !_balance.bestManager ||
+        !_balance.usesFixedCosts(thisMonthKey) ||
+        !_balance.monthTrend;
+    final showsFixedCosts =
+        _balance.usesFixedCosts(selectedKey) && (hasFixedCosts || canChange);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -1018,293 +933,125 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
         ),
         const SizedBox(height: 14),
 
-        // ─── Meals / Fixed / Overall ───
-        if (_fixedCostsEnabled)
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<_CalcTab>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment<_CalcTab>(
-                  value: _CalcTab.meals,
-                  icon: Icon(Icons.restaurant_outlined, size: 18),
-                  label: Text('Meals'),
-                ),
-                ButtonSegment<_CalcTab>(
-                  value: _CalcTab.fixed,
-                  icon: Icon(Icons.home_work_outlined, size: 18),
-                  label: Text('Fixed'),
-                ),
-                ButtonSegment<_CalcTab>(
-                  value: _CalcTab.overall,
-                  icon: Icon(Icons.receipt_long_outlined, size: 18),
-                  label: Text('Overall'),
-                ),
-              ],
-              selected: {_tab},
-              onSelectionChanged: (selection) {
-                setState(() => _tab = selection.first);
-              },
+        _RateHero(
+          mealRate: result.mealRate,
+          totalMealNumber: result.totalMealNumber,
+          totalActualMeals: result.totalActualMeals,
+          totalExpense: result.totalExpense,
+          shopDue: shopDue,
+          minimumMeals: minimumMeals,
+          showsMinimum: showsMinimum,
+          showsShopDue: showsShopDue,
+          initialShareTotal: showsInitialShare ? initialShareTotal : null,
+          onOpenInitialShare: hasRecords
+              ? () => _openInitialShare(
+                  canAdd: canChange && _balance.initialShare,
+                  canDelete: canChange,
+                )
+              : null,
+          balance: _balance,
+          onOpenBalanceOptions: widget.isAdmin && hasOptionOff
+              ? _openBalanceOptions
+              : null,
+          previousMonthKey: _monthKey(previousMonth),
+          groupId: widget.groupId,
+          onCopy: () => _copySummaryCard(result: result),
+          onOpenMeals: hasRecords ? () => _openRecords(0) : null,
+          onOpenExpenses: hasRecords ? () => _openRecords(1) : null,
+          onEditMinimum: canChange
+              ? () => _setMinimumMeals(
+                  currentMinimum: savedMinimum,
+                  currentShopDue: savedShopDue,
+                )
+              : null,
+          onEditShopDue: canChange
+              ? () => _setShopDue(
+                  currentDue: savedShopDue,
+                  minimumMeals: savedMinimum,
+                )
+              : null,
+        ),
+        const SizedBox(height: 14),
+        if (result.members.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'No members were found.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          _MemberBalancesCard(
+            members: result.members,
+            openMemberIds: _openMemberIds,
+            onToggle: (id) {
+              setState(() {
+                if (!_openMemberIds.remove(id)) _openMemberIds.add(id);
+              });
+            },
+            onCopyBalances: () => _copyMealBalances(result: result),
+            onCopyTable: () => _copyFullTable(result: result),
+            onSharePicture: () => showBalanceShare(
+              context,
+              hostelName: widget.groupName,
+              monthName: _monthName(_selectedMonth),
+              result: result,
             ),
           ),
-        if (_fixedCostsEnabled) const SizedBox(height: 16),
-
-        // ═══ Meals ═══
-        if (tab == _CalcTab.meals) ...[
-          _RateHero(
-            mealRate: result.mealRate,
-            totalMealNumber: result.totalMealNumber,
-            totalActualMeals: result.totalActualMeals,
-            totalExpense: result.totalExpense,
-            shopDue: shopDue,
-            minimumMeals: minimumMeals,
-            showsMinimum: showsMinimum,
-            showsShopDue: showsShopDue,
-            initialShareTotal: showsInitialShare ? initialShareTotal : null,
-            onOpenInitialShare: hasRecords
-                ? () => _openInitialShare(
-                    canAdd: canChange && _balance.initialShare,
-                    canDelete: canChange,
-                  )
-                : null,
-            balance: _balance,
-            onOpenBalanceOptions: widget.isAdmin && hasOptionOff
-                ? _openBalanceOptions
-                : null,
-            previousMonthKey: _monthKey(previousMonth),
-            groupId: widget.groupId,
-            onCopy: () => _copySummaryCard(result: result),
-            onOpenMeals: hasRecords ? () => _openRecords(0) : null,
-            onOpenExpenses: hasRecords ? () => _openRecords(1) : null,
-            onEditMinimum: canChange
-                ? () => _setMinimumMeals(
-                    currentMinimum: savedMinimum,
-                    currentShopDue: savedShopDue,
-                  )
-                : null,
-            onEditShopDue: canChange
-                ? () => _setShopDue(
-                    currentDue: savedShopDue,
-                    minimumMeals: savedMinimum,
-                  )
-                : null,
-          ),
+        if (_balance.bestManager && hasRecords) ...[
           const SizedBox(height: 14),
-          if (result.members.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'No members were found.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          else
-            _MemberBalancesCard(
-              members: result.members,
-              openMemberIds: _openMemberIds,
-              onToggle: (id) {
-                setState(() {
-                  if (!_openMemberIds.remove(id)) _openMemberIds.add(id);
-                });
-              },
-              onCopyBalances: () => _copyMealBalances(result: result),
-              onCopyTable: () => _copyFullTable(result: result),
-              onSharePicture: () => showBalanceShare(
-                context,
-                hostelName: widget.groupName,
-                monthName: _monthName(_selectedMonth),
-                result: result,
-              ),
+          StreamBuilder<DutyRoster>(
+            stream: _rosterStream,
+            builder: (context, roster) => _BestManagerCard(
+              monthName: _monthName(_selectedMonth),
+              report: roster.hasData
+                  ? BestManager.of(
+                      month: _selectedMonth,
+                      roster: roster.data!,
+                      meals: managerMeals,
+                      expenses: managerExpenses,
+                      today: DateTime.now(),
+                    )
+                  : null,
             ),
-          if (_balance.bestManager && hasRecords) ...[
-            const SizedBox(height: 14),
-            StreamBuilder<DutyRoster>(
-              stream: _rosterStream,
-              builder: (context, roster) => _BestManagerCard(
-                monthName: _monthName(_selectedMonth),
-                report: roster.hasData
-                    ? BestManager.of(
-                        month: _selectedMonth,
-                        roster: roster.data!,
-                        meals: managerMeals,
-                        expenses: managerExpenses,
-                        today: DateTime.now(),
-                      )
-                    : null,
-              ),
-            ),
-          ],
-          if (trend != null) ...[
-            const SizedBox(height: 14),
-            _trendChart(trend),
-          ],
+          ),
         ],
-
-        // ═══ Fixed ═══
-        if (tab == _CalcTab.fixed) ...[
-          if (!hasFixedCosts)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      widget.isAdmin
-                          ? 'Add each member\'s rent and the shared bills '
-                                '(Wi-Fi, electricity, chef). Shared bills '
-                                'are divided equally, and everything stays '
-                                'the same each month until you change it.'
-                          : 'No rent or shared bills have been added '
-                                'for this hostel yet.',
-                      textAlign: TextAlign.center,
-                    ),
-                    if (widget.isAdmin) ...[
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: () => _openFixedCosts(
-                          members: members,
-                          rents: rents,
-                          sharedBills: sharedBills,
-                          minimumMeals: savedMinimum,
-                          shopDue: savedShopDue,
-                        ),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Fixed Costs'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            )
-          else ...[
-            if (carriedFrom != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF2DA),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.history,
-                      size: 18,
-                      color: AppTheme.warning,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.isAdmin
-                            ? 'Carried over from $carriedFrom. Update it '
-                                  'if any bill changed this month.'
-                            : 'Carried over from $carriedFrom.',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            _AmountListCard(
-              title: 'Fixed Cost',
-              rows: [
-                for (final settlement in settlements)
-                  if (settlement.rent + settlement.billShare > 0)
-                    _AmountRow.owed(
-                      settlement.name,
-                      settlement.rent + settlement.billShare,
-                    ),
-              ],
-              onCopy: () => _copyFixedCosts(
-                settlements: settlements,
-                sharedBills: sharedBills,
-                billShare: billShare,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _DetailsToggle(
-              title: 'Details',
-              subtitle: 'Shared bills and each member\'s rent',
-              isExpanded: _showFixedDetails,
-              onTap: () {
-                setState(() => _showFixedDetails = !_showFixedDetails);
-              },
-            ),
-            if (_showFixedDetails) ...[
-              const SizedBox(height: 12),
-              _FixedCostsDetails(
-                settlements: settlements,
-                sharedBills: sharedBills,
-                billShare: billShare,
-              ),
-            ],
-            if (widget.isAdmin) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _resetFixedCosts(
-                        minimumMeals: savedMinimum,
-                        shopDue: savedShopDue,
-                      ),
-                      icon: const Icon(Icons.restart_alt, size: 18),
-                      label: const Text('Reset'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => _openFixedCosts(
-                        members: members,
-                        rents: rents,
-                        sharedBills: sharedBills,
-                        minimumMeals: savedMinimum,
-                        shopDue: savedShopDue,
-                      ),
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Edit'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+        if (showsFixedCosts) ...[
+          const SizedBox(height: 14),
+          _FixedCostsCard(
+            settlements: settlements,
+            sharedBills: sharedBills,
+            billShare: billShare,
+            carriedFrom: carriedFrom,
+            openIds: _openFixedIds,
+            onToggle: (id) {
+              setState(() {
+                if (!_openFixedIds.remove(id)) _openFixedIds.add(id);
+              });
+            },
+            onCopy: hasFixedCosts
+                ? () => _copyFixedCosts(
+                    settlements: settlements,
+                    sharedBills: sharedBills,
+                    billShare: billShare,
+                  )
+                : null,
+            onEdit: canChange
+                ? () => _openFixedCosts(
+                    members: members,
+                    rents: rents,
+                    sharedBills: sharedBills,
+                    minimumMeals: savedMinimum,
+                    shopDue: savedShopDue,
+                  )
+                : null,
+          ),
         ],
-
-        // ═══ Overall: meals + fixed costs, final amounts only ═══
-        if (tab == _CalcTab.overall) ...[
-          if (settlements.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'No members were found.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          else
-            _AmountListCard(
-              title: 'Overall Calculation',
-              subtitle: hasFixedCosts
-                  ? 'Meals + fixed costs'
-                  : 'Meals only. No fixed costs this month.',
-              rows: [
-                for (final settlement in settlements)
-                  _AmountRow.balance(settlement.name, settlement.finalTotal),
-              ],
-              onCopy: () => _copyOverall(
-                settlements: settlements,
-                includesFixedCosts: hasFixedCosts,
-              ),
-            ),
+        if (trend != null && _balance.monthTrend) ...[
+          const SizedBox(height: 14),
+          _trendChart(trend),
         ],
       ],
     );
@@ -1394,8 +1141,6 @@ String _amountText(double value) {
   return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
 }
 
-enum _CalcTab { meals, fixed, overall }
-
 /// One member's line in an [_AmountListCard].
 class _AmountRow {
   const _AmountRow(this.name, this.text, this.color);
@@ -1411,246 +1156,9 @@ class _AmountRow {
     return _AmountRow(name, 'Settled', AppTheme.textSecondary);
   }
 
-  /// An amount the member owes.
-  factory _AmountRow.owed(String name, double amount) {
-    return _AmountRow(name, '৳${_amountText(amount)}', AppTheme.textPrimary);
-  }
-
   final String name;
   final String text;
   final Color color;
-}
-
-// ─────────────────────────────────────────────────────────────
-// A titled list of one amount per member, with a copy action
-// ─────────────────────────────────────────────────────────────
-class _AmountListCard extends StatelessWidget {
-  const _AmountListCard({
-    required this.title,
-    required this.rows,
-    required this.onCopy,
-    this.subtitle,
-  });
-
-  final String title;
-  final String? subtitle;
-  final List<_AmountRow> rows;
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: onCopy,
-                  icon: const Icon(Icons.copy_outlined, size: 18),
-                  label: const Text('Copy'),
-                ),
-              ],
-            ),
-            if (subtitle != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 8, bottom: 4),
-                child: Text(
-                  subtitle!,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ),
-            const Divider(height: 12, endIndent: 8),
-            for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 7, 8, 7),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        row.name,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      row.text,
-                      style: TextStyle(
-                        color: row.color,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Expand / collapse row for a tab's details
-// ─────────────────────────────────────────────────────────────
-class _DetailsToggle extends StatelessWidget {
-  const _DetailsToggle({
-    required this.title,
-    required this.subtitle,
-    required this.isExpanded,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool isExpanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        onTap: onTap,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle),
-        trailing: Icon(
-          isExpanded ? Icons.expand_less : Icons.expand_more,
-          color: AppTheme.textSecondary,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Fixed cost details — the bills and rents that were entered
-// ─────────────────────────────────────────────────────────────
-class _FixedCostsDetails extends StatelessWidget {
-  const _FixedCostsDetails({
-    required this.settlements,
-    required this.sharedBills,
-    required this.billShare,
-  });
-
-  final List<MemberSettlement> settlements;
-  final List<SharedBill> sharedBills;
-  final double billShare;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final rents = settlements.where((item) => item.rent > 0).toList();
-    final totalRent = rents.fold<double>(0, (total, item) => total + item.rent);
-
-    Widget heading(String text) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(
-          text,
-          style: textTheme.bodySmall?.copyWith(
-            color: AppTheme.textSecondary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (sharedBills.isNotEmpty) ...[
-              heading('SHARED BILLS'),
-              for (final bill in sharedBills)
-                _SettlementLine(
-                  label: bill.name,
-                  value: '৳${_amountText(bill.amount)}',
-                ),
-              _SettlementLine(
-                label: 'Total',
-                value:
-                    '৳${_amountText(FixedCostsCalculator.totalBills(sharedBills))}',
-              ),
-              _SettlementLine(
-                label: 'Each Member Pays',
-                value: '৳${_amountText(billShare)}',
-                isStrong: true,
-              ),
-            ],
-            if (sharedBills.isNotEmpty && rents.isNotEmpty)
-              const Divider(height: 22),
-            if (rents.isNotEmpty) ...[
-              heading('RENT'),
-              for (final item in rents)
-                _SettlementLine(
-                  label: item.name,
-                  value: '৳${_amountText(item.rent)}',
-                ),
-              _SettlementLine(
-                label: 'Total Rent',
-                value: '৳${_amountText(totalRent)}',
-                isStrong: true,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettlementLine extends StatelessWidget {
-  const _SettlementLine({
-    required this.label,
-    required this.value,
-    this.isStrong = false,
-  });
-
-  final String label;
-  final String value;
-  final bool isStrong;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextStyle(
-      color: AppTheme.textPrimary,
-      fontWeight: isStrong ? FontWeight.w800 : FontWeight.w500,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: style)),
-          const SizedBox(width: 12),
-          Text(value, style: style),
-        ],
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2176,6 +1684,279 @@ class _MemberFigure extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// "Get ৳310", "Pay ৳120" or "Settled".
+String _mealBalanceText(int amount) => amount > 0
+    ? 'Get ৳$amount'
+    : amount < 0
+    ? 'Pay ৳${-amount}'
+    : 'Settled';
+
+// ─────────────────────────────────────────────────────────────
+// Fixed Costs: rent and shared bills, set by admins, with meals
+// ─────────────────────────────────────────────────────────────
+class _FixedCostsCard extends StatelessWidget {
+  const _FixedCostsCard({
+    required this.settlements,
+    required this.sharedBills,
+    required this.billShare,
+    required this.carriedFrom,
+    required this.openIds,
+    required this.onToggle,
+    required this.onCopy,
+    required this.onEdit,
+  });
+
+  final List<MemberSettlement> settlements;
+  final List<SharedBill> sharedBills;
+  final double billShare;
+
+  /// The month the figures were saved in, when not this one.
+  final String? carriedFrom;
+  final Set<String> openIds;
+  final ValueChanged<String> onToggle;
+
+  /// Null while nothing is set.
+  final VoidCallback? onCopy;
+
+  /// Null unless an admin can change them.
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty =
+        sharedBills.isEmpty &&
+        settlements.every((settlement) => settlement.rent <= 0);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 8, 6, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Fixed Costs',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (carriedFrom != null && !isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      'From $carriedFrom',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (onCopy != null)
+                  IconButton(
+                    tooltip: 'Copy',
+                    onPressed: onCopy,
+                    icon: const Icon(
+                      Icons.copy_outlined,
+                      size: 20,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                if (onEdit != null && !isEmpty)
+                  IconButton(
+                    tooltip: 'Edit',
+                    onPressed: onEdit,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Rent & Bills'),
+              ),
+            )
+          else ...[
+            if (sharedBills.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    for (final bill in sharedBills)
+                      _BillLine(
+                        label: bill.name.isEmpty ? 'Bill' : bill.name,
+                        value: '৳${_amountText(bill.amount)}',
+                      ),
+                    _BillLine(
+                      label: 'Each',
+                      value: '৳${_amountText(billShare)}',
+                      isStrong: true,
+                    ),
+                  ],
+                ),
+              ),
+            for (final settlement in settlements)
+              _FixedCostsRow(
+                settlement: settlement,
+                isOpen: openIds.contains(settlement.id),
+                onTap: () => onToggle(settlement.id),
+              ),
+            const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BillLine extends StatelessWidget {
+  const _BillLine({
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isStrong;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      color: isStrong ? AppTheme.textPrimary : AppTheme.textSecondary,
+      fontSize: 13.5,
+      fontWeight: isStrong ? FontWeight.w800 : FontWeight.w600,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text(value, style: style),
+        ],
+      ),
+    );
+  }
+}
+
+/// A member's total with meals; tapped, the rent, bills and meals.
+class _FixedCostsRow extends StatelessWidget {
+  const _FixedCostsRow({
+    required this.settlement,
+    required this.isOpen,
+    required this.onTap,
+  });
+
+  final MemberSettlement settlement;
+  final bool isOpen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _AmountRow.balance(settlement.name, settlement.finalTotal);
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 11, 10, 11),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    settlement.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  total.text,
+                  style: TextStyle(
+                    color: total.color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  isOpen ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
+              ],
+            ),
+            if (isOpen)
+              Container(
+                margin: const EdgeInsets.only(top: 10, right: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Rent',
+                        value: '৳${_amountText(settlement.rent)}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Bills',
+                        value: '৳${_amountText(settlement.billShare)}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _MemberFigure(
+                        label: 'Meals',
+                        value: _mealBalanceText(settlement.mealBalance.round()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

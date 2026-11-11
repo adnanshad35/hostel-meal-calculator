@@ -63,6 +63,8 @@ class HostelSettings {
         ),
         initialShare: option('initialShareEnabled') == true,
         bestManager: option('bestManagerEnabled') == true,
+        fixedCostsChanges: _changes(options['fixedCostsChanges']),
+        monthTrend: options['monthTrendEnabled'] != false,
       ),
     );
   }
@@ -153,6 +155,8 @@ class HostelSettings {
       'shopDueChanges': balanceOptions.shopDueChanges,
       'initialShareEnabled': balanceOptions.initialShare,
       'bestManagerEnabled': balanceOptions.bestManager,
+      'fixedCostsChanges': balanceOptions.fixedCostsChanges,
+      'monthTrendEnabled': balanceOptions.monthTrend,
     };
   }
 }
@@ -171,6 +175,8 @@ class BalanceOptions {
     this.shopDueChanges = const {},
     this.initialShare = false,
     this.bestManager = false,
+    this.fixedCostsChanges = const {},
+    this.monthTrend = true,
   });
 
   final Map<String, bool> minimumMealsChanges;
@@ -186,7 +192,15 @@ class BalanceOptions {
   /// cheapest, against the month's average.
   final bool bestManager;
 
-  static bool _isOnIn(Map<String, bool> changes, String monthKey) {
+  /// Rent and shared bills, set by admins. Off until switched on, and
+  /// remembered by month like Min Meals.
+  final Map<String, bool> fixedCostsChanges;
+
+  /// When on, the Balance page shows the month's day-by-day chart.
+  final bool monthTrend;
+
+  /// The last switch made in [monthKey] or before it.
+  static String? _lastChange(Map<String, bool> changes, String monthKey) {
     String? last;
     for (final key in changes.keys) {
       if (key.compareTo(monthKey) <= 0 &&
@@ -194,7 +208,16 @@ class BalanceOptions {
         last = key;
       }
     }
-    return last == null || changes[last]!;
+    return last;
+  }
+
+  static bool _isOnIn(
+    Map<String, bool> changes,
+    String monthKey, {
+    bool byDefault = true,
+  }) {
+    final last = _lastChange(changes, monthKey);
+    return last == null ? byDefault : changes[last]!;
   }
 
   /// [changes] with a switch to [isOn] in [monthKey]. A switch back to
@@ -202,14 +225,28 @@ class BalanceOptions {
   static Map<String, bool> _switched(
     Map<String, bool> changes,
     bool isOn,
-    String monthKey,
-  ) {
+    String monthKey, {
+    bool byDefault = true,
+  }) {
     final updated = {
       for (final entry in changes.entries)
         if (entry.key.compareTo(monthKey) < 0) entry.key: entry.value,
     };
-    if (_isOnIn(updated, monthKey) != isOn) updated[monthKey] = isOn;
+    if (_isOnIn(updated, monthKey, byDefault: byDefault) != isOn) {
+      updated[monthKey] = isOn;
+    }
     return updated;
+  }
+
+  bool usesFixedCosts(String monthKey) =>
+      _isOnIn(fixedCostsChanges, monthKey, byDefault: false);
+
+  /// The month Fixed Costs were last switched on, up to [monthKey].
+  /// Only figures saved from then on count, so rent entered long ago,
+  /// before a switch off, never comes back by itself. Null when off.
+  String? fixedCostsSince(String monthKey) {
+    if (!usesFixedCosts(monthKey)) return null;
+    return _lastChange(fixedCostsChanges, monthKey);
   }
 
   bool usesMinimumMeals(String monthKey) =>
@@ -235,12 +272,16 @@ class BalanceOptions {
     Map<String, bool>? shopDueChanges,
     bool? initialShare,
     bool? bestManager,
+    Map<String, bool>? fixedCostsChanges,
+    bool? monthTrend,
   }) {
     return BalanceOptions(
       minimumMealsChanges: minimumMealsChanges ?? this.minimumMealsChanges,
       shopDueChanges: shopDueChanges ?? this.shopDueChanges,
       initialShare: initialShare ?? this.initialShare,
       bestManager: bestManager ?? this.bestManager,
+      fixedCostsChanges: fixedCostsChanges ?? this.fixedCostsChanges,
+      monthTrend: monthTrend ?? this.monthTrend,
     );
   }
 
@@ -255,6 +296,17 @@ class BalanceOptions {
   BalanceOptions withInitialShare(bool isOn) => _copy(initialShare: isOn);
 
   BalanceOptions withBestManager(bool isOn) => _copy(bestManager: isOn);
+
+  BalanceOptions withFixedCosts(bool isOn, String monthKey) => _copy(
+    fixedCostsChanges: _switched(
+      fixedCostsChanges,
+      isOn,
+      monthKey,
+      byDefault: false,
+    ),
+  );
+
+  BalanceOptions withMonthTrend(bool isOn) => _copy(monthTrend: isOn);
 
   /// True when [other] counts Min Meals and Shop Due the same way in
   /// [monthKey].

@@ -199,6 +199,14 @@ const guideSections = [
             'Initial Share and Shop Due. Tap it to see every manager.',
       ),
       (
+        'Fixed Costs',
+        'When it is on, admins set each member\'s rent and the shared '
+            'bills, such as Wi-Fi and electricity; bills are split equally. '
+            'Each member sees rent, bills and meals added together. Tap a '
+            'name to see the parts. The figures carry on to the next month '
+            'until an admin changes them.',
+      ),
+      (
         'Month Trend',
         'Compares this month with last month day by day. Switch between '
             '{b:Rate}, {b:Meals} and {b:Cost}, and tap or drag to pick a day.',
@@ -309,8 +317,9 @@ const guideSections = [
       ),
       (
         'Balance Options',
-        'Switch {b:Min Meals}, {b:Shop Due}, {b:Initial Share} and {b:Best '
-            'Manager} on or off, here or with {b:+} on the Balance page. A '
+        'Switch {b:Min Meals}, {b:Shop Due}, {b:Initial Share}, {b:Fixed '
+            'Costs}, {b:Best Manager} and {b:Month Trend} on or off, here or '
+            'with {b:+} on the Balance page. A '
             'switch changes this month and the months after it; earlier '
             'months keep their figures. Initial Shares already added still '
             'count when it is off. Min Meals and Shop Due open from the 25th '

@@ -98,12 +98,32 @@ class _BalanceOptionsScreenState extends State<BalanceOptionsScreen> {
                     ),
                   ),
                   SwitchTile(
+                    icon: Icons.home_work_outlined,
+                    title: 'Fixed Costs',
+                    value: options.usesFixedCosts(thisMonth),
+                    onChanged: (isOn) => _save(
+                      settings.copyWith(
+                        balanceOptions: options.withFixedCosts(isOn, thisMonth),
+                      ),
+                    ),
+                  ),
+                  SwitchTile(
                     icon: Icons.emoji_events_outlined,
                     title: 'Best Manager',
                     value: options.bestManager,
                     onChanged: (isOn) => _save(
                       settings.copyWith(
                         balanceOptions: options.withBestManager(isOn),
+                      ),
+                    ),
+                  ),
+                  SwitchTile(
+                    icon: Icons.show_chart,
+                    title: 'Month Trend',
+                    value: options.monthTrend,
+                    onChanged: (isOn) => _save(
+                      settings.copyWith(
+                        balanceOptions: options.withMonthTrend(isOn),
                       ),
                     ),
                   ),
