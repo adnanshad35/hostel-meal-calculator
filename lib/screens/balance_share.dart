@@ -88,7 +88,7 @@ class _BalanceShareDialogState extends State<_BalanceShareDialog> {
       contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
       title: const Text('Share Balance'),
       content: SizedBox(
-        width: 380,
+        width: 400,
         child: SingleChildScrollView(
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -137,7 +137,7 @@ class _BalancePicture extends StatelessWidget {
   final String monthName;
   final MonthlyCalculation result;
 
-  static const double _width = 360;
+  static const double _width = 390;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +198,7 @@ class _BalancePicture extends StatelessWidget {
               const _Row(
                 name: 'Member',
                 meals: 'Meals',
+                cost: 'Meal Cost',
                 paid: 'Paid',
                 balance: 'Balance',
                 isHeader: true,
@@ -206,7 +207,9 @@ class _BalancePicture extends StatelessWidget {
                 _Row(
                   name: member.name,
                   meals: _number(member.mealNumber),
-                  paid: '৳${_number(member.spending)}',
+                  // Taken from the rounded figures, so each row adds up.
+                  cost: '৳${member.spending.round() - member.finalBalance}',
+                  paid: '৳${member.spending.round()}',
                   balance: member.finalBalance < 0
                       ? 'Pay ৳${-member.finalBalance}'
                       : member.finalBalance > 0
@@ -281,6 +284,7 @@ class _Row extends StatelessWidget {
   const _Row({
     required this.name,
     required this.meals,
+    required this.cost,
     required this.paid,
     required this.balance,
     this.balanceColor = AppTheme.textPrimary,
@@ -290,6 +294,7 @@ class _Row extends StatelessWidget {
 
   final String name;
   final String meals;
+  final String cost;
   final String paid;
   final String balance;
   final Color balanceColor;
@@ -306,11 +311,11 @@ class _Row extends StatelessWidget {
 
     return Container(
       color: isHeader || isShaded ? AppTheme.surfaceSoft : null,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       child: Row(
         children: [
           Expanded(
-            flex: 5,
+            flex: 4,
             child: Text(
               name,
               maxLines: 1,
@@ -321,6 +326,10 @@ class _Row extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(meals, textAlign: TextAlign.right, style: style()),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(cost, textAlign: TextAlign.right, style: style()),
           ),
           Expanded(
             flex: 3,
