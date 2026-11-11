@@ -155,11 +155,11 @@ class _BalancePicture extends StatelessWidget {
                   gradient: AppTheme.heroGradient,
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (hostelName.isNotEmpty)
                       Text(
                         hostelName,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 19,
@@ -169,10 +169,21 @@ class _BalancePicture extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '$monthName Balance',
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppTheme.accent,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Created on ${_date(DateTime.now())}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -241,6 +252,25 @@ class _BalancePicture extends StatelessWidget {
     );
   }
 
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  /// "12 Nov 2026".
+  static String _date(DateTime day) =>
+      '${day.day} ${_months[day.month - 1]} ${day.year}';
+
   static String _number(double value) =>
       value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
 }
@@ -255,7 +285,6 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
