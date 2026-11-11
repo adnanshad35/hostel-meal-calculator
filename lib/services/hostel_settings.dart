@@ -65,6 +65,7 @@ class HostelSettings {
         bestManager: option('bestManagerEnabled') == true,
         fixedCostsChanges: _changes(options['fixedCostsChanges']),
         monthTrend: options['monthTrendEnabled'] != false,
+        mealPlusFixed: options['mealPlusFixedEnabled'] == true,
       ),
     );
   }
@@ -157,6 +158,7 @@ class HostelSettings {
       'bestManagerEnabled': balanceOptions.bestManager,
       'fixedCostsChanges': balanceOptions.fixedCostsChanges,
       'monthTrendEnabled': balanceOptions.monthTrend,
+      'mealPlusFixedEnabled': balanceOptions.mealPlusFixed,
     };
   }
 }
@@ -177,6 +179,7 @@ class BalanceOptions {
     this.bestManager = false,
     this.fixedCostsChanges = const {},
     this.monthTrend = true,
+    this.mealPlusFixed = false,
   });
 
   final Map<String, bool> minimumMealsChanges;
@@ -198,6 +201,10 @@ class BalanceOptions {
 
   /// When on, the Balance page shows the month's day-by-day chart.
   final bool monthTrend;
+
+  /// When on, with Fixed Costs, the Balance page also shows each
+  /// member's meal balance and fixed cost added together.
+  final bool mealPlusFixed;
 
   /// The last switch made in [monthKey] or before it.
   static String? _lastChange(Map<String, bool> changes, String monthKey) {
@@ -274,6 +281,7 @@ class BalanceOptions {
     bool? bestManager,
     Map<String, bool>? fixedCostsChanges,
     bool? monthTrend,
+    bool? mealPlusFixed,
   }) {
     return BalanceOptions(
       minimumMealsChanges: minimumMealsChanges ?? this.minimumMealsChanges,
@@ -282,6 +290,7 @@ class BalanceOptions {
       bestManager: bestManager ?? this.bestManager,
       fixedCostsChanges: fixedCostsChanges ?? this.fixedCostsChanges,
       monthTrend: monthTrend ?? this.monthTrend,
+      mealPlusFixed: mealPlusFixed ?? this.mealPlusFixed,
     );
   }
 
@@ -307,6 +316,8 @@ class BalanceOptions {
   );
 
   BalanceOptions withMonthTrend(bool isOn) => _copy(monthTrend: isOn);
+
+  BalanceOptions withMealPlusFixed(bool isOn) => _copy(mealPlusFixed: isOn);
 
   /// True when [other] counts Min Meals and Shop Due the same way in
   /// [monthKey].

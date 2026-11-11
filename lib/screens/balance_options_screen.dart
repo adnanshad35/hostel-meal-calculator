@@ -107,6 +107,17 @@ class _BalanceOptionsScreenState extends State<BalanceOptionsScreen> {
                       ),
                     ),
                   ),
+                  if (options.usesFixedCosts(thisMonth))
+                    SwitchTile(
+                      icon: Icons.add_card_outlined,
+                      title: 'Meal + Fixed Cost',
+                      value: options.mealPlusFixed,
+                      onChanged: (isOn) => _save(
+                        settings.copyWith(
+                          balanceOptions: options.withMealPlusFixed(isOn),
+                        ),
+                      ),
+                    ),
                   SwitchTile(
                     icon: Icons.emoji_events_outlined,
                     title: 'Best Manager',
