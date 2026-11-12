@@ -46,7 +46,7 @@ const guideSections = [
       (
         'Join a Hostel',
         'Ask your admin for the {b:Hostel Code} and enter it under '
-            '{b:Join a Hostel}. The hostel's name shows before you join. '
+            '{b:Join a Hostel}. The hostel\'s name shows before you join. '
             'The admin must keep {b:Allow New Members} on.',
       ),
       (
