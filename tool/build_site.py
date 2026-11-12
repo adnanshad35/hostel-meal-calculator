@@ -22,10 +22,27 @@ def main():
     # would turn /app/ into a Windows folder.
     environment = dict(os.environ, MSYS_NO_PATHCONV='1')
 
+    # A leftover build can make Flutter skip copying the fonts and other
+    # assets, which leaves every icon as an empty box. Start clean.
+    if os.path.isdir(WEB_BUILD):
+        shutil.rmtree(WEB_BUILD)
+
     subprocess.run(
         'flutter build web --release --base-href /app/',
         shell=True, cwd=ROOT, env=environment, check=True,
     )
+
+    required = [
+        os.path.join('assets', 'FontManifest.json'),
+        os.path.join('assets', 'fonts', 'MaterialIcons-Regular.otf'),
+        'flutter_service_worker.js',
+    ]
+    missing = [
+        name for name in required
+        if not os.path.isfile(os.path.join(WEB_BUILD, name))
+    ]
+    if missing:
+        sys.exit('The web build is incomplete, missing: ' + ', '.join(missing))
 
     if os.path.isdir(OUTPUT):
         shutil.rmtree(OUTPUT)
