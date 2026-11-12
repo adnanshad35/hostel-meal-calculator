@@ -139,7 +139,8 @@ const guideSections = [
         'Simple or Itemwise',
         'Choose {b:Simple} for one name and amount, or {b:Itemwise} to list '
             'each item with its quantity and price. Tap {b:Add Item} for '
-            'another row; the total and the name fill in by themselves.',
+            'another row; the total and the name fill in by themselves. '
+            'Switching starts the other one empty.',
       ),
       (
         'Paid By',
@@ -325,7 +326,7 @@ const guideSections = [
         'Switch {b:Min Meals}, {b:Shop Due}, {b:Initial Share}, {b:Fixed '
             'Costs}, {b:Meal + Fixed Cost}, {b:Best Manager} and {b:Month '
             'Trend} on or off, here or '
-            'with {b:+} on the Balance page. A '
+            'with {b:More Options} on the Balance page. A '
             'switch changes this month and the months after it; earlier '
             'months keep their figures. Initial Shares already added still '
             'count when it is off. Min Meals and Shop Due open from the 25th '

@@ -1180,7 +1180,10 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _amountController;
-  late final TextEditingController _descriptionController;
+
+  /// A note saved on a simple expense by an earlier version. Simple
+  /// has no description box now, so it is kept as it is when saved.
+  String _keptDescription = '';
 
   _ExpenseMode _mode = _ExpenseMode.simple;
   final List<_ItemRow> _rows = [];
@@ -1216,7 +1219,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     );
 
     final description = (data?['description'] as String? ?? '').trim();
-    _descriptionController = TextEditingController(text: description);
 
     if (_isEditing) {
       // Saved itemwise, it opens itemwise.
@@ -1228,6 +1230,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       if (items != null) {
         _mode = _ExpenseMode.itemwise;
         _rows.addAll(items.map(_rowOf));
+      } else {
+        _keptDescription = description;
       }
     } else {
       _loadMode();
@@ -1247,7 +1251,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _membersSubscription?.cancel();
     _nameController.dispose();
     _amountController.dispose();
-    _descriptionController.dispose();
     for (final row in _rows) {
       row.dispose();
     }
@@ -1315,47 +1318,19 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     (total, row) => total + (row.priceValue ?? 0).clamp(0, double.infinity),
   );
 
-  /// Switching carries what was typed across, so nothing is lost.
+  /// One mode at a time: switching starts the other one empty.
   void _setMode(_ExpenseMode mode, {bool remember = true}) {
     if (mode == _mode) return;
     setState(() {
+      _nameController.clear();
+      _amountController.clear();
+      _keptDescription = '';
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows.clear();
       if (mode == _ExpenseMode.itemwise) {
-        if (_rows.every((row) => row.isBlank)) {
-          for (final row in _rows) {
-            row.dispose();
-          }
-          _rows.clear();
-          final amount = double.tryParse(_amountController.text.trim());
-          final items = ExpenseItems.parse(
-            name: _nameController.text,
-            description: _descriptionController.text,
-            amount: amount ?? 0,
-          );
-          if (items != null) {
-            _rows.addAll(items.map(_rowOf));
-          } else if (_nameController.text.trim().isNotEmpty || amount != null) {
-            _rows.add(
-              _rowOf(
-                ExpenseItem(
-                  name: ExpenseItems.clean(_nameController.text),
-                  price: amount ?? 0,
-                ),
-              ),
-            );
-            if (amount == null) _rows.last.price.clear();
-          } else {
-            _rows.add(_ItemRow()..price.addListener(_onPriceChanged));
-          }
-        }
-      } else {
-        final items = _items;
-        if (items != null && items.isNotEmpty) {
-          _nameController.text = ExpenseItems.nameOf(items);
-          _amountController.text = ExpenseItems.plain(
-            ExpenseItems.totalOf(items),
-          );
-          _descriptionController.text = ExpenseItems.describe(items);
-        }
+        _rows.add(_ItemRow()..price.addListener(_onPriceChanged));
       }
       _mode = mode;
     });
@@ -1515,7 +1490,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
 
       final description = items != null
           ? ExpenseItems.describe(items)
-          : _descriptionController.text.trim();
+          : _keptDescription;
       final savedDescription =
           (widget.expense?.data()?['description'] as String? ?? '').trim();
 
@@ -1811,19 +1786,6 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                       }
                       return null;
                     },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _descriptionController,
-                    minLines: 2,
-                    maxLines: 5,
-                    maxLength: 400,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      alignLabelWithHint: true,
-                      counterText: '',
-                    ),
                   ),
                   const SizedBox(height: 20),
                   // Tapping the amount opens the keyboard; the calculator

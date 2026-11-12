@@ -1222,14 +1222,21 @@ class _RateHero extends StatelessWidget {
               ),
               // A small + for admins while an option is off.
               if (onOpenBalanceOptions != null)
-                IconButton(
-                  tooltip: 'Balance Options',
+                TextButton.icon(
                   onPressed: onOpenBalanceOptions,
-                  style: IconButton.styleFrom(
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.accent,
                     backgroundColor: Colors.white.withValues(alpha: 0.12),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.fromLTRB(10, 0, 14, 0),
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.add, size: 20, color: AppTheme.accent),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('More Options'),
                 ),
               // Keeps the height the same with or without the +.
               const SizedBox(height: 40),
