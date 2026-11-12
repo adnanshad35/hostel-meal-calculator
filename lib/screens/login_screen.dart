@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/sign_in_limiter.dart';
-import '../theme/app_theme.dart';
+import '../widgets/onboarding.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -141,28 +141,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceSoft,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: const Icon(
-                          Icons.lock_open_rounded,
-                          size: 36,
-                          color: AppTheme.primary,
-                        ),
-                      ),
+                    const AuthHeader(
+                      title: 'Welcome Back',
+                      subtitle: 'Sign in to your hostel.',
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Welcome Back',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 26),
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(20),

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../widgets/onboarding.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -10,9 +13,67 @@ class VerifyEmailScreen extends StatefulWidget {
   State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
 }
 
-class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
+class _VerifyEmailScreenState extends State<VerifyEmailScreen>
+    with WidgetsBindingObserver {
   bool _isChecking = false;
   bool _isSending = false;
+
+  /// Looks again every few seconds, so the app moves on by itself once
+  /// the link is opened.
+  Timer? _autoCheck;
+
+  /// Seconds until Resend can be tapped again.
+  int _resendWait = 0;
+  Timer? _resendTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _autoCheck = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => _checkQuietly(),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoCheck?.cancel();
+    _resendTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Back from the email app: look straight away.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkQuietly();
+  }
+
+  /// Checks without any message; the app simply moves on when verified.
+  Future<void> _checkQuietly() async {
+    if (_isChecking || _isSending) return;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      // As the button does: a fresh token first, so the database sees
+      // the email as verified by the time the app moves on.
+      await user.getIdToken(true);
+      await FirebaseAuth.instance.currentUser?.reload();
+    } catch (_) {
+      // Tried again shortly.
+    }
+  }
+
+  void _startResendWait() {
+    _resendTimer?.cancel();
+    setState(() => _resendWait = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() => _resendWait--);
+      if (_resendWait <= 0) timer.cancel();
+    });
+  }
 
   Future<void> _checkVerification() async {
     setState(() => _isChecking = true);
@@ -59,6 +120,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       await FirebaseAuth.instance.currentUser?.sendEmailVerification();
       if (!mounted) return;
+      _startResendWait();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -89,10 +151,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     final isBusy = _isChecking || _isSending;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Verify Email'),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: AppBar(automaticallyImplyLeading: false),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -102,33 +161,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Align(
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceSoft,
-                        borderRadius: BorderRadius.circular(26),
-                      ),
-                      child: const Icon(
-                        Icons.mark_email_unread_outlined,
-                        size: 42,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 26),
-                  Text(
-                    'Check Your Email',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'We sent a verification link to',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge
-                        ?.copyWith(color: AppTheme.textSecondary),
+                  const AuthHeader(
+                    title: 'Check Your Email',
+                    subtitle: 'We sent a verification link to',
                   ),
                   const SizedBox(height: 6),
                   SelectableText(
@@ -147,19 +182,46 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         children: [
                           const _StepRow(
                             number: '1',
-                            text: 'Open the verification email.',
+                            text: 'Open the email and tap the link.',
                           ),
                           const SizedBox(height: 14),
                           const _StepRow(
                             number: '2',
-                            text: 'Tap the verification link.',
+                            text: 'Come back here. The app moves on by itself.',
                           ),
-                          const SizedBox(height: 14),
-                          const _StepRow(
-                            number: '3',
-                            text: 'Return here and continue.',
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 20,
+                                  color: AppTheme.accentDeep,
+                                ),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'It comes from noreply@hostel-meal-'
+                                    'calculator-1035.firebaseapp.com, our '
+                                    'sign-in service. Not in your inbox? '
+                                    'Check Spam or Promotions.',
+                                    style: TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 13,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 18),
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
@@ -181,11 +243,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
-                              onPressed: isBusy ? null : _resendEmail,
+                              onPressed: isBusy || _resendWait > 0
+                                  ? null
+                                  : _resendEmail,
                               child: Text(
                                 _isSending
                                     ? 'Sending...'
-                                    : 'Resend Verification Email',
+                                    : _resendWait > 0
+                                    ? 'Resend in ${_resendWait}s'
+                                    : 'Resend Email',
                               ),
                             ),
                           ),

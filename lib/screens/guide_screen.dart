@@ -34,18 +34,20 @@ const guideSections = [
       (
         'Create an Account',
         'Sign up with your email and a password, then open the link we '
-            'email you to verify it.',
+            'email you. The app moves on by itself once it is verified; if '
+            'the email is not in your inbox, check Spam.',
       ),
       (
         'Create a Hostel',
-        'Tap {b:Create Hostel} and enter its name. The name cannot be '
+        'Tap {b:Create a Hostel} and enter its name. The name cannot be '
             'changed later. You become its admin and get a {b:Hostel Code} '
-            'for your members.',
+            'to copy or share with your members.',
       ),
       (
         'Join a Hostel',
         'Ask your admin for the {b:Hostel Code} and enter it under '
-            '{b:Join Hostel}. The admin must keep {b:Allow New Members} on.',
+            '{b:Join a Hostel}. The hostel's name shows before you join. '
+            'The admin must keep {b:Allow New Members} on.',
       ),
       (
         'Activate the Hostel',
