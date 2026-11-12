@@ -794,6 +794,15 @@
       .chip { padding: 9px 12px; }
       .chip strong { font-size: 15px; }
     }
+    .alt-download {
+      margin-top: 12px;
+      font-size: 13.5px;
+      color: rgba(255, 255, 255, 0.72);
+    }
+    .alt-download a { color: var(--brass); font-weight: 700; }
+    .install-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+    .install-buttons .btn { flex: 1 1 200px; justify-content: center; }
+    .install-buttons small { font-weight: 600; opacity: 0.75; }
   </style>
 </head>
 <body>
@@ -841,6 +850,7 @@
           </a>
           <a class="btn btn-ghost" href="/app/">Use It in Your Browser</a>
         </div>
+        <p class="alt-download">Older phone, or "App not installed"? <a href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate-32bit.apk">Get the 32-bit version</a></p>
 
         <div class="meta">
           <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.500 4.500L19 7.500"/></svg>Free to download</span>
@@ -1116,12 +1126,19 @@
               <li>Sign up and follow the <a href="#guide">guide above</a>.</li>
             </ol>
 
-            <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
-              Download for Android
-            </a>
+            <div class="install-buttons">
+              <a class="btn btn-dark" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+                64-bit&nbsp;<small>Recommended</small>
+              </a>
+              <a class="btn btn-soft" href="https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate-32bit.apk">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+                32-bit&nbsp;<small>Older Phones</small>
+              </a>
+            </div>
 
             <div class="tip">
+              <strong>Which One?</strong> Most phones need <strong>64-bit</strong>. If your phone says <strong>App not installed</strong>, use <strong>32-bit</strong>.<br><br>
               <strong>Download Looks Stuck?</strong> Open your browser's Downloads list. If HostelMate.apk shows a warning, choose <strong>Keep</strong> or <strong>Download anyway</strong>. If Play Protect asks, choose <strong>Install anyway</strong>.
             </div>
           </div>

@@ -11,12 +11,12 @@ Flutter app (Android + web) for shared hostel meals, expenses and monthly balanc
 
 ## Commands
 - Check: `flutter analyze lib` and `flutter test`
-- APK: `flutter build apk --release --target-platform android-arm64` (arm64 only, to keep the download small; signed via `android/key.properties`)
+- APK: `flutter build apk --release --target-platform android-arm64` for `HostelMate.apk`, and `--target-platform android-arm` for `HostelMate-32bit.apk` (one ABI each, to keep downloads small; signed via `android/key.properties`)
 - Web: `python tool/build_site.py`, then `firebase deploy --only hosting`
 - Rules: `firebase deploy --only firestore:rules`
 
 ## Release
-Bump `version` in `pubspec.yaml`, then publish a GitHub release tagged `vX.Y.Z` with the APK attached as `HostelMate.apk`. The in-app update check reads the latest release.
+Bump `version` in `pubspec.yaml`, then publish a GitHub release tagged `vX.Y.Z` with both APKs attached: `HostelMate.apk` (64-bit) and `HostelMate-32bit.apk`. The in-app update check reads the latest release, and a 32-bit phone downloads the 32-bit file.
 
 ## Conventions
 - Work on `Ready2Release`; the user merges into `main`.
