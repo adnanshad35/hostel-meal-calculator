@@ -6,7 +6,9 @@ HostelMate replaces the handwritten meal register and the end-of-month calculato
 
 It is built with Flutter and Firebase and runs on Android and in the browser. There is no server code: every permission is enforced by Firestore Security Rules.
 
-**[Download for Android](https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk)** · **[Open the web version](https://hostelmate.web.app/app/)** · **[Website](https://hostelmate.web.app)**
+**[Download for Android](https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk)** (64-bit, most phones) · **[32-bit for older phones](https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate-32bit.apk)** · **[Open the web version](https://hostelmate.web.app/app/)** · **[Website](https://hostelmate.web.app)**
+
+Current version: **1.9.0**
 
 ---
 
@@ -15,6 +17,7 @@ It is built with Flutter and Firebase and runs on Android and in the browser. Th
 - [The problem it solves](#the-problem-it-solves)
 - [Who uses it](#who-uses-it)
 - [Features](#features)
+- [Balance Options](#balance-options)
 - [Accountability and the month lock](#accountability-and-the-month-lock)
 - [How the monthly calculation works](#how-the-monthly-calculation-works)
 - [Hostel activation](#hostel-activation)
@@ -56,6 +59,15 @@ Hostels often include people who will never install an app. An admin can add the
 
 The phone app has four tabs along the bottom: **Home**, **Meals**, **Expenses** and **Balance**. The website's [Guide](https://hostelmate.web.app/#guide) walks a new user from sign-up to settings.
 
+### First steps
+
+- **Welcome**: the HostelMate logo, what the app does in three lines, and **Create New Account** or **Sign In**
+- **Create Account**: name, email, phone and password, with a checklist that turns green as each password rule is met
+- **Verify Email**: the app checks by itself every few seconds and when you come back from your email app, so it moves on as soon as the link is opened. **Resend** waits 60 seconds between emails, and a tip says where the email comes from and to check Spam
+- **Join a Hostel** (the main choice) or **Create a Hostel**
+- **Joining** shows the hostel's name as soon as the 6-character code is typed, before you join
+- **Creating** ends on a page with the **Hostel Code** in large letters, with **Copy** and **Share**; Share sends the app link, the steps and the code
+
 ### Home
 
 - The hostel's name, who is on duty today, and the **Hostel Details** button
@@ -71,41 +83,46 @@ The phone app has four tabs along the bottom: **Home**, **Meals**, **Expenses** 
 - One page: the month at the top, **My Meals** and **Total Meals**, a calendar, and the chosen day's table
 - In the table your own row comes first; tap a row with a pencil to change it. Days still to come cannot be picked
 - Admins can record or correct meals for any member, including members without the app
+- **Chef**: beside the title of Add Meal, admins see **Chef ✓**. Tapping it turns **Lunch** or **Dinner** off for everyone for that day, with **Cancel** and **Save**. An off meal shows in red, and the day turns back on by itself the next day. Members' usual meals are kept, so turning a meal back on restores them
 
 ### Expenses
 
-- Record an expense with an item, an optional description, an amount, and who paid
-- A built-in calculator for the amount, without opening the phone keyboard
+- Two ways to add one, one at a time; switching starts the other empty:
+  - **Simple**: an expense name and an amount, with a built-in calculator
+  - **Itemwise**: rows of **Item | Qty | Price** (for example Rice | 5 kg | ৳350). **Add Item** adds a row, the total adds up by itself, and the name is made from the items (*Rice, Oil, Onion*). The phone remembers the mode used last
+- An itemwise expense is saved as a normal expense: the items are written into its description, one per line, so every app version reads it
+- Who paid: admins can record an expense for any member
 - The same one-page layout: **My Expenses**, **Total Expenses**, a calendar and the day's table
 - Members change their own entries; admins can change or delete any entry
 
 ### Balance
 
-- The meal rate, total meals, total cost, minimum meals and shop due on one card, with the change from last month
-- **Month Trend**: this month against last month, day by day, as **Rate**, **Meals** or **Cost**
+- The top card: the meal rate, total meals, total cost, and the figures switched on in Balance Options, with the change from last month. Admins see **+ More Options** while any option is off
 - Every member's balance, **Pay** or **Collect**; tapping a member shows their meals, meal cost and spending
-- **Copy** produces a WhatsApp-ready summary or the full table
+- The **Members** card's share menu: **Copy Balances**, **Copy Full Table** (WhatsApp-ready text) and **Share as Picture**: a branded image with the hostel's name, the month, the day it was made, and each member's **Meals | Meal Cost | Paid | Balance**
+- **Best Manager**, **Fixed Costs**, **Meal + Fixed Cost** and **Month Trend** cards when switched on (see [Balance Options](#balance-options))
 - Earlier months can be opened to review their figures
 - Minimum meals and shop due can be entered from the 25th of the month to the 5th of the next, unless an admin turns on **Min Meals & Shop Due Any Day**
 
 ### Hostel Details
 
 - **Activation**: whether the hostel is active and for how long; admins tap it to renew
-- **Hostel Code**: tap it to copy, then send it to new members, who enter it as the **Invitation Code** under **Join Hostel**
+- **Hostel Code**: tap it to copy, then send it to new members, who enter it under **Join a Hostel**
 - **Accountability**: the hostel's change history (see [below](#accountability-and-the-month-lock)), with a red dot when someone else changed something since you last looked
-- **Members**, with **Admin** and **No App** tags and each member's phone number
+- **Members**, with **Admin** and **No App** tags and each member's phone number. Admins can **Remove** a member; their records always stay
 - **Admin Settings** (admins only): see below
 - **Leave Hostel**: your past records stay; the only admin must first make another member admin
 
 ### Admin Settings
 
-Organised in four groups:
+Organised in groups:
 
 | Group | Settings |
 |---|---|
-| **Members** | Members (make an admin, remove someone), Allow New Members, Add Member Without App, Duty Roster, Send Announcement |
-| **Member Permissions** | Add Meals, Add Expenses, Edit Their Entries |
-| **Month End** | Min Meals & Shop Due Any Day; Calculate Other Costs (coming soon) |
+| **Members Who Left** | How each member who left this month counts: **Remove All**, **Keep Actual** or **Keep Normal** (shown only when someone left) |
+| **Members** | **Member Settings**: Allow New Members, Add Member Without App, Duty Roster, Remove All Limits. **Member Permissions**: Add Meals, Add Expenses, Edit Their Entries |
+| **Balance** | **Balance Options** (see [below](#balance-options)) |
+| **Hostel** | Send Announcement |
 | **Danger Zone** | Reset This Month |
 
 A hostel's name is set when it is created and cannot be changed. The **Duty Roster** sets which member looks after the hostel on which dates, with clash checks; drag a member to swap periods.
@@ -146,6 +163,27 @@ The super admin's account opens directly into an administration panel, with a de
 - The super admin sets the **Latest Version**, an optional **Minimum Version**, and **What's New** under App Update
 - On launch the Android app checks that setting. A version below the minimum must update before continuing; otherwise the update is optional. The APK downloads and installs inside the app, with a progress bar
 - After updating, the app shows **What's New** once
+
+## Balance Options
+
+Admins choose which figures the Balance page uses, in **Admin Settings → Balance Options** or with **+ More Options** on the Balance page.
+
+| Option | Default | What it does |
+|---|---|---|
+| **Min Meals** | On | The month's minimum meals count in the calculation |
+| **Shop Due** | On | The month's shop due counts in the total cost |
+| **Initial Share** | Off | Money collected at the start of the month for its food (rice, oil…). The admin enters a total and the contributors; it splits equally by default. Each part counts in that member's **Paid** and shows as *Initial Share* in their expenses; the whole amount counts in the meal rate |
+| **Fixed Costs** | Off | Admins set each member's rent and the shared bills (Wi-Fi, electricity, chef…), split equally among current members. A **Fixed Costs** card shows each member's **Rent \| Bills \| Total**; the figures carry forward to the next month until changed |
+| **Meal + Fixed Cost** | Off | Shown with Fixed Costs on: each member's meal balance and fixed cost together, as **Pay** or **Collect** |
+| **Best Manager** | Off | The finished duty turn (3 days or more) with the cheapest meal rate, against the month's average, without Initial Share and Shop Due. Tap it for the full ranking |
+| **Month Trend** | On | This month against last month, day by day, as **Rate**, **Meals** or **Cost** |
+
+Rules that keep earlier months safe:
+
+- **Min Meals**, **Shop Due** and **Fixed Costs** are remembered by month: a switch applies from the current month on, and earlier months keep their figures. Saved values are kept when a figure is switched off.
+- **Fixed Costs** only uses rent and bills saved **since the month it was switched on**, so figures entered long ago never come back by themselves.
+- **Initial Share** parts already added still count when the option is off, because that money was really collected; only the box disappears.
+- New options are saved under the hostel's `options` field, which older app versions do not overwrite.
 
 ## Accountability and the month lock
 
@@ -203,8 +241,10 @@ Together they owe ৳500, which is exactly the shop due.
 ### Rules worth knowing
 
 - **Former members.** Someone who left but has meals or expenses in a month still appears in that month's calculation under their saved name.
-- **Minimum meals and shop due** are set per month and start at zero each month.
-- **Rent and shared bills.** The calculation engine supports per-member rent and equally shared bills (`FixedCostsCalculator`). The screens for them are hidden while a redesigned version is prepared.
+- **Minimum meals and shop due** are set per month and start at zero each month, and count only while switched on in Balance Options.
+- **Initial Share** parts are ordinary expenses paid by each contributor, so they need nothing special in the calculation.
+- **Meal Off** days count as no meal for anyone; meal plans and saved meals for that day are kept for when the meal is turned back on.
+- **Rent and shared bills** (Fixed Costs) are shown beside the meal balance, never inside it.
 
 ## Hostel activation
 
@@ -247,13 +287,18 @@ Design decisions:
 ```text
 users/{uid}                        Profile, nickname, current hostel, and role
 groups/{groupId}                   Hostel: name, memberIds, admins, inviteCode,
-                                   settings, duties
+                                   settings (permissions), options (Balance
+                                   Options and newer settings), duties
   ├── members/{memberId}           App users (id = uid) and members without the app
   ├── meals/{memberId_YYYY-MM-DD}  One document per member per day
   ├── mealPlans/{memberId}         A member's meal plan rules
-  ├── expenses/{id}                Expenses
-  ├── monthlySettings/{YYYY-MM}    Minimum meals, shop due, and the summary
-                                   kept for older months
+  ├── expenses/{id}                Expenses; an Initial Share part also has
+                                   kind 'initialShare' and a shareId
+  ├── monthlySettings/{YYYY-MM}    Minimum meals, shop due, meals turned off
+                                   (cancelledMeals), how members who left
+                                   count (leavers), rent and shared bills,
+                                   and the summary kept for older months
+  ├── departures/{id}              Members who left and how they count
   ├── activity/{id}                Accountability records (append-only)
   └── notifications/{id}           Admin announcements and away notices
 invites/{code}                     Hostel code → hostel
@@ -305,10 +350,16 @@ lib/
 │   ├── dashboard_summary.dart        The Home figures (pure)
 │   ├── daily_trend.dart              Month Trend figures (pure)
 │   ├── fixed_costs.dart              Rent and shared bills (pure)
+│   ├── initial_share.dart            Initial Share split and saving
+│   ├── best_manager.dart             Best Manager ranking (pure)
+│   ├── expense_items.dart            Itemwise expenses in a description (pure)
+│   ├── meal_cancellation*.dart       Meal Off for a day
+│   ├── month_rules*.dart             Meal Off and leaving rules for a month
+│   ├── member_departure_service.dart Members who leave and how they count
 │   ├── edit_mark.dart                When an entry counts as edited (pure)
 │   ├── activity_log.dart             Accountability records
 │   ├── month_records.dart            One-month meal and expense queries
-│   ├── hostel_settings.dart          Hostel settings
+│   ├── hostel_settings.dart          Hostel settings and Balance Options
 │   ├── group_member_service.dart     Members, roles, leaving, linking
 │   ├── meal_plan_service.dart        Meal plans in Firestore
 │   ├── profile_service.dart          Nickname
@@ -319,11 +370,15 @@ lib/
 │   ├── notification_service.dart     Hostel notifications and app notices
 │   ├── super_admin_service.dart      Super admin identity and data
 │   ├── update_service.dart           Update settings, in-app update, What's New
+│   ├── abi/                          Whether the phone needs the 32-bit APK
 │   └── error_messages.dart           User-facing messages for refused saves
 ├── screens/                          One file per screen: phone shell, Home,
-│                                     Meals, Expenses, Balance, Accountability,
-│                                     Admin Settings, Guide, super admin…
+│                                     Meals, Expenses, Balance, Balance Options,
+│                                     Initial Share, share picture,
+│                                     Accountability, Admin Settings, Guide,
+│                                     super admin…
 ├── widgets/                          Month calendar, Month Trend chart, tiles,
+│                                     sign-in branding (onboarding.dart),
 │                                     super admin desktop layout, update prompt…
 └── theme/app_theme.dart              Colours, font and component styles
 assets/fonts/                         Manrope
@@ -383,7 +438,7 @@ flutter analyze lib
 flutter test
 ```
 
-The suite has 208 tests. The areas that decide money and access are covered most heavily:
+The suite has 253 tests. The areas that decide money and access are covered most heavily:
 
 | Area | What is tested |
 |---|---|
@@ -393,10 +448,13 @@ The suite has 208 tests. The areas that decide money and access are covered most
 | Meal plans | Ranges, open-ended plans, lunch or dinner starts and ends, days with entries |
 | Home and settings | Summary figures, Month Trend, hostel settings defaults |
 | Duty roster | Turns, clashes, who is on duty |
+| Balance Options | Switch history by month, saving under `options`, older settings read back, Fixed Costs counting only since it was switched on |
+| Initial Share and Best Manager | Equal split, calculation, turns of 3+ days, ranking against the average |
+| Expenses | Itemwise lines saved and read back, changed expenses opening as Simple |
 | Fixed costs | Equal split, per-member rent, carry-forward and reset |
 | Activation | Active and ended periods, time left, extending, voucher and transaction ID formats |
 | Profile | Nickname rules, the name shown in the hostel |
-| Super admin, notifications, updates | Counts and search, unread counts, update settings, required and optional updates |
+| Super admin, notifications, updates | Counts and search, unread counts, update settings, required and optional updates, the 32-bit APK for 32-bit phones |
 | Widgets | Month calendar, Guide, meal counter, billing screens, desktop layout, update and maintenance screens |
 
 The security rules are not covered by automated tests. The month lock was checked against the Firebase Rules test API; the rest is verified manually against the live project.
@@ -405,14 +463,16 @@ The security rules are not covered by automated tests. The month lock was checke
 
 **Android release**
 
-1. Raise `version` in `pubspec.yaml` (for example `1.7.0+11` → `1.7.1+12`).
-2. Build the APK:
+1. Raise `version` in `pubspec.yaml` (for example `1.9.0+13` → `1.9.1+14`).
+2. Build both APKs, one at a time (each build overwrites `app-release.apk`), and keep them in `build/release/`:
    ```bash
-   flutter build apk --release --target-platform android-arm64
+   flutter build apk --release --target-platform android-arm64   # → build/release/HostelMate.apk
+   flutter build apk --release --target-platform android-arm     # → build/release/HostelMate-32bit.apk
    ```
-   This builds for 64-bit ARM phones only, which keeps the APK at about a third of the all-devices size.
-3. Publish a GitHub release tagged `v<version>`, with the APK attached under the name `HostelMate.apk`.
-4. In the super admin panel, open **App Update** and set the **Latest Version**, **What's New**, and a **Minimum Version** only if the update must be installed.
+   One ABI each keeps the downloads small (about 22 MB and 20 MB).
+3. Publish a GitHub release tagged `v<version>`, with both files attached as `HostelMate.apk` and `HostelMate-32bit.apk`.
+4. Deploy the security rules if they changed, then the website and web app (below).
+5. In the super admin panel, open **App Update** and set the **Latest Version** and **What's New**. Leave **APK Link** empty so each phone downloads its own file, and set a **Minimum Version** only if the update must be installed.
 
 Pushing commits alone never affects users.
 
@@ -434,17 +494,19 @@ firebase deploy --only firestore:rules
 - **No iPhone app.** iPhone users use the web version.
 - **In-app notifications only.** Nothing is delivered while the app is closed.
 - **Internet required for changes.** Cached data can be viewed offline, but saves need a connection.
-- **Distributed outside the Play Store.** Users install from a link and Android asks them to allow it.
+- **Distributed outside the Play Store.** Users install from a link; Chrome holds the download until they choose **Download anyway**, and Android asks them to allow the install. The website explains both.
+- **Sign-in emails come from Firebase's address** (`noreply@…firebaseapp.com`), as email templates cannot be changed on this project yet. The Verify Email page says so.
 - **No automatic backups.** The project is on Firebase's free plan; a manual backup download is planned ([#8](https://github.com/adnanshad35/hostel-meal-calculator/issues/8)).
 - **English only.**
 
 ## Roadmap
 
-- A **Download Backup** button for the super admin
-- Calculate other costs (rent and shared bills), redesigned
-- Bangla language
-- Push notifications
 - A Play Store listing
+- Bangla language
+- Meal reminders for missing entries
+- Entering meals and expenses offline
+- A **Download Backup** button for the super admin
+- Push notifications
 - Automated tests for the security rules
 
 ## Developer
