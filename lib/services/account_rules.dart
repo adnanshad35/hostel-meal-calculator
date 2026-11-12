@@ -16,6 +16,16 @@ class AccountRules {
   static const String passwordHint =
       'At least 6 characters with A–Z, a–z, 0–9 and a symbol';
 
+  /// Each part of the password rule, for a checklist that fills in
+  /// as the password is typed.
+  static List<({String label, bool isMet})> passwordChecks(String value) => [
+    (label: '6+ Characters', isMet: value.length >= 6),
+    (label: 'A–Z', isMet: RegExp(r'[A-Z]').hasMatch(value)),
+    (label: 'a–z', isMet: RegExp(r'[a-z]').hasMatch(value)),
+    (label: '0–9', isMet: RegExp(r'[0-9]').hasMatch(value)),
+    (label: 'Symbol', isMet: RegExp(r'[^A-Za-z0-9]').hasMatch(value)),
+  ];
+
   static bool isValidPhone(String phone) => _phone.hasMatch(phone.trim());
 
   static String? validatePhone(String? value) {

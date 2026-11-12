@@ -14,6 +14,8 @@ class GroupMember {
     this.addedAt,
     this.linkedTo,
     this.phone = '',
+    this.status = '',
+    this.leftOn,
   });
 
   factory GroupMember.fromDocument(
@@ -31,6 +33,8 @@ class GroupMember {
       addedAt: (data['addedAt'] as Timestamp?)?.toDate(),
       linkedTo: data['linkedTo'] as String?,
       phone: (data['phone'] as String? ?? '').trim(),
+      status: data['status'] as String? ?? '',
+      leftOn: data['leftOn'] as String?,
     );
   }
 
@@ -63,6 +67,15 @@ class GroupMember {
 
   /// The phone number on their account; empty when there is none.
   final String phone;
+
+  /// [deleted] for a member an admin removed ('alumni' in earlier
+  /// versions); empty for everyone else.
+  final String status;
+
+  /// The day they left, as `YYYY-MM-DD`, when it was saved.
+  final String? leftOn;
+
+  static const String deleted = 'deleted';
 
   String get initials {
     final words = name

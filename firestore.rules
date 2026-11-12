@@ -416,6 +416,11 @@ service cloud.firestore {
             resource.data.paidById == request.auth.uid
             || isGroupAdmin(groupId)
           )
+          // A part of an Initial Share is changed by admins only.
+          && (
+            resource.data.get('kind', '') != 'initialShare'
+            || isGroupAdmin(groupId)
+          )
           && request.resource.data.name is string
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -449,6 +454,24 @@ service cloud.firestore {
       }
 
       match /monthlySettings/{monthKey} {
+        // Meals cancelled for everyone, such as when the cook is away,
+        // and how members who left count, change only while the month
+        // is open, like its meals.
+        function changesOnlyWhileOpen(field) {
+          let after = request.resource.data.get(field, {});
+          let parts = monthKey.split('-');
+
+          return after is map
+            && (
+              (resource == null && after.size() == 0)
+              || (
+                resource != null
+                && after == resource.data.get(field, {})
+              )
+              || isOpenMonth(int(parts[0]) * 12 + int(parts[1]))
+            );
+        }
+
         allow read: if canReadHostel(groupId);
 
         allow create, update: if isGroupAdmin(groupId)
@@ -457,7 +480,9 @@ service cloud.firestore {
           && request.resource.data.minimumMeals >= 0
           && request.resource.data.shopDue is number
           && request.resource.data.shopDue >= 0
-          && request.resource.data.monthKey == monthKey;
+          && request.resource.data.monthKey == monthKey
+          && changesOnlyWhileOpen('cancelledMeals')
+          && changesOnlyWhileOpen('leavers');
 
         allow delete: if isGroupAdmin(groupId)
           && isHostelActive(groupId);
@@ -501,12 +526,44 @@ service cloud.firestore {
               memberId == request.auth.uid
               || request.resource.data.name == resource.data.name
             )
+            && (
+              request.resource.data.get('status', '')
+                == resource.data.get('status', '')
+              || request.resource.data.status == 'active'
+            )
           );
 
-        // App users are deactivated, never deleted. An admin may delete
-        // a member who does not use the app.
-        allow delete: if isGroupAdmin(groupId)
-          && resource.data.get('isAppUser', false) != true;
+        // Never deleted: a member who leaves is marked as removed, and
+        // keeps their records. Only the super admin removes
+        // members, with the whole hostel.
+        allow delete: if false;
+      }
+
+      // Members who left, and how their last month counts. A member
+      // who leaves on their own adds one for an admin to decide; only
+      // admins read, decide or change them. None is ever deleted.
+      match /departures/{departureId} {
+        allow read: if isGroupAdmin(groupId);
+
+        allow create: if request.resource.data.memberId is string
+          && request.resource.data.leftOn is string
+          && request.resource.data.createdBy == request.auth.uid
+          && (
+            isGroupAdmin(groupId)
+            || (
+              isGroupMember(groupId)
+              && request.resource.data.memberId == request.auth.uid
+              && request.resource.data.way == 'left'
+              && request.resource.data.choice == null
+            )
+          );
+
+        allow update: if isGroupAdmin(groupId)
+          && request.resource.data.memberId == resource.data.memberId
+          && request.resource.data.leftOn == resource.data.leftOn
+          && request.resource.data.monthKey == resource.data.monthKey;
+
+        allow delete: if false;
       }
 
       // The hostel's history: who changed which meal, expense, month
@@ -551,9 +608,9 @@ service cloud.firestore {
           && request.resource.data.message is string
           && request.resource.data.message.size() <= 600
           && (
-            request.resource.data.type in ['expense', 'mealPlan']
+            request.resource.data.type in ['expense', 'mealPlan', 'memberLeft']
             || (
-              request.resource.data.type == 'announcement'
+              request.resource.data.type in ['announcement', 'mealCancelled']
               && isGroupAdmin(groupId)
             )
           );

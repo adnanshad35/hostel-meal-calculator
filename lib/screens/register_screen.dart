@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../services/account_rules.dart';
 import '../theme/app_theme.dart';
+import '../widgets/onboarding.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -24,6 +25,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _hidePassword = true;
   bool _hideConfirmPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // The checklist under the password fills in as it is typed.
+    _passwordController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -72,12 +80,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created. Check your email to verify it.'),
-        ),
-      );
 
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (error) {
@@ -129,10 +131,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'Create Account',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
+                    const AuthHeader(
+                      title: 'Create Your Account',
+                      subtitle: 'It takes about a minute.',
                     ),
                     const SizedBox(height: 24),
                     Card(
@@ -147,8 +148,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.name],
                               decoration: const InputDecoration(
-                                labelText: 'Name',
-                                helperText: 'Cannot be changed later',
+                                labelText: 'Full Name',
+                                helperText: 'As your hostel knows you. It stays the same later.',
+                                helperMaxLines: 2,
                                 prefixIcon: Icon(Icons.person_outline),
                               ),
                               validator: (value) {
@@ -210,8 +212,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               autofillHints: const [AutofillHints.newPassword],
                               decoration: InputDecoration(
                                 labelText: 'Password',
-                                helperText: AccountRules.passwordHint,
-                                helperMaxLines: 2,
                                 prefixIcon: const Icon(Icons.lock_outline),
                                 suffixIcon: _visibilityButton(
                                   _hidePassword,
@@ -222,7 +222,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                               validator: AccountRules.validatePassword,
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 10),
+                            PasswordChecklist(
+                              password: _passwordController.text,
+                            ),
+                            const SizedBox(height: 16),
                             TextFormField(
                               controller: _confirmPasswordController,
                               obscureText: _hideConfirmPassword,

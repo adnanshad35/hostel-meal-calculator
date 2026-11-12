@@ -92,6 +92,7 @@ class HomeScreen extends StatelessWidget {
           return _page(
             context,
             _NoHostelView(
+              name: name,
               onCreateGroup: () {
                 _openCreateGroup(context);
               },
@@ -130,7 +131,7 @@ class HomeScreen extends StatelessWidget {
 
             final group = groupSnapshot.data!.data()!;
 
-            final groupName = group['name'] as String? ?? 'Hostel Group';
+            final groupName = group['name'] as String? ?? 'Hostel';
             final inviteCode = group['inviteCode'] as String? ?? '';
 
             // A member belongs to one hostel, so the app opens straight
@@ -174,65 +175,153 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+/// A new account's first page: join the hostel they were invited to,
+/// or start one.
 class _NoHostelView extends StatelessWidget {
-  const _NoHostelView({required this.onCreateGroup, required this.onJoinGroup});
+  const _NoHostelView({
+    required this.name,
+    required this.onCreateGroup,
+    required this.onJoinGroup,
+  });
 
+  final String name;
   final VoidCallback onCreateGroup;
   final VoidCallback onJoinGroup;
 
   @override
   Widget build(BuildContext context) {
+    final firstName = name.split(' ').first;
+    final textTheme = Theme.of(context).textTheme;
+
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E9E5)),
-          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceSoft,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: const Icon(
-                  Icons.apartment_rounded,
-                  size: 38,
-                  color: AppTheme.primary,
-                ),
-              ),
-              const SizedBox(height: 20),
               Text(
-                'No Hostel Yet',
-                style: Theme.of(context).textTheme.headlineSmall,
+                firstName == 'Member' ? 'Welcome' : 'Welcome, $firstName',
+                style: textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Let\'s get you into your hostel.',
+                style: textTheme.bodyLarge?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onCreateGroup,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Create Hostel'),
-                ),
+              _ChoiceCard(
+                icon: Icons.group_add_rounded,
+                title: 'Join a Hostel',
+                line: 'I have a code from my hostel admin.',
+                isMain: true,
+                onTap: onJoinGroup,
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: onJoinGroup,
-                  icon: const Icon(Icons.group_add_outlined),
-                  label: const Text('Join Hostel'),
-                ),
+              const SizedBox(height: 14),
+              _ChoiceCard(
+                icon: Icons.add_home_work_outlined,
+                title: 'Create a Hostel',
+                line: 'I manage the meals and want to start one.',
+                isMain: false,
+                onTap: onCreateGroup,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChoiceCard extends StatelessWidget {
+  const _ChoiceCard({
+    required this.icon,
+    required this.title,
+    required this.line,
+    required this.isMain,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String line;
+
+  /// The usual choice, shown in green.
+  final bool isMain;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = isMain ? Colors.white : AppTheme.textPrimary;
+
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: isMain ? AppTheme.heroGradient : null,
+          color: isMain ? null : AppTheme.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: isMain ? null : Border.all(color: const Color(0xFFDDE4E0)),
+          boxShadow: isMain ? AppTheme.heroShadow : null,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 20, 14, 20),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: isMain
+                        ? Colors.white.withValues(alpha: 0.14)
+                        : AppTheme.surfaceSoft,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 27,
+                    color: isMain ? AppTheme.accent : AppTheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        line,
+                        style: TextStyle(
+                          color: isMain
+                              ? Colors.white.withValues(alpha: 0.78)
+                              : AppTheme.textSecondary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: isMain ? AppTheme.accent : AppTheme.primary,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -252,11 +341,8 @@ class _AppLogo extends StatelessWidget {
         color: AppTheme.surfaceSoft,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(
-        Icons.home_work_rounded,
-        color: AppTheme.primary,
-        size: 21,
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset('assets/icon/icon.png', fit: BoxFit.cover),
     );
   }
 }

@@ -5,6 +5,8 @@ import 'group_member_service.dart';
 import 'meal_plan.dart';
 import 'meal_plan_service.dart';
 import 'month_records.dart';
+import 'month_rules.dart';
+import 'hostel_settings.dart';
 import 'monthly_calculator.dart';
 
 /// When a month's meals and expenses may still be changed.
@@ -154,6 +156,7 @@ class MonthArchive {
     final group = FirebaseFirestore.instance.collection('groups').doc(groupId);
     final groupData = (await group.get()).data();
     final created = (groupData?['createdAt'] as Timestamp?)?.toDate();
+    final balance = HostelSettings.fromGroupData(groupData).balanceOptions;
     final settingsSnapshot = await group.collection('monthlySettings').get();
     final settingsByMonth = {
       for (final document in settingsSnapshot.docs)
@@ -195,8 +198,11 @@ class MonthArchive {
           month: month,
           members: members,
           plans: plans,
-          minimumMeals: kept['minimumMeals'] as double,
-          shopDue: kept['shopDue'] as double,
+          // The saved figures are kept as they are; one switched off
+          // counts as zero.
+          minimumMeals: balance.minimumMealsOf(settings, key),
+          shopDue: balance.shopDueOf(settings, key),
+          rules: MonthRules.fromSettings(settings),
           now: now,
         );
 
@@ -225,6 +231,7 @@ class MonthArchive {
     required List<MemberMealPlan> plans,
     required double minimumMeals,
     required double shopDue,
+    required MonthRules rules,
     required DateTime now,
   }) async {
     final mealsSnapshot = await MonthRecords.meals(groupId, month).get();
@@ -258,6 +265,7 @@ class MonthArchive {
       ],
       minimumMeals: minimumMeals,
       shopDue: shopDue,
+      rules: rules,
     );
   }
 

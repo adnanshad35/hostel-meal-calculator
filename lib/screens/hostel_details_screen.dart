@@ -9,9 +9,13 @@ import '../models/group_member.dart';
 import '../services/activity_log.dart';
 import '../services/duty_roster.dart';
 import '../services/group_member_service.dart';
+import '../services/hostel_settings.dart';
+import '../services/member_departure_service.dart';
+import '../services/month_rules.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_tiles.dart';
+import '../widgets/leaving_choice_sheet.dart';
 import '../widgets/member_name_dialog.dart';
 import 'activity_screen.dart';
 import 'duty_roster_screen.dart' show dutyDatesText;
@@ -163,90 +167,87 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
-  Future<void> _deactivateMember(GroupMember member) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Deactivate Member?'),
-          content: Text(
-            '${member.name} will no longer appear in meal entry, '
-            'expenses, or new calculations.\n\n'
-            'Their previous meals and expenses will remain in '
-            'the hostel records.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Deactivate'),
-            ),
-          ],
+  /// Takes [member] out of the hostel. When they had meals or
+  /// expenses this month, the admin first sees them and chooses how
+  /// the month counts. Nothing they entered is changed or deleted.
+  Future<void> _removeMember(GroupMember member) async {
+    setState(() => _isBusy = true);
+    DepartureSummary summary;
+    RemoveAllLimits limits;
+    try {
+      final (loaded, settings) = await (
+        MemberDepartureService.summarize(
+          groupId: widget.groupId,
+          memberId: member.id,
+          leftOn: DateTime.now(),
+        ),
+        HostelSettingsService.fetch(widget.groupId),
+      ).wait;
+      summary = loaded;
+      limits = settings.removeAllLimits;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isBusy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load this month.')),
         );
-      },
-    );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isBusy = false);
 
-    if (confirmed != true || !mounted) return;
+    const actionLabel = 'Remove';
+    LeavingChoice? choice;
+
+    if (summary.hasActivity) {
+      choice = await showLeavingChoiceSheet(
+        context,
+        memberName: member.name,
+        summary: summary,
+        limits: limits,
+        confirmLabel: actionLabel,
+      );
+      if (choice == null) return;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Remove ${member.name}?'),
+            content: const Text('Their records stay in past months.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text(actionLabel),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+    }
+
+    if (!mounted) return;
 
     await _run(
-      () => GroupMemberService.setActive(
-        groupId: widget.groupId,
-        memberId: member.id,
-        active: false,
-      ),
-      successMessage: '${member.name} was deactivated.',
-    );
-  }
-
-  Future<void> _reactivateMember(GroupMember member) async {
-    await _run(
-      () => GroupMemberService.setActive(
-        groupId: widget.groupId,
-        memberId: member.id,
-        active: true,
-      ),
-      successMessage: '${member.name} is active again.',
-    );
-  }
-
-  Future<void> _deleteShadowMember(GroupMember member) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete Member?'),
-          content: Text(
-            'Delete ${member.name} with their meals and expenses in '
-            'open months? Closed months keep theirs. This cannot be '
-            'undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+      () => member.isAppUser
+          ? GroupMemberService.removeAppUser(
+              groupId: widget.groupId,
+              member: member,
+              choice: choice,
+            )
+          : GroupMemberService.removeShadowMember(
+              groupId: widget.groupId,
+              member: member,
+              choice: choice,
             ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    await _run(
-      () => GroupMemberService.deleteShadowMember(
-        groupId: widget.groupId,
-        member: member,
-      ),
-      successMessage: '${member.name} was deleted.',
+      successMessage: '${member.name} was removed.',
     );
   }
 
@@ -353,25 +354,14 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               ),
               ListTile(
                 leading: const Icon(
-                  Icons.person_off_outlined,
+                  Icons.person_remove_outlined,
                   color: AppTheme.danger,
                 ),
                 title: const Text(
-                  'Deactivate',
+                  'Remove from Hostel',
                   style: TextStyle(color: AppTheme.danger),
                 ),
-                onTap: () => Navigator.of(sheetContext).pop('deactivate'),
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: AppTheme.danger,
-                ),
-                title: const Text(
-                  'Delete',
-                  style: TextStyle(color: AppTheme.danger),
-                ),
-                onTap: () => Navigator.of(sheetContext).pop('delete'),
+                onTap: () => Navigator.of(sheetContext).pop('remove'),
               ),
               const SizedBox(height: 8),
             ],
@@ -387,10 +377,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         await _renameMember(member);
       case 'link':
         await _linkMember(member, appUsers);
-      case 'deactivate':
-        await _deactivateMember(member);
-      case 'delete':
-        await _deleteShadowMember(member);
+      case 'remove':
+        await _removeMember(member);
     }
   }
 
@@ -434,43 +422,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       successMessage: makeAdmin
           ? '${member.name} is now an administrator.'
           : '${member.name} is now a member.',
-    );
-  }
-
-  Future<void> _removeAppUser(GroupMember member) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Remove Member?'),
-          content: Text(
-            'Remove ${member.name} from this hostel?\n\n'
-            'Their previous meals and expenses will remain in '
-            'the hostel records.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Remove Member'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    await _run(
-      () => GroupMemberService.removeAppUser(
-        groupId: widget.groupId,
-        member: member,
-      ),
-      successMessage: '${member.name} was removed from the hostel.',
     );
   }
 
@@ -525,7 +476,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       case 'demote':
         await _changeAdminRole(member, makeAdmin: false);
       case 'remove':
-        await _removeAppUser(member);
+        await _removeMember(member);
     }
   }
 
@@ -756,16 +707,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           final appUsers = activeMembers
               .where((member) => member.isAppUser)
               .toList();
-          final deactivatedMembers = widget.isAdmin
-              ? members
-                    .where(
-                      (member) =>
-                          !member.active &&
-                          !member.isAppUser &&
-                          member.linkedTo == null,
-                    )
-                    .toList()
-              : <GroupMember>[];
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -903,47 +844,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                         : null,
                   ),
                   const SizedBox(height: 6),
-                ],
-                if (deactivatedMembers.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  Text(
-                    'Deactivated',
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(color: AppTheme.textSecondary),
-                  ),
-                  const SizedBox(height: 10),
-                  for (final member in deactivatedMembers) ...[
-                    Card(
-                      key: ValueKey(member.id),
-                      child: ListTile(
-                        leading: _MemberAvatar(member: member),
-                        title: Text(member.name),
-                        subtitle: const Text('Deactivated'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton(
-                              onPressed: _isBusy
-                                  ? null
-                                  : () => _reactivateMember(member),
-                              child: const Text('Reactivate'),
-                            ),
-                            IconButton(
-                              tooltip: 'Delete',
-                              onPressed: _isBusy
-                                  ? null
-                                  : () => _deleteShadowMember(member),
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: AppTheme.danger,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
                 ],
               ],
               if (!widget.membersOnly) ...[

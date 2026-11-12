@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/group_member.dart';
+import '../services/initial_share.dart';
 import '../services/activity_log.dart';
 import '../services/edit_mark.dart';
 import '../services/error_messages.dart';
+import '../services/expense_items.dart';
 import '../services/group_member_service.dart';
 import '../services/month_archive.dart';
 import '../services/month_records.dart';
@@ -756,8 +759,11 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     }
 
     final isOpen = isEditableMonth(_month);
+    // A member cannot change their part of an Initial Share.
     bool canEdit(Map<String, dynamic> data) =>
-        isOpen && (widget.isAdmin || data['paidById'] == _uid);
+        isOpen &&
+        (widget.isAdmin ||
+            (data['paidById'] == _uid && !InitialShare.isPartOfShare(data)));
     // A column for the pencil or menu, when any row has one.
     final hasAction = expenses.any((expense) => canEdit(expense.data()));
     final dayTotal = expenses.fold<double>(
@@ -975,7 +981,10 @@ class _ExpenseCalendarState extends State<_ExpenseCalendar> {
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
     // A month is read-only once it is locked.
     final isOpen = isEditableMonth(_month);
-    final canEdit = isOpen && (widget.isAdmin || data['paidById'] == _uid);
+    final canEdit =
+        isOpen &&
+        (widget.isAdmin ||
+            (data['paidById'] == _uid && !InitialShare.isPartOfShare(data)));
 
     return CalendarLine(
       title: name,
@@ -1136,15 +1145,48 @@ class _ExpenseFormDialog extends StatefulWidget {
   State<_ExpenseFormDialog> createState() => _ExpenseFormDialogState();
 }
 
+enum _ExpenseMode { simple, itemwise }
+
+/// One row of the Itemwise form.
+class _ItemRow {
+  _ItemRow({String name = '', String quantity = '', String price = ''})
+    : name = TextEditingController(text: name),
+      quantity = TextEditingController(text: quantity),
+      price = TextEditingController(text: price);
+
+  final TextEditingController name;
+  final TextEditingController quantity;
+  final TextEditingController price;
+
+  bool get isBlank =>
+      name.text.trim().isEmpty &&
+      quantity.text.trim().isEmpty &&
+      price.text.trim().isEmpty;
+
+  double? get priceValue => double.tryParse(price.text.trim());
+
+  void dispose() {
+    name.dispose();
+    quantity.dispose();
+    price.dispose();
+  }
+}
+
 class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
+  /// The mode last used, kept on this phone for the next expense.
+  static const _modeKey = 'expenseFormMode';
+
   late final TextEditingController _nameController;
   late final TextEditingController _amountController;
-  late final TextEditingController _descriptionController;
 
-  /// True once the + beside the name has opened the description box.
-  bool _showDescription = false;
+  /// A note saved on a simple expense by an earlier version. Simple
+  /// has no description box now, so it is kept as it is when saved.
+  String _keptDescription = '';
+
+  _ExpenseMode _mode = _ExpenseMode.simple;
+  final List<_ItemRow> _rows = [];
 
   late DateTime _selectedDate;
 
@@ -1177,8 +1219,23 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     );
 
     final description = (data?['description'] as String? ?? '').trim();
-    _descriptionController = TextEditingController(text: description);
-    _showDescription = description.isNotEmpty;
+
+    if (_isEditing) {
+      // Saved itemwise, it opens itemwise.
+      final items = ExpenseItems.parse(
+        name: _nameController.text,
+        description: description,
+        amount: amount is num ? amount.toDouble() : 0,
+      );
+      if (items != null) {
+        _mode = _ExpenseMode.itemwise;
+        _rows.addAll(items.map(_rowOf));
+      } else {
+        _keptDescription = description;
+      }
+    } else {
+      _loadMode();
+    }
 
     _selectedDate = (data?['date'] as Timestamp?)?.toDate() ?? DateTime.now();
 
@@ -1194,8 +1251,94 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     _membersSubscription?.cancel();
     _nameController.dispose();
     _amountController.dispose();
-    _descriptionController.dispose();
+    for (final row in _rows) {
+      row.dispose();
+    }
     super.dispose();
+  }
+
+  _ItemRow _rowOf(ExpenseItem item) => _ItemRow(
+    name: item.name,
+    quantity: item.quantity,
+    price: ExpenseItems.plain(item.price),
+  )..price.addListener(_onPriceChanged);
+
+  void _onPriceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _addRow() {
+    setState(() => _rows.add(_ItemRow()..price.addListener(_onPriceChanged)));
+  }
+
+  void _removeRow(_ItemRow row) {
+    setState(() => _rows.remove(row));
+    row.dispose();
+    if (_rows.isEmpty) _addRow();
+  }
+
+  Future<void> _loadMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_modeKey) == _ExpenseMode.itemwise.name &&
+          mounted &&
+          _mode == _ExpenseMode.simple &&
+          _nameController.text.trim().isEmpty &&
+          _amountController.text.trim().isEmpty) {
+        _setMode(_ExpenseMode.itemwise, remember: false);
+      }
+    } catch (_) {
+      // Starts in Simple.
+    }
+  }
+
+  /// Items with a name or a price; null when one is half filled.
+  List<ExpenseItem>? get _items {
+    final items = <ExpenseItem>[];
+    for (final row in _rows) {
+      if (row.isBlank) continue;
+      final name = ExpenseItems.clean(row.name.text);
+      final typed = row.priceValue;
+      // Whole paisa, as the list shows it.
+      final price = typed == null ? null : (typed * 100).round() / 100;
+      if (name.isEmpty || price == null || price <= 0) return null;
+      items.add(
+        ExpenseItem(
+          name: name,
+          quantity: ExpenseItems.clean(row.quantity.text),
+          price: price,
+        ),
+      );
+    }
+    return items;
+  }
+
+  double get _itemsTotal => _rows.fold(
+    0,
+    (total, row) => total + (row.priceValue ?? 0).clamp(0, double.infinity),
+  );
+
+  /// One mode at a time: switching starts the other one empty.
+  void _setMode(_ExpenseMode mode, {bool remember = true}) {
+    if (mode == _mode) return;
+    setState(() {
+      _nameController.clear();
+      _amountController.clear();
+      _keptDescription = '';
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows.clear();
+      if (mode == _ExpenseMode.itemwise) {
+        _rows.add(_ItemRow()..price.addListener(_onPriceChanged));
+      }
+      _mode = mode;
+    });
+
+    if (!remember) return;
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setString(_modeKey, mode.name))
+        .catchError((Object _) => false);
   }
 
   void _watchMembers() {
@@ -1285,6 +1428,23 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final isItemwise = _mode == _ExpenseMode.itemwise;
+    final items = isItemwise ? _items : null;
+    if (isItemwise) {
+      final message = items == null
+          ? 'Each item needs a name and a price.'
+          : items.isEmpty
+          ? 'Please add an item.'
+          : ExpenseItems.describe(items).length > ExpenseItems.maxDescription
+          ? 'Too many items for one expense.'
+          : null;
+      if (message != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+        return;
+      }
+    }
+
     if (widget.isAdmin && !_isEditing && _selectedMemberId == null) {
       ScaffoldMessenger.of(
         context,
@@ -1292,7 +1452,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       return;
     }
 
-    final parsedAmount = double.tryParse(_amountController.text.trim());
+    final parsedAmount = items != null
+        ? ExpenseItems.totalOf(items)
+        : double.tryParse(_amountController.text.trim());
 
     if (parsedAmount == null || parsedAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1326,13 +1488,15 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
           .doc(widget.groupId)
           .collection('expenses');
 
-      final description = _showDescription
-          ? _descriptionController.text.trim()
-          : '';
+      final description = items != null
+          ? ExpenseItems.describe(items)
+          : _keptDescription;
       final savedDescription =
           (widget.expense?.data()?['description'] as String? ?? '').trim();
 
-      final name = _nameController.text.trim();
+      final name = items != null
+          ? ExpenseItems.nameOf(items)
+          : _nameController.text.trim();
       final day = _dayKey(_selectedDate);
 
       if (_isEditing) {
@@ -1426,6 +1590,83 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     }
   }
 
+  List<Widget> _itemFields() {
+    InputDecoration field(String label, {String? prefix}) => InputDecoration(
+      labelText: label,
+      prefixText: prefix,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    );
+
+    return [
+      for (final row in _rows)
+        Padding(
+          key: ObjectKey(row),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 5,
+                child: TextField(
+                  controller: row.name,
+                  enabled: !_isSaving,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: field('Item'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: row.quantity,
+                  enabled: !_isSaving,
+                  textInputAction: TextInputAction.next,
+                  decoration: field('Qty'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 4,
+                child: TextField(
+                  controller: row.price,
+                  enabled: !_isSaving,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: field('Price', prefix: '৳'),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove item',
+                visualDensity: VisualDensity.compact,
+                onPressed: _isSaving ? null : () => _removeRow(row),
+                icon: const Icon(Icons.close, size: 20),
+              ),
+            ],
+          ),
+        ),
+      Row(
+        children: [
+          TextButton.icon(
+            onPressed: _isSaving ? null : _addRow,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Item'),
+          ),
+          const Spacer(),
+          Text(
+            'Total ৳${ExpenseItems.plain(_itemsTotal)}',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final day = _selectedDate.day.toString().padLeft(2, '0');
@@ -1509,75 +1750,70 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                TextFormField(
-                  controller: _nameController,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: 'Expense Name',
-                    prefixIcon: const Icon(Icons.description_outlined),
-                    // Opens a box for what was bought, or closes it.
-                    suffixIcon: IconButton(
-                      tooltip: _showDescription
-                          ? 'Remove description'
-                          : 'Add description',
-                      onPressed: _isSaving
-                          ? null
-                          : () {
-                              setState(() {
-                                _showDescription = !_showDescription;
-                              });
-                            },
-                      icon: Icon(_showDescription ? Icons.remove : Icons.add),
+                SegmentedButton<_ExpenseMode>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _ExpenseMode.simple,
+                      label: Text('Simple'),
+                      icon: Icon(Icons.notes_outlined),
                     ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter the expense name.';
-                    }
-                    return null;
-                  },
+                    ButtonSegment(
+                      value: _ExpenseMode.itemwise,
+                      label: Text('Itemwise'),
+                      icon: Icon(Icons.format_list_bulleted),
+                    ),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: _isSaving
+                      ? null
+                      : (selection) => _setMode(selection.first),
                 ),
-                if (_showDescription) ...[
-                  const SizedBox(height: 12),
+                const SizedBox(height: 20),
+                if (_mode == _ExpenseMode.itemwise)
+                  ..._itemFields()
+                else ...[
                   TextFormField(
-                    controller: _descriptionController,
-                    minLines: 2,
-                    maxLines: 5,
-                    maxLength: 400,
-                    textCapitalization: TextCapitalization.sentences,
+                    controller: _nameController,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Description',
-                      alignLabelWithHint: true,
-                      counterText: '',
+                      labelText: 'Expense Name',
+                      prefixIcon: Icon(Icons.description_outlined),
                     ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter the expense name.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  // Tapping the amount opens the keyboard; the calculator
+                  // icon opens the calculator instead.
+                  TextFormField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Amount',
+                      prefixText: '৳ ',
+                      prefixIcon: const Icon(Icons.payments_outlined),
+                      suffixIcon: IconButton(
+                        tooltip: 'Calculator',
+                        onPressed: _isSaving ? null : _openCalculator,
+                        icon: const Icon(Icons.calculate_outlined),
+                      ),
+                    ),
+                    validator: (value) {
+                      final parsed = double.tryParse(value?.trim() ?? '');
+                      if (parsed == null || parsed <= 0) {
+                        return 'Please enter a valid amount.';
+                      }
+                      return null;
+                    },
                   ),
                 ],
-                const SizedBox(height: 20),
-                // Tapping the amount opens the keyboard; the calculator
-                // icon opens the calculator instead.
-                TextFormField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Amount',
-                    prefixText: '৳ ',
-                    prefixIcon: const Icon(Icons.payments_outlined),
-                    suffixIcon: IconButton(
-                      tooltip: 'Calculator',
-                      onPressed: _isSaving ? null : _openCalculator,
-                      icon: const Icon(Icons.calculate_outlined),
-                    ),
-                  ),
-                  validator: (value) {
-                    final parsed = double.tryParse(value?.trim() ?? '');
-                    if (parsed == null || parsed <= 0) {
-                      return 'Please enter a valid amount.';
-                    }
-                    return null;
-                  },
-                ),
               ],
             ),
           ),

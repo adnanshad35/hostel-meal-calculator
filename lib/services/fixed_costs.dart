@@ -104,13 +104,20 @@ class FixedCostsCalculator {
   ///
   /// [settingsByMonth] maps `YYYY-MM` keys to saved monthly settings.
   /// Returns null when nothing has been saved up to that month.
+  ///
+  /// With [since], months before it are not looked at.
   static FixedCosts? resolve(
     Map<String, Map<String, dynamic>> settingsByMonth,
-    String monthKey,
-  ) {
+    String monthKey, {
+    String? since,
+  }) {
     final candidates =
         settingsByMonth.keys
-            .where((key) => key.compareTo(monthKey) <= 0)
+            .where(
+              (key) =>
+                  key.compareTo(monthKey) <= 0 &&
+                  (since == null || key.compareTo(since) >= 0),
+            )
             .toList()
           ..sort((a, b) => b.compareTo(a));
 

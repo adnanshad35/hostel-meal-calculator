@@ -10,6 +10,7 @@ import '../services/hostel_settings.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/month_archive.dart';
+import '../services/month_rules.dart';
 import '../services/monthly_calculator.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
@@ -108,6 +109,7 @@ class _HostelDashboardScreenState extends State<HostelDashboardScreen> {
                         stream: _roster,
                         builder: (context, roster) => _HostelOverview(
                           groupId: groupId,
+                          balance: settings.balanceOptions,
                           groupName: widget.groupName,
                           isAdmin: isAdmin,
                           subscription: subscription,
@@ -393,6 +395,7 @@ const _monthNames = [
 class _HostelOverview extends StatefulWidget {
   const _HostelOverview({
     required this.groupId,
+    required this.balance,
     required this.groupName,
     required this.isAdmin,
     required this.subscription,
@@ -404,6 +407,9 @@ class _HostelOverview extends StatefulWidget {
   final String groupId;
   final String groupName;
   final bool isAdmin;
+
+  /// Which of Min Meals and Shop Due count.
+  final BalanceOptions balance;
 
   /// Null while it loads.
   final HostelSubscription? subscription;
@@ -538,8 +544,15 @@ class _HostelOverviewState extends State<_HostelOverview> {
             amount: (expense.data()['amount'] as num?)?.toDouble() ?? 0,
           ),
       ],
-      minimumMeals: (monthSettings?['minimumMeals'] as num?)?.toDouble() ?? 0,
-      shopDue: (monthSettings?['shopDue'] as num?)?.toDouble() ?? 0,
+      minimumMeals: widget.balance.minimumMealsOf(
+        monthSettings,
+        MonthlyCalculator.monthKey(_now),
+      ),
+      shopDue: widget.balance.shopDueOf(
+        monthSettings,
+        MonthlyCalculator.monthKey(_now),
+      ),
+      rules: MonthRules.fromSettings(monthSettings),
       memberId: FirebaseAuth.instance.currentUser?.uid,
     );
   }
@@ -999,12 +1012,14 @@ class _TodayCard extends StatelessWidget {
     );
   }
 
-  /// Lunch or dinner: its icon and name, with the count on the right.
+  /// Lunch or dinner: its icon and name, with the count on the right,
+  /// or Off when an admin cancelled it for everyone.
   Widget _meal({
     required String label,
     required double? count,
     required IconData icon,
     required VoidCallback onTap,
+    bool isCancelled = false,
   }) {
     return Material(
       color: AppTheme.surfaceSoft,
@@ -1029,13 +1044,26 @@ class _TodayCard extends StatelessWidget {
                 ),
               ),
               Text(
-                count == null ? '—' : _count(count),
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  height: 1.1,
-                ),
+                isCancelled
+                    ? 'Off'
+                    : count == null
+                    ? '—'
+                    : _count(count),
+                // Off is a word, not a count, so it is set smaller and
+                // lighter than the figures.
+                style: isCancelled
+                    ? const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                      )
+                    : const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
               ),
               // Shows that the row opens the list of who is eating.
               const Padding(
@@ -1102,6 +1130,7 @@ class _TodayCard extends StatelessWidget {
                         _meal(
                           label: 'Lunch',
                           count: summary?.todayLunch,
+                          isCancelled: summary?.isLunchCancelled ?? false,
                           icon: Icons.lunch_dining_outlined,
                           onTap: () => _showWho(
                             context,
@@ -1113,6 +1142,7 @@ class _TodayCard extends StatelessWidget {
                         _meal(
                           label: 'Dinner',
                           count: summary?.todayDinner,
+                          isCancelled: summary?.isDinnerCancelled ?? false,
                           icon: Icons.dinner_dining_outlined,
                           onTap: () => _showWho(
                             context,

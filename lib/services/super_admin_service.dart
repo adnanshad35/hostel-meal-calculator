@@ -213,6 +213,7 @@ class SuperAdminService {
     'mealPlans',
     'notifications',
     'members',
+    'departures',
     'deposits',
   ];
 

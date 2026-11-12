@@ -221,4 +221,22 @@ void main() {
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
     expect(tester.takeException(), isNull);
   });
+
+  test('a 32-bit phone gets the 32-bit APK', () {
+    const url =
+        'https://github.com/adnanshad35/hostel-meal-calculator/releases/latest/download/HostelMate.apk';
+    expect(UpdateService.forThisPhone(url, isArm32Phone: false), url);
+    expect(
+      UpdateService.forThisPhone(url, isArm32Phone: true),
+      endsWith('/download/HostelMate-32bit.apk'),
+    );
+    // Another address set by the super admin is left as it is.
+    expect(
+      UpdateService.forThisPhone(
+        'https://example.com/a.apk',
+        isArm32Phone: true,
+      ),
+      'https://example.com/a.apk',
+    );
+  });
 }

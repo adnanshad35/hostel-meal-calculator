@@ -8,10 +8,14 @@ import '../models/group_member.dart';
 import '../services/activity_log.dart';
 import '../services/error_messages.dart';
 import '../services/group_member_service.dart';
+import '../services/meal_cancellation.dart';
+import '../services/meal_cancellation_service.dart';
 import '../services/meal_plan.dart';
 import '../services/meal_plan_service.dart';
 import '../services/month_archive.dart';
 import '../services/month_records.dart';
+import '../services/month_rules.dart';
+import '../services/month_rules_service.dart';
 import '../services/monthly_calculator.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
@@ -53,6 +57,7 @@ class _MealScreenState extends State<MealScreen> {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _mealsStream;
   late final Stream<List<GroupMember>> _membersStream;
   late final Stream<List<MemberMealPlan>> _plansStream;
+  late final Stream<MonthRules> _rulesStream;
 
   User get _user => FirebaseAuth.instance.currentUser!;
 
@@ -61,6 +66,7 @@ class _MealScreenState extends State<MealScreen> {
     super.initState();
     _membersStream = GroupMemberService.watch(widget.groupId);
     _plansStream = MealPlanService.watchAll(widget.groupId);
+    _rulesStream = MonthRulesService.watch(widget.groupId, DateTime.now());
     // This month only: the page shows nothing older.
     _mealsStream = MonthRecords.meals(
       widget.groupId,
@@ -112,11 +118,17 @@ class _MealScreenState extends State<MealScreen> {
             return StreamBuilder<List<MemberMealPlan>>(
               stream: _plansStream,
               builder: (context, plansSnapshot) {
-                return _buildMeals(
-                  context,
-                  now: now,
-                  members: membersSnapshot.data ?? const [],
-                  plans: plansSnapshot.data ?? const [],
+                return StreamBuilder<MonthRules>(
+                  stream: _rulesStream,
+                  builder: (context, rulesSnapshot) {
+                    return _buildMeals(
+                      context,
+                      now: now,
+                      members: membersSnapshot.data ?? const [],
+                      plans: plansSnapshot.data ?? const [],
+                      rules: rulesSnapshot.data ?? MonthRules.none,
+                    );
+                  },
                 );
               },
             );
@@ -131,6 +143,7 @@ class _MealScreenState extends State<MealScreen> {
     required DateTime now,
     required List<GroupMember> members,
     required List<MemberMealPlan> plans,
+    required MonthRules rules,
   }) {
     final currentMonth = _monthKey(now);
     final todayKey = _dateKey(now);
@@ -154,19 +167,31 @@ class _MealScreenState extends State<MealScreen> {
         double myMonthlyTotal = 0;
         Map<String, dynamic>? myEntryToday;
 
-        // Days without an entry, counted from the meal plans.
-        final planned = MealPlans.automaticMeals(
-          plans: plans,
-          meals: [
-            for (final document in snapshot.data?.docs ?? [])
+        final saved = [
+          for (final document in snapshot.data?.docs ?? [])
+            if ((document.data()['dateKey'] as String? ?? '').startsWith(
+              currentMonth,
+            ))
               MealRecord.fromData(document.id, document.data()),
-          ],
-          activeMemberIds: {_user.uid, for (final member in members) member.id},
-          month: now,
-          today: now,
-        );
+        ];
 
-        for (final meal in planned) {
+        // Days without an entry are counted from the meal plans, and
+        // meals cancelled for everyone count as zero.
+        final counted = rules.applyToMeals([
+          ...saved,
+          ...MealPlans.automaticMeals(
+            plans: plans,
+            meals: saved,
+            activeMemberIds: {
+              _user.uid,
+              for (final member in members) member.id,
+            },
+            month: now,
+            today: now,
+          ),
+        ]);
+
+        for (final meal in counted) {
           totalMealsMonthly += meal.lunch + meal.dinner;
           if (meal.userId == _user.uid) {
             myMonthlyTotal += meal.lunch + meal.dinner;
@@ -175,20 +200,8 @@ class _MealScreenState extends State<MealScreen> {
 
         for (final document in snapshot.data?.docs ?? []) {
           final data = document.data();
-          final dateKey = data['dateKey'] as String? ?? '';
-          final userId = data['userId'] as String?;
-
-          if (!dateKey.startsWith(currentMonth)) continue;
-
-          final total = (data['total'] as num?)?.toDouble() ?? 0;
-
-          totalMealsMonthly += total;
-
-          if (userId == _user.uid) {
-            myMonthlyTotal += total;
-            if (dateKey == todayKey) {
-              myEntryToday = data;
-            }
+          if (data['userId'] == _user.uid && data['dateKey'] == todayKey) {
+            myEntryToday = data;
           }
         }
 
@@ -224,6 +237,7 @@ class _MealScreenState extends State<MealScreen> {
             _TodayMealCard(
               entry: myEntryToday,
               planned: MealPlans.forDay(myRules, todayKey),
+              cancelled: rules.cancellations.dayOf(todayKey),
               onTap: _openMealForm,
             ),
           ],
@@ -259,6 +273,7 @@ class _TodayMealCard extends StatelessWidget {
   const _TodayMealCard({
     required this.entry,
     required this.planned,
+    required this.cancelled,
     required this.onTap,
   });
 
@@ -266,12 +281,43 @@ class _TodayMealCard extends StatelessWidget {
 
   /// What the member's meal plan counts today when there is no entry.
   final PlannedMeals? planned;
+
+  /// Today's meals an admin cancelled for everyone, if any.
+  final CancelledDay? cancelled;
   final VoidCallback onTap;
+
+  /// "Lunch: 1   Dinner: Off", with Off for a cancelled meal.
+  String _meals(double lunch, double dinner) {
+    final cancelled = this.cancelled;
+    final lunchText = cancelled?.lunch == true
+        ? 'Off'
+        : _displayQuantity(lunch);
+    final dinnerText = cancelled?.dinner == true
+        ? 'Off'
+        : _displayQuantity(dinner);
+
+    return 'Lunch: $lunchText   Dinner: $dinnerText';
+  }
 
   @override
   Widget build(BuildContext context) {
     final entry = this.entry;
     final planned = this.planned;
+    final cancelled = this.cancelled;
+
+    if (cancelled != null && cancelled.lunch && cancelled.dinner) {
+      return const Card(
+        color: AppTheme.surfaceSoft,
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          leading: Icon(Icons.no_meals_outlined, color: AppTheme.accentDeep),
+          title: Text(
+            "Today's Meals Off",
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
 
     if (entry == null && planned != null) {
       return Card(
@@ -287,10 +333,7 @@ class _TodayMealCard extends StatelessWidget {
             'Today is counted from your meal plan',
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
-          subtitle: Text(
-            'Lunch: ${_displayQuantity(planned.lunch)}   '
-            'Dinner: ${_displayQuantity(planned.dinner)}',
-          ),
+          subtitle: Text(_meals(planned.lunch, planned.dinner)),
           trailing: const Icon(Icons.edit_outlined),
         ),
       );
@@ -303,9 +346,10 @@ class _TodayMealCard extends StatelessWidget {
           onTap: onTap,
           leading: const Icon(Icons.info_outline, color: AppTheme.accentDeep),
           title: const Text(
-            'Today\'s Meals Not Entered',
+            "Today's Meals Not Entered",
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
+          subtitle: cancelled == null ? null : Text('${cancelled.label}: Off'),
         ),
       );
     }
@@ -323,13 +367,10 @@ class _TodayMealCard extends StatelessWidget {
           color: AppTheme.primary,
         ),
         title: const Text(
-          'Today\'s meals entered',
+          "Today's meals entered",
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(
-          'Lunch: ${_displayQuantity(lunch)}   '
-          'Dinner: ${_displayQuantity(dinner)}',
-        ),
+        subtitle: Text(_meals(lunch, dinner)),
         trailing: const Icon(Icons.edit_outlined),
       ),
     );
@@ -376,6 +417,11 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   bool _isLoadingEntry = true;
   bool _isSaving = false;
   bool _hasEntry = false;
+
+  /// True when an admin cancelled that meal of the selected day for
+  /// everyone. It cannot be entered, and an entry keeps what it had.
+  bool _isLunchCancelled = false;
+  bool _isDinnerCancelled = false;
 
   /// What the entry held when it was opened, for the hostel's history.
   double? _savedLunch;
@@ -481,8 +527,12 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     });
 
     try {
-      final snapshot = await _mealCollection.doc(_entryId).get();
+      final (snapshot, rules) = await (
+        _mealCollection.doc(_entryId).get(),
+        MonthRulesService.fetch(widget.groupId, _selectedDate),
+      ).wait;
       final data = snapshot.data();
+      final dateKey = _dateKey(_selectedDate);
 
       // Without an entry, the form starts from the member's meal plan
       // for that day, if they have one.
@@ -499,6 +549,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
 
       setState(() {
         _hasEntry = snapshot.exists;
+        _isLunchCancelled = rules.cancellations.isLunchCancelled(dateKey);
+        _isDinnerCancelled = rules.cancellations.isDinnerCancelled(dateKey);
 
         if (planned != null) {
           _lunch = planned.lunch;
@@ -527,6 +579,187 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     }
   }
 
+  /// The last day a meal can be entered: the end of this month.
+  DateTime _lastDate(DateTime now) => DateTime(now.year, now.month + 1, 0);
+
+  void _showTab(_FormTab tab) => setState(() => _tab = tab);
+
+  /// Turns the selected day's lunch and dinner off for everyone, or on
+  /// again. Each switch saves at once. Admins only.
+  /// True once saved.
+  Future<bool> _setMealOff({required bool lunch, required bool dinner}) async {
+    if (!await ensureHostelEditable(context, widget.groupId)) return false;
+    if (!mounted) return false;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final day = _selectedDate;
+
+    setState(() => _isSaving = true);
+    try {
+      await MealCancellationService.save(
+        groupId: widget.groupId,
+        day: DateTime(day.year, day.month, day.day),
+        lunch: lunch,
+        dinner: dinner,
+      );
+      if (mounted) {
+        setState(() {
+          _isLunchCancelled = lunch;
+          _isDinnerCancelled = dinner;
+        });
+      }
+      return true;
+    } on FirebaseException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            saveErrorMessage(error, fallback: 'Unable to save the change.'),
+          ),
+        ),
+      );
+      return false;
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// The chef's day: a green tick while the chef cooks, red once an
+  /// admin turned a meal of the selected day off for everyone.
+  Widget _chefButton() {
+    final isOff = _isLunchCancelled || _isDinnerCancelled;
+    final color = isOff ? AppTheme.danger : AppTheme.primary;
+    const shape = StadiumBorder();
+
+    return Material(
+      color: color.withValues(alpha: 0.1),
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: _isSaving || _isLoadingEntry ? null : _openChefDialog,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Chef',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                isOff ? Icons.cancel : Icons.check_circle,
+                size: 20,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// When the chef is away: lunch and dinner of the selected day can
+  /// be turned off for everyone. Nothing changes until Save.
+  Future<void> _openChefDialog() {
+    final day = _selectedDate.day.toString().padLeft(2, '0');
+    final month = _selectedDate.month.toString().padLeft(2, '0');
+
+    // The choice on screen; saved only with Save.
+    var lunchOff = _isLunchCancelled;
+    var dinnerOff = _isDinnerCancelled;
+    var isSaving = false;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final hasChanged =
+              lunchOff != _isLunchCancelled || dinnerOff != _isDinnerCancelled;
+
+          Future<void> save() async {
+            setDialogState(() => isSaving = true);
+            final saved = await _setMealOff(lunch: lunchOff, dinner: dinnerOff);
+            if (!dialogContext.mounted) return;
+            if (saved) {
+              Navigator.of(dialogContext).pop();
+            } else {
+              setDialogState(() => isSaving = false);
+            }
+          }
+
+          Widget offSwitch({
+            required String title,
+            required IconData icon,
+            required bool value,
+            required ValueChanged<bool> onChanged,
+          }) {
+            return SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Icon(
+                icon,
+                color: value ? AppTheme.danger : AppTheme.primary,
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: value ? AppTheme.danger : AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              activeThumbColor: AppTheme.danger,
+              value: value,
+              onChanged: isSaving ? null : onChanged,
+            );
+          }
+
+          return AlertDialog(
+            title: Text('Chef · $day/$month/${_selectedDate.year}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                offSwitch(
+                  title: 'Lunch Off for Everyone',
+                  icon: Icons.lunch_dining_outlined,
+                  value: lunchOff,
+                  onChanged: (isOff) => setDialogState(() => lunchOff = isOff),
+                ),
+                offSwitch(
+                  title: 'Dinner Off for Everyone',
+                  icon: Icons.dinner_dining_outlined,
+                  value: dinnerOff,
+                  onChanged: (isOff) => setDialogState(() => dinnerOff = isOff),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isSaving || !hasChanged ? null : save,
+                child: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _selectDate() async {
     final now = DateTime.now();
 
@@ -534,7 +767,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       context: context,
       initialDate: _selectedDate,
       firstDate: MonthLock.firstEditableDay(now),
-      lastDate: DateTime(now.year, now.month + 1, 0),
+      lastDate: _lastDate(now),
       helpText: 'Select a meal date',
     );
 
@@ -559,8 +792,21 @@ class _MealFormDialogState extends State<_MealFormDialog> {
     return member?.name ?? 'Member';
   }
 
+  /// What is saved: a meal that is off keeps what the entry had, or
+  /// for a new entry what it would have had (the meal plan, or the
+  /// usual one). It counts as nothing while the meal is off, and is
+  /// there again once the meal is turned back on.
+  double get _lunchToSave => _isLunchCancelled ? _savedLunch ?? _lunch : _lunch;
+  double get _dinnerToSave =>
+      _isDinnerCancelled ? _savedDinner ?? _dinner : _dinner;
+
+  bool get _isDayCancelled => _isLunchCancelled && _isDinnerCancelled;
+
   Future<bool> _confirmLargeQuantity() async {
-    if (_lunch <= 5 && _dinner <= 5) return true;
+    // A cancelled meal cannot be entered, so it is never asked about.
+    final lunch = _isLunchCancelled ? 0 : _lunch;
+    final dinner = _isDinnerCancelled ? 0 : _dinner;
+    if (lunch <= 5 && dinner <= 5) return true;
 
     return await showDialog<bool>(
           context: context,
@@ -591,7 +837,9 @@ class _MealFormDialogState extends State<_MealFormDialog> {
   Future<void> _save() async {
     // Saving what is already there changes nothing, so it is not
     // recorded, nor marked as edited.
-    if (_hasEntry && _lunch == _savedLunch && _dinner == _savedDinner) {
+    if (_hasEntry &&
+        _lunchToSave == _savedLunch &&
+        _dinnerToSave == _savedDinner) {
       Navigator.of(context).pop();
       return;
     }
@@ -622,9 +870,9 @@ class _MealFormDialogState extends State<_MealFormDialog> {
             : _selectedMemberName,
         'dateKey': _dateKey(_selectedDate),
         'date': Timestamp.fromDate(_selectedDate),
-        'lunch': _lunch,
-        'dinner': _dinner,
-        'total': _lunch + _dinner,
+        'lunch': _lunchToSave,
+        'dinner': _dinnerToSave,
+        'total': _lunchToSave + _dinnerToSave,
         'submitted': true,
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -649,8 +897,8 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         memberName: data['userName'] as String,
         day: _dateKey(_selectedDate),
         details: ActivityLog.mealDetails(
-          lunch: _lunch,
-          dinner: _dinner,
+          lunch: _lunchToSave,
+          dinner: _dinnerToSave,
           oldLunch: _savedLunch,
           oldDinner: _savedDinner,
         ),
@@ -700,6 +948,9 @@ class _MealFormDialogState extends State<_MealFormDialog> {
         .clamp(0.0, 520.0)
         .toDouble();
     final isPlan = _tab == _FormTab.plan;
+    final title = isPlan
+        ? 'Meal Plan'
+        : (_hasEntry ? 'Update Meal' : 'Add Meal');
 
     return AlertDialog(
       // Wider than the default, with room around each part, so the
@@ -707,9 +958,16 @@ class _MealFormDialogState extends State<_MealFormDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-      title: Text(
-        isPlan ? 'Meal Plan' : (_hasEntry ? 'Update Meal' : 'Add Meal'),
-      ),
+      // Admins see the chef's day beside the title.
+      title: widget.isAdmin && !isPlan
+          ? Row(
+              children: [
+                Expanded(child: Text(title)),
+                const SizedBox(width: 8),
+                _chefButton(),
+              ],
+            )
+          : Text(title),
       content: SizedBox(
         width: dialogWidth,
         child: SingleChildScrollView(
@@ -733,7 +991,7 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                 selected: {_tab},
                 onSelectionChanged: _isSaving
                     ? null
-                    : (selection) => setState(() => _tab = selection.first),
+                    : (selection) => _showTab(selection.first),
               ),
               const SizedBox(height: 20),
               if (isPlan)
@@ -791,18 +1049,24 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                   )
                 else ...[
                   MealCounter(
-                    title: 'Lunch',
-                    icon: Icons.lunch_dining_outlined,
-                    value: _lunch,
-                    enabled: !_isSaving,
+                    title: _isLunchCancelled ? 'Lunch Off' : 'Lunch',
+                    icon: _isLunchCancelled
+                        ? Icons.no_meals_outlined
+                        : Icons.lunch_dining_outlined,
+                    value: _isLunchCancelled ? 0 : _lunch,
+                    color: _isLunchCancelled ? AppTheme.danger : null,
+                    enabled: !_isSaving && !_isLunchCancelled,
                     onChanged: (value) => setState(() => _lunch = value),
                   ),
                   const SizedBox(height: 20),
                   MealCounter(
-                    title: 'Dinner',
-                    icon: Icons.dinner_dining_outlined,
-                    value: _dinner,
-                    enabled: !_isSaving,
+                    title: _isDinnerCancelled ? 'Dinner Off' : 'Dinner',
+                    icon: _isDinnerCancelled
+                        ? Icons.no_meals_outlined
+                        : Icons.dinner_dining_outlined,
+                    value: _isDinnerCancelled ? 0 : _dinner,
+                    color: _isDinnerCancelled ? AppTheme.danger : null,
+                    enabled: !_isSaving && !_isDinnerCancelled,
                     onChanged: (value) => setState(() => _dinner = value),
                   ),
                 ],
@@ -864,7 +1128,10 @@ class _MealFormDialogState extends State<_MealFormDialog> {
                   ),
                   const SizedBox(width: 4),
                   FilledButton(
-                    onPressed: isBusy || (widget.isAdmin && _isLoadingMembers)
+                    onPressed:
+                        isBusy ||
+                            _isDayCancelled ||
+                            (widget.isAdmin && _isLoadingMembers)
                         ? null
                         : _save,
                     child: _isSaving
@@ -973,6 +1240,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
 
   late Stream<QuerySnapshot<Map<String, dynamic>>> _meals;
+  late Stream<MonthRules> _rules;
   late final Stream<MemberMealPlan> _plan;
 
   @override
@@ -982,6 +1250,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
     // One month at a time. Filtered to this member afterwards, which
     // avoids needing a composite index.
     _meals = MonthRecords.meals(widget.groupId, _month).snapshots();
+    _rules = MonthRulesService.watch(widget.groupId, _month);
     _plan = MealPlanService.watch(widget.groupId, widget.currentUserId);
   }
 
@@ -989,6 +1258,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
     setState(() {
       _month = month;
       _meals = MonthRecords.meals(widget.groupId, month).snapshots();
+      _rules = MonthRulesService.watch(widget.groupId, month);
     });
   }
 
@@ -1010,7 +1280,14 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              return _buildCalendar(meals.data!.docs, plan.data);
+              return StreamBuilder<MonthRules>(
+                stream: _rules,
+                builder: (context, rules) => _buildCalendar(
+                  meals.data!.docs,
+                  plan.data,
+                  rules.data ?? MonthRules.none,
+                ),
+              );
             },
           );
         },
@@ -1021,6 +1298,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
   Widget _buildCalendar(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     MemberMealPlan? plan,
+    MonthRules rules,
   ) {
     final saved = [
       for (final document in docs)
@@ -1028,8 +1306,9 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
           MealRecord.fromData(document.id, document.data()),
     ];
 
-    // Days without an entry, counted from the meal plan.
-    final records = [
+    // Days without an entry, counted from the meal plan. Meals
+    // cancelled for everyone count as zero.
+    final records = rules.applyToMeals([
       ...saved,
       if (plan != null)
         ...MealPlans.automaticMeals(
@@ -1039,7 +1318,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
           month: _month,
           today: DateTime.now(),
         ),
-    ];
+    ]);
 
     final byDay = <int, MealRecord>{};
     double total = 0;
@@ -1055,6 +1334,22 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
     final previous = shiftMonth(_month, -1);
     final next = shiftMonth(_month, 1);
     final now = DateTime.now();
+
+    String dateKeyOf(int day) =>
+        _dateKey(DateTime(_month.year, _month.month, day));
+
+    // "Lunch 1 · Dinner Off", with Off for a meal cancelled for
+    // everyone.
+    String mealsOf(int day, MealRecord record) {
+      final dateKey = dateKeyOf(day);
+      final lunch = rules.cancellations.isLunchCancelled(dateKey)
+          ? 'Off'
+          : _displayQuantity(record.lunch);
+      final dinner = rules.cancellations.isDinnerCancelled(dateKey)
+          ? 'Off'
+          : _displayQuantity(record.dinner);
+      return 'Lunch $lunch · Dinner $dinner';
+    }
 
     return MonthCalendarView(
       // A new month starts on its own selected day and view.
@@ -1072,9 +1367,7 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
 
         return [
           CalendarLine(
-            title:
-                'Lunch ${_displayQuantity(record.lunch)} · '
-                'Dinner ${_displayQuantity(record.dinner)}',
+            title: mealsOf(day, record),
             trailing: _displayQuantity(record.lunch + record.dinner),
           ),
         ];
@@ -1100,19 +1393,25 @@ class _MyMealsScreenState extends State<MyMealsScreen> {
           );
         }
 
+        final cancelled = rules.cancellations.dayOf(dateKeyOf(day));
+
         if (record == null) {
           return [
-            if (canEdit)
+            if (cancelled != null)
+              CalendarLine(title: '${cancelled.label} Off', trailing: '')
+            else if (canEdit)
               CalendarLine(title: 'No Entry', trailing: '', onTap: edit),
           ];
         }
 
         return [
           CalendarLine(
-            title:
-                'Lunch ${_displayQuantity(record.lunch)} · '
-                'Dinner ${_displayQuantity(record.dinner)}',
-            note: record.isAutomatic ? 'plan' : null,
+            title: mealsOf(day, record),
+            note: cancelled != null
+                ? 'off'
+                : record.isAutomatic
+                ? 'plan'
+                : null,
             trailing: _displayQuantity(record.lunch + record.dinner),
             onTap: canEdit ? edit : null,
           ),

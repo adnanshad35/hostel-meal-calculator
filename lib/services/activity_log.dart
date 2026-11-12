@@ -22,6 +22,11 @@ enum ActivityKind {
   hostelActivated,
   paymentSent,
   activationSet,
+  mealCancelled,
+  mealRestored,
+  memberLeft,
+  memberRestored,
+  leavingChosen,
 }
 
 /// One change to the hostel, as every member sees it in its history.
@@ -113,6 +118,15 @@ class Activity {
       ActivityKind.hostelActivated => (actorName, 'activated', 'the hostel'),
       ActivityKind.paymentSent => (actorName, 'sent', 'a bKash payment'),
       ActivityKind.activationSet => (actorName, 'changed', 'the activation'),
+      ActivityKind.mealCancelled => (actorName, 'turned off', subject),
+      ActivityKind.mealRestored => (actorName, 'turned on', subject),
+      ActivityKind.memberLeft => (actorName, 'left', 'the hostel'),
+      ActivityKind.memberRestored => (actorName, 'restored', memberName),
+      ActivityKind.leavingChosen => (
+        actorName,
+        'chose',
+        '$subject for $memberName',
+      ),
     };
   }
 
@@ -129,8 +143,11 @@ class Activity {
     ActivityKind.expenseAdded ||
     ActivityKind.adminMade ||
     ActivityKind.hostelActivated ||
+    ActivityKind.memberRestored ||
     ActivityKind.paymentSent => ActivityTone.added,
     ActivityKind.expenseDeleted ||
+    ActivityKind.mealCancelled ||
+    ActivityKind.memberLeft ||
     ActivityKind.monthReset ||
     ActivityKind.memberRemoved ||
     ActivityKind.adminRemoved => ActivityTone.removed,

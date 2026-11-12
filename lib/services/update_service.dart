@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'abi/phone_abi_stub.dart' if (dart.library.ffi) 'abi/phone_abi_ffi.dart';
+
 /// A newer version of the app that is available to download.
 class AppUpdate {
   const AppUpdate({
@@ -79,9 +81,22 @@ class UpdateService {
   /// shared Wi-Fi or a mobile carrier can easily use up.
   static const String _latestReleaseUrl = '$_repository/releases/latest';
 
-  /// Always serves the APK attached to the newest release.
-  static const String _downloadUrl =
-      '$_repository/releases/latest/download/HostelMate.apk';
+  /// The APKs attached to every release: 64-bit for most phones, and
+  /// 32-bit for older ones.
+  static const String apkName = 'HostelMate.apk';
+  static const String apk32Name = 'HostelMate-32bit.apk';
+
+  /// Always serves the APK attached to the newest release, the one this
+  /// phone can run.
+  static String get _downloadUrl =>
+      forThisPhone('$_repository/releases/latest/download/$apkName');
+
+  /// [url] with the 32-bit APK in place of the 64-bit one, on a phone
+  /// running 32-bit Android.
+  static String forThisPhone(String url, {bool? isArm32Phone}) {
+    if (!(isArm32Phone ?? isArm32) || !url.endsWith('/$apkName')) return url;
+    return '${url.substring(0, url.length - apkName.length)}$apk32Name';
+  }
 
   static DocumentReference<Map<String, dynamic>> get _config =>
       FirebaseFirestore.instance.collection('config').doc('appUpdate');
@@ -169,7 +184,7 @@ class UpdateService {
       version: _numbers(config.version).join('.'),
       downloadUrl: config.downloadUrl.isEmpty
           ? _downloadUrl
-          : config.downloadUrl,
+          : forThisPhone(config.downloadUrl),
       notes: config.notes,
       isRequired:
           config.minVersion.isNotEmpty &&
