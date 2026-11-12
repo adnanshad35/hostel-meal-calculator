@@ -182,45 +182,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
   /// characters — they show up as broken boxes.)
   static String _bold(String input) => '*$input*';
 
-  Future<void> _copySummaryCard({required MonthlyCalculation result}) async {
-    final buffer = StringBuffer();
-    buffer.writeln(_bold('HostelMate Monthly Summary'));
-    buffer.writeln(_bold(_monthName(_selectedMonth)));
-    buffer.writeln('');
-    buffer.writeln(
-      '${_bold('Meal Rate')}: ৳${result.mealRate.toStringAsFixed(2)}',
-    );
-    buffer.writeln(
-      '${_bold('Total Meals')}: '
-      '${result.totalActualMeals.toStringAsFixed(2)}',
-    );
-    if ((result.totalMealNumber - result.totalActualMeals).abs() > 0.001) {
-      buffer.writeln(
-        '${_bold('Charged Meals')}: '
-        '${result.totalMealNumber.toStringAsFixed(2)}',
-      );
-    }
-    buffer.writeln(
-      '${_bold('Member Paid')}: '
-      '৳${result.memberPaidExpenses.toStringAsFixed(2)}',
-    );
-    if (_balance.usesShopDue(_monthKey(_selectedMonth))) {
-      buffer.writeln(
-        '${_bold('Shop Due')}: '
-        '৳${result.shopDue.toStringAsFixed(2)}',
-      );
-    }
-    buffer.writeln(
-      '${_bold('Total Monthly Cost')}: '
-      '৳${result.totalExpense.toStringAsFixed(2)}',
-    );
-
-    await Clipboard.setData(ClipboardData(text: buffer.toString().trim()));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Summary copied.')));
-  }
-
   /// Copies the full table (all members) to clipboard.
   Future<void> _copyFullTable({required MonthlyCalculation result}) async {
     final buffer = StringBuffer();
@@ -972,7 +933,6 @@ class _MonthlySummaryScreenState extends State<MonthlySummaryScreen> {
               : null,
           previousMonthKey: _monthKey(previousMonth),
           groupId: widget.groupId,
-          onCopy: () => _copySummaryCard(result: result),
           onOpenMeals: hasRecords ? () => _openRecords(0) : null,
           onOpenExpenses: hasRecords ? () => _openRecords(1) : null,
           onEditMinimum: canChange
@@ -1198,7 +1158,6 @@ class _RateHero extends StatelessWidget {
     required this.onOpenBalanceOptions,
     required this.previousMonthKey,
     required this.groupId,
-    required this.onCopy,
     required this.onOpenMeals,
     required this.onOpenExpenses,
     required this.onEditMinimum,
@@ -1223,7 +1182,6 @@ class _RateHero extends StatelessWidget {
   final VoidCallback? onOpenBalanceOptions;
   final String previousMonthKey;
   final String groupId;
-  final VoidCallback onCopy;
 
   /// Null for a month whose entries are no longer kept.
   final VoidCallback? onOpenMeals;
@@ -1273,15 +1231,8 @@ class _RateHero extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.add, size: 20, color: AppTheme.accent),
                 ),
-              IconButton(
-                tooltip: 'Copy summary',
-                onPressed: onCopy,
-                icon: Icon(
-                  Icons.copy_outlined,
-                  size: 19,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-              ),
+              // Keeps the height the same with or without the +.
+              const SizedBox(height: 40),
             ],
           ),
           Padding(
